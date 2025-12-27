@@ -1,0 +1,491 @@
+const Product = require('../models/Product');
+
+// @desc    Get all products with filtering
+// @route   GET /api/products
+// @access  Public/Admin
+const getProducts = async (req, res) => {
+    try {
+        const { 
+            category, 
+            status, 
+            minPrice, 
+            maxPrice, 
+            search, 
+            sort = 'createdAt', 
+            order = 'desc',
+            page = 1,
+            limit = 10
+        } = req.query;
+
+        let query = {};
+
+        // Filter by category
+        if (category && category !== 'all') {
+            query.category = category;
+        }
+
+        // Filter by status
+        if (status && status !== 'all') {
+            query.status = status;
+        }
+
+        // Filter by price range
+        if (minPrice || maxPrice) {
+            query.price = {};
+            if (minPrice) query.price.$gte = Number(minPrice);
+            if (maxPrice) query.price.$lte = Number(maxPrice);
+        }
+
+        // Search by name or category
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { category: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Sorting
+        const sortOptions = {};
+        sortOptions[sort] = order === 'desc' ? -1 : 1;
+
+        // Pagination
+        const skip = (page - 1) * limit;
+
+        const [products, total] = await Promise.all([
+            Product.find(query)
+                .sort(sortOptions)
+                .skip(skip)
+                .limit(Number(limit))
+                .lean(),
+            Product.countDocuments(query)
+        ]);
+
+        // Calculate summary stats
+        const summary = await Product.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: null,
+                    totalProducts: { $sum: 1 },
+                    totalStock: { $sum: '$stock' },
+                    totalSales: { $sum: '$sales' },
+                    avgRating: { $avg: '$rating' },
+                    lowStockCount: {
+                        $sum: {
+                            $cond: [
+                                { $and: [{ $gt: ['$stock', 0] }, { $lt: ['$stock', 5] }] },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    outOfStockCount: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$stock', 0] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            count: products.length,
+            total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: Number(page),
+            summary: summary[0] || {
+                totalProducts: 0,
+                totalStock: 0,
+                totalSales: 0,
+                avgRating: 0,
+                lowStockCount: 0,
+                outOfStockCount: 0
+            },
+            products
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get single product
+// @route   GET /api/products/:id
+// @access  Public/Admin
+const getProductById = async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            product
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Create new product
+// @route   POST /api/products
+// @access  Admin
+const createProduct = async (req, res) => {
+    try {
+        // Auto-generate SKU if not provided
+        if (!req.body.sku) {
+            const count = await Product.countDocuments();
+            req.body.sku = `PROD${String(count + 1).padStart(6, '0')}`;
+        }
+
+        const product = await Product.create(req.body);
+
+        res.status(201).json({
+            success: true,
+            message: 'Product created successfully',
+            product
+        });
+    } catch (error) {
+        console.error(error);
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: 'SKU already exists'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Update product
+// @route   PUT /api/products/:id
+// @access  Admin
+const updateProduct = async (req, res) => {
+    try {
+        // Prevent SKU updates
+        if (req.body.sku) {
+            delete req.body.sku;
+        }
+
+        const product = await Product.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true }
+        );
+
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Product updated successfully',
+            product
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Delete product
+// @route   DELETE /api/products/:id
+// @access  Admin
+const deleteProduct = async (req, res) => {
+    try {
+        const product = await Product.findByIdAndDelete(req.params.id);
+
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Product deleted successfully'
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Bulk update products
+// @route   PUT /api/products/bulk/update
+// @access  Admin
+const bulkUpdateProducts = async (req, res) => {
+    try {
+        const { ids, updateData } = req.body;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Product IDs are required'
+            });
+        }
+
+        const result = await Product.updateMany(
+            { _id: { $in: ids } },
+            updateData,
+            { runValidators: true }
+        );
+
+        res.json({
+            success: true,
+            message: `${result.modifiedCount} products updated successfully`,
+            modifiedCount: result.modifiedCount
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Bulk delete products
+// @route   DELETE /api/products/bulk/delete
+// @access  Admin
+const bulkDeleteProducts = async (req, res) => {
+    try {
+        const { ids } = req.body;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Product IDs are required'
+            });
+        }
+
+        const result = await Product.deleteMany({ _id: { $in: ids } });
+
+        res.json({
+            success: true,
+            message: `${result.deletedCount} products deleted successfully`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Update product stock
+// @route   PUT /api/products/:id/stock
+// @access  Admin
+const updateStock = async (req, res) => {
+    try {
+        const { stock } = req.body;
+        
+        if (typeof stock !== 'number' || stock < 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid stock quantity is required'
+            });
+        }
+
+        const product = await Product.findById(req.params.id);
+        
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: 'Product not found'
+            });
+        }
+
+        product.stock = stock;
+        product.status = stock === 0 ? 'out_of_stock' : (stock < 5 ? 'low_stock' : 'active');
+        await product.save();
+
+        res.json({
+            success: true,
+            message: 'Stock updated successfully',
+            product
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get product statistics
+// @route   GET /api/products/stats/summary
+// @access  Admin
+const getProductStats = async (req, res) => {
+    try {
+        const stats = await Product.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalProducts: { $sum: 1 },
+                    totalValue: { $sum: { $multiply: ['$price', '$stock'] } },
+                    totalSales: { $sum: '$sales' },
+                    avgRating: { $avg: '$rating' },
+                    avgPrice: { $avg: '$price' },
+                    categories: { $addToSet: '$category' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    pipeline: [
+                        { $sort: { sales: -1 } },
+                        { $limit: 1 }
+                    ],
+                    as: 'topProduct'
+                }
+            },
+            {
+                $project: {
+                    totalProducts: 1,
+                    totalValue: 1,
+                    totalSales: 1,
+                    avgRating: 1,
+                    avgPrice: 1,
+                    categoryCount: { $size: '$categories' },
+                    topProduct: { $arrayElemAt: ['$topProduct', 0] }
+                }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            stats: stats[0] || {}
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get categories
+// @route   GET /api/products/categories
+// @access  Public/Admin
+const getCategories = async (req, res) => {
+    try {
+        const categories = await Product.distinct('category');
+        
+        res.json({
+            success: true,
+            categories: [
+        'All',
+        'Sarees',
+        'Home Decor',
+        'Bags',
+        'Sculptures',
+        'Clothing',
+        'Jewelry',
+        'Accessories',
+        'Pottery',
+        'Textiles',
+        'Art'
+      ]
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Export products
+// @route   GET /api/products/export
+// @access  Admin
+const exportProducts = async (req, res) => {
+    try {
+        const products = await Product.find().lean();
+        
+        // Convert to CSV format
+        const csvData = products.map(product => ({
+            Name: product.name,
+            Category: product.category,
+            Price: product.price,
+            Stock: product.stock,
+            Status: product.status,
+            Sales: product.sales,
+            Rating: product.rating,
+            SKU: product.sku || ''
+        }));
+
+        res.json({
+            success: true,
+            data: csvData,
+            format: 'csv',
+            count: products.length
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
+module.exports = {
+    getProducts,
+    getProductById,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    bulkUpdateProducts,
+    bulkDeleteProducts,
+    updateStock,
+    getProductStats,
+    getCategories,
+    exportProducts
+};
