@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ShoppingBag, User, Home, Info, Phone, X } from "lucide-react";
 import logo from "../Assets/TantikaLogo.png";
+// import { useAuth } from "../context/AuthContext";
+import useAuth from '../Hooks/useAuth';
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -13,6 +15,7 @@ const Navbar = () => {
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
   };
+   const { user, logout, isAuthenticated } = useAuth();
 
   return (
     <nav className="bg-white shadow-lg sticky top-0 z-50">

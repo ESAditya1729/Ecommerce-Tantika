@@ -44,3 +44,52 @@
     }
   }
 }
+
+/* Admin Layout Fix */
+.admin-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.admin-sidebar-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 256px;
+  z-index: 40;
+}
+
+.admin-content-area {
+  flex: 1;
+  margin-left: 256px;
+  padding-top: 64px;
+}
+
+.admin-header-fixed {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 256px;
+  z-index: 50;
+  background: white;
+}
+
+/* Mobile */
+@media (max-width: 1023px) {
+  .admin-sidebar-fixed {
+    transform: translateX(-100%);
+  }
+  
+  .admin-sidebar-fixed.open {
+    transform: translateX(0);
+  }
+  
+  .admin-content-area {
+    margin-left: 0;
+  }
+  
+  .admin-header-fixed {
+    left: 0;
+  }
+}

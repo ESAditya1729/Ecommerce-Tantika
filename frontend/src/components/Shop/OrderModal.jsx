@@ -15,38 +15,50 @@ const OrderModal = ({ isOpen, onClose, product }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  // After creating orders API in backend, update this
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+  
+  try {
+    // This will be a real API call to /api/orders
+    const orderData = {
+      productId: product.id,
+      productName: product.name,
+      productPrice: product.price,
+      customerDetails: {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode,
+        message: formData.message
+      }
+    };
+    
+    // REAL API CALL (when you create orders API)
+    // const response = await axios.post('/api/orders', orderData);
+    
+    // For now, log to console
+    console.log('Order would be sent to:', orderData);
     
     // Simulate API call
     setTimeout(() => {
-      console.log('Order submitted:', {
-        productId: product.id,
-        productName: product.name,
-        productPrice: product.price,
-        ...formData
-      });
       setIsSubmitting(false);
       setSubmitSuccess(true);
       
-      // Reset form after successful submission
       setTimeout(() => {
-        setSubmitSuccess(false);
-        setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          address: '',
-          city: '',
-          state: '',
-          pincode: '',
-          message: ''
-        });
         onClose();
       }, 2000);
     }, 1500);
-  };
+    
+  } catch (error) {
+    console.error('Order submission error:', error);
+    setIsSubmitting(false);
+  }
+};
 
   const handleChange = (e) => {
     setFormData({

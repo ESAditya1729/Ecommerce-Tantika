@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Phone, Eye, EyeOff, ArrowRight, Check, Sparkles } from 'lucide-react';
-import authService from '../services/authServices';
+import authServices from '../services/authServices';
+
 
 const Register = () => {
   const navigate = useNavigate();
@@ -97,49 +98,52 @@ const Register = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (!validateForm()) {
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setSuccessMessage('');
+  
+  try {
+    const userData = {
+      username: formData.username.trim(),
+      email: formData.email.toLowerCase().trim(),
+      phone: formData.phone.trim() || null,
+      password: formData.password,
+      confirmPassword: formData.confirmPassword,
+      newsletter: true
+    };
     
-    if (!validateForm()) {
-      return;
+    // Use authServices
+    const result = await authServices.register(userData);
+    
+    if (result.success) {
+      setSuccessMessage('🎉 Account created successfully!');
+      
+      // Redirect to dashboard
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
     }
+  } catch (error) {
+    console.error('Registration error:', error);
     
-    setIsSubmitting(true);
-    setSuccessMessage('');
-    
-    try {
-      // Prepare data for backend (MongoDB friendly)
-      const userData = {
-        username: formData.username.trim(),
-        email: formData.email.toLowerCase().trim(),
-        phone: formData.phone.trim() || null, // null instead of empty string for MongoDB
-        password: formData.password // This will be hashed in backend
-      };
-      
-      console.log('Submitting to backend:', userData); // For debugging
-      
-      // Mock API call - will be replaced with real API
-      const response = await authService.register(userData);
-      
-      if (response.success) {
-        // Store token and user data (mocking localStorage)
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
-        
-        setSuccessMessage('🎉 Account created successfully!');
-        
-        // Redirect to dashboard after 2 seconds
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      setErrors({ submit: error.message || 'Registration failed. Please try again.' });
-    } finally {
-      setIsSubmitting(false);
+    // Handle axios error format
+    if (error.errors) {
+      setErrors(error.errors);
+    } else {
+      setErrors({ 
+        submit: error.message || 'Registration failed. Please try again.' 
+      });
     }
-  };
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // Calculate password strength
   const calculatePasswordStrength = () => {
