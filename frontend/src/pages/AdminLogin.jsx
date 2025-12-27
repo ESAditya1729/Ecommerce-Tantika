@@ -31,6 +31,9 @@ const AdminLogin = () => {
       if (response.data.success) {
         const { token, user } = response.data;
         
+        // Debug: Log what we're receiving
+        console.log('Login successful:', { token: token.substring(0, 20) + '...', user });
+        
         // Store token based on rememberMe choice
         if (formData.rememberMe) {
           localStorage.setItem('token', token);
@@ -41,20 +44,29 @@ const AdminLogin = () => {
         // Store user info
         localStorage.setItem('user', JSON.stringify(user));
         
+        // Debug: Verify storage
+        console.log('Stored in:', formData.rememberMe ? 'localStorage' : 'sessionStorage');
+        console.log('Token stored:', !!localStorage.getItem('token') || !!sessionStorage.getItem('token'));
+        console.log('User stored:', !!localStorage.getItem('user'));
+        
         // Check if user is admin
         if (user.role !== 'admin' && user.role !== 'superadmin') {
           setError('Access denied. Admin privileges required.');
           localStorage.removeItem('token');
           sessionStorage.removeItem('token');
+          localStorage.removeItem('user');
           setLoading(false);
           return;
         }
 
-        // Show success message
-        alert(`Welcome back, ${user.name}!`);
+        // Show success message - FIXED: Using username instead of name
+        alert(`Welcome back, ${user.username || user.email}!`);
         
-        // Redirect to admin dashboard
-        navigate('/admin/dashboard');
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          console.log('Navigating to /admin/dashboard...');
+          navigate('/admin/dashboard');
+        }, 100);
       } else {
         setError(response.data.message || 'Login failed');
       }
@@ -104,8 +116,7 @@ const AdminLogin = () => {
     
     // Auto-submit after a short delay
     setTimeout(() => {
-      const demoEvent = { preventDefault: () => {} };
-      handleSubmit(demoEvent);
+      handleSubmit({ preventDefault: () => {} });
     }, 100);
   };
 
