@@ -74,10 +74,29 @@ function App() {
               </ProtectedRoute>
             } />
             
-            {/* Admin Routes */}
-            <Route path="/admin" element={<AdminLogin />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
+            {/* Admin Routes - FIXED */}
+            {/* Remove the direct /admin route or wrap it with ProtectedRoute */}
+            <Route path="/admin/login" element={
+              <ProtectedRoute requireAuth={false} requireAdmin={false}>
+                <AdminLogin />
+              </ProtectedRoute>
+            } />
+            
+            {/* Alternative: Redirect /admin to /admin/login */}
+            <Route path="/admin" element={
+              <ProtectedRoute requireAuth={false} requireAdmin={false}>
+                <AdminLogin />
+              </ProtectedRoute>
+            } />
+            
             <Route path="/admin/dashboard" element={
+              <ProtectedRoute requireAdmin={true}>
+                <AdminPage />
+              </ProtectedRoute>
+            } />
+            
+            {/* Add a catch-all for admin routes */}
+            <Route path="/admin/*" element={
               <ProtectedRoute requireAdmin={true}>
                 <AdminPage />
               </ProtectedRoute>

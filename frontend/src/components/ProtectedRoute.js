@@ -3,50 +3,71 @@ import { useEffect, useState } from 'react';
 
 const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) => {
   const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [authState, setAuthState] = useState({
+    isAuthenticated: null,
+    isAdmin: false,
+    loading: true
+  });
 
   useEffect(() => {
     const checkAuth = () => {
-      setLoading(true);
+      setAuthState(prev => ({ ...prev, loading: true }));
       
-      // Get token from BOTH localStorage and sessionStorage
+      // Check both storage locations
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const user = localStorage.getItem('user');
+      const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
       
-      if (token && user) {
-        setIsAuthenticated(true);
-        
+      console.log('Auth check:', { tokenExists: !!token, userExists: !!userStr });
+
+      if (token && userStr) {
         try {
-          const userData = JSON.parse(user);
-          // Check if user has admin role
+          const userData = JSON.parse(userStr);
           const hasAdminRole = userData.role === 'admin' || userData.role === 'superadmin';
-          setIsAdmin(hasAdminRole);
           
-          // Debug logging
-          console.log('User data:', {
-            userData,
-            role: userData.role,
+          console.log('User authenticated:', { 
+            role: userData.role, 
             isAdmin: hasAdminRole,
-            requireAdmin,
-            location: location.pathname
+            path: location.pathname 
+          });
+          
+          setAuthState({
+            isAuthenticated: true,
+            isAdmin: hasAdminRole,
+            loading: false
           });
         } catch (error) {
           console.error('Error parsing user:', error);
-          setIsAuthenticated(false);
-          setIsAdmin(false);
+          setAuthState({
+            isAuthenticated: false,
+            isAdmin: false,
+            loading: false
+          });
         }
       } else {
-        setIsAuthenticated(false);
-        setIsAdmin(false);
+        console.log('No token or user found');
+        setAuthState({
+          isAuthenticated: false,
+          isAdmin: false,
+          loading: false
+        });
       }
-      
-      setLoading(false);
     };
 
     checkAuth();
-  }, [requireAdmin, location.pathname]);
+    
+    // Optional: Add event listener to handle storage changes
+    const handleStorageChange = () => {
+      checkAuth();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [location.pathname]); // Only depend on pathname
+
+  const { loading, isAuthenticated, isAdmin } = authState;
 
   if (loading) {
     return (
@@ -67,7 +88,7 @@ const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) 
     isAdmin,
     path: location.pathname,
     hasToken: !!(localStorage.getItem('token') || sessionStorage.getItem('token')),
-    hasUser: !!localStorage.getItem('user')
+    hasUser: !!(localStorage.getItem('user') || sessionStorage.getItem('user'))
   });
 
   // CASE 1: Admin route but not authenticated
@@ -96,13 +117,17 @@ const ProtectedRoute = ({ children, requireAuth = true, requireAdmin = false }) 
 
   // CASE 5: Login/Register page but already authenticated
   if (!requireAuth && isAuthenticated) {
-    // Redirect to admin dashboard if admin, else user dashboard
-    if (isAdmin) {
-      console.log('Redirecting to admin dashboard - already authenticated as admin');
-      return <Navigate to="/admin/dashboard" replace />;
+    // IMPORTANT FIX: Check if we're already on the destination path to prevent loops
+    const currentPath = location.pathname;
+    const targetPath = isAdmin ? "/admin/dashboard" : "/dashboard";
+    
+    if (currentPath !== targetPath) {
+      console.log(`Redirecting to ${targetPath} - already authenticated as ${isAdmin ? 'admin' : 'user'}`);
+      return <Navigate to={targetPath} replace />;
     }
-    console.log('Redirecting to user dashboard - already authenticated');
-    return <Navigate to="/dashboard" replace />;
+    
+    // If already on the target path, render children to prevent infinite redirect
+    return children;
   }
 
   // CASE 6: Access granted
