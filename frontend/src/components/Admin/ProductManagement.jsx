@@ -14,7 +14,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api
 
 // Helper function to get auth headers using logged-in user's credentials
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token') || 
+  const token = localStorage.getItem('tantika_token') || 
                 sessionStorage.getItem('token');
   
   if (token) {
