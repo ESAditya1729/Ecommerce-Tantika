@@ -1,99 +1,37 @@
-const mongoose = require('mongoose');
-
-const productSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: [true, 'Product name is required'],
-        trim: true
+// Creating a product with variants
+const newProduct = new Product({
+  name: "Handcrafted Silk Saree",
+  description: "Traditional handwoven silk saree...",
+  price: 2999,
+  variants: [
+    {
+      name: "Red",
+      price: 2999,
+      stock: 10,
+      sku: "SAR-RED-001"
     },
-    description: {
-        type: String,
-        trim: true
-    },
-    category: {
-    type: String,
-    required: [true, 'Category is required'],
-    enum: [
-      'Sarees',
-      'Home Decor', 
-      'Bags',
-      'Sculptures',
-      'Clothing',
-      'Jewelry',
-      'Accessories',
-      'Pottery',
-      'Textiles',
-      'Art',
-      'Furniture',
-      'Stationery'
-    ],
-    default: 'Clothing'
-  },
-    price: {
-        type: Number,
-        required: [true, 'Price is required'],
-        min: [0, 'Price cannot be negative']
-    },
-    stock: {
-        type: Number,
-        required: [true, 'Stock quantity is required'],
-        min: [0, 'Stock cannot be negative'],
-        default: 0
-    },
-    status: {
-        type: String,
-        enum: ['active', 'out_of_stock', 'low_stock', 'draft'],
-        default: 'active'
-    },
-    sales: {
-        type: Number,
-        default: 0,
-        min: 0
-    },
-    rating: {
-        type: Number,
-        min: 0,
-        max: 5,
-        default: 0
-    },
-    image: {
-        type: String,
-        default: ''
-    },
-    images: [{
-        type: String
-    }],
-    sku: {
-        type: String,
-        unique: true,
-        sparse: true
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
-    },
-    tags: [{
-        type: String
-    }]
-}, {
-    timestamps: true
+    {
+      name: "Blue", 
+      price: 3199,
+      stock: 5,
+      sku: "SAR-BLU-001"
+    }
+  ],
+  specifications: [
+    { key: "Material", value: "Pure Silk" },
+    { key: "Length", value: "5.5 meters" }
+  ]
 });
 
-// Virtual for determining stock status
-productSchema.virtual('stockStatus').get(function() {
-    if (this.stock === 0) return 'out_of_stock';
-    if (this.stock < 5) return 'low_stock';
-    return 'active';
-});
+// Using virtual fields
+console.log(product.salePrice); // Calculated price with discount
+console.log(product.totalStock); // Total stock across variants
+console.log(product.stockStatus); // 'active', 'low_stock', or 'out_of_stock'
 
-// Indexes for better query performance
-productSchema.index({ name: 'text', category: 'text' });
-productSchema.index({ status: 1 });
-productSchema.index({ category: 1 });
-productSchema.index({ price: 1 });
+// Using static methods
+const activeProducts = await Product.findByStatus('active');
+const searchResults = await Product.search("silk saree");
 
-module.exports = mongoose.model('Product', productSchema);
+// Using instance methods
+await product.decreaseStock(1);
+await product.addReview(4.5);
