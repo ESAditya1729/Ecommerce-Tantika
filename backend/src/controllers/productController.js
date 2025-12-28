@@ -151,13 +151,25 @@ const getProductById = async (req, res) => {
 // @access  Admin
 const createProduct = async (req, res) => {
     try {
-        // REMOVE THIS BLOCK - Let the model handle SKU generation
-        // if (!req.body.sku) {
-        //     const count = await Product.countDocuments();
-        //     req.body.sku = `PROD${String(count + 1).padStart(6, '0')}`;
-        // }
-
-        const product = await Product.create(req.body);
+        console.log('Creating product with data:', req.body);
+        
+        // Generate SKU if not provided
+        let sku = req.body.sku;
+        if (!sku) {
+            const prefix = (req.body.category || 'PRO').substring(0, 3).toUpperCase();
+            const random = Math.floor(10000 + Math.random() * 90000);
+            sku = `${prefix}-${random}`;
+        }
+        
+        // Create product data with SKU
+        const productData = {
+            ...req.body,
+            sku: sku
+        };
+        
+        const product = await Product.create(productData);
+        
+        console.log('Product created successfully:', product._id);
 
         res.status(201).json({
             success: true,
@@ -165,13 +177,33 @@ const createProduct = async (req, res) => {
             product
         });
     } catch (error) {
-        console.error('Create product error:', error);
+        console.error('CREATE PRODUCT ERROR:');
+        console.error('Full error:', error);
+        
         if (error.code === 11000) {
+            // Duplicate SKU error
+            if (error.keyPattern && error.keyPattern.sku) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'SKU already exists. Please try again or provide a different SKU.'
+                });
+            }
             return res.status(400).json({
                 success: false,
-                message: 'SKU already exists'
+                message: 'Duplicate key error'
             });
         }
+        
+        // Check for validation errors
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors: messages
+            });
+        }
+        
         res.status(500).json({
             success: false,
             message: 'Server error',

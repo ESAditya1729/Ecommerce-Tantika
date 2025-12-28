@@ -302,7 +302,8 @@ const productSchema = new mongoose.Schema({
   sku: {
     type: String,
     trim: true,
-    uppercase: true
+    uppercase: true,
+    unique: true // Added unique constraint
   },
   
   // Related Products
@@ -337,94 +338,32 @@ const productSchema = new mongoose.Schema({
     ref: 'User'
   }
 }, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  timestamps: true
+  // Removed virtuals for now to simplify
+  // toJSON: { virtuals: true },
+  // toObject: { virtuals: true }
 });
 
-// Virtuals
-productSchema.virtual('stockStatus').get(function() {
-  if (this.stock === 0) return 'out_of_stock';
-  if (this.stock < (this.inventory?.lowStockThreshold || 5)) return 'low_stock';
-  return 'active';
-});
+// REMOVED ALL PRE-SAVE MIDDLEWARE - CAUSING "next is not a function" ERROR
 
-productSchema.virtual('salePrice').get(function() {
-  if (this.discount?.isActive && this.discount.type !== 'none') {
-    if (this.discount.type === 'percentage') {
-      return this.price * (1 - this.discount.value / 100);
-    } else if (this.discount.type === 'fixed') {
-      return Math.max(0, this.price - this.discount.value);
-    }
-  }
-  return this.price;
-});
-
-productSchema.virtual('discountPercentage').get(function() {
-  if (this.discount?.isActive && this.discount.type === 'percentage') {
-    return this.discount.value;
-  }
-  return 0;
-});
-
-productSchema.virtual('hasVariants').get(function() {
-  return this.variants && this.variants.length > 0;
-});
-
-productSchema.virtual('totalStock').get(function() {
-  if (this.hasVariants) {
-    return this.variants.reduce((total, variant) => total + (variant.stock || 0), 0);
-  }
-  return this.stock;
-});
-
-// Pre-save middleware
-productSchema.pre('save', function(next) {
-  // Auto-generate SKU if not provided
-  if (!this.sku) {
-    const prefix = (this.category || 'PRO').substring(0, 3).toUpperCase();
-    const random = Math.floor(10000 + Math.random() * 90000);
-    this.sku = `${prefix}-${random}`;
-  }
-  
-  // Generate slug if not provided
-  if (!this.seo?.slug && this.name) {
-    this.seo = this.seo || {};
-    this.seo.slug = this.name
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-  
-  // Update stock status based on inventory
-  if (this.stock <= 0) {
-    this.status = 'out_of_stock';
-  } else if (this.stock < (this.inventory?.lowStockThreshold || 5)) {
-    this.status = 'low_stock';
-  } else if (this.status === 'out_of_stock' && this.stock > 0) {
-    this.status = 'active';
-  }
-  
-  // Update sale price calculation
-  if (this.discount?.isActive && this.discount.type === 'percentage' && !this.discount.originalPrice) {
-    this.discount.originalPrice = this.price;
-  }
-  
-  next();
-});
-
-// Indexes
+// Indexes - Keep these, they're fine
 productSchema.index({ name: 'text', description: 'text', 'specifications.value': 'text' });
 productSchema.index({ status: 1 });
 productSchema.index({ category: 1, status: 1 });
 productSchema.index({ price: 1 });
-productSchema.index({ sku: 1 });
+productSchema.index({ sku: 1 }, { unique: true }); // Ensure sku is unique
 productSchema.index({ createdAt: -1 });
 productSchema.index({ sales: -1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ isFeatured: 1 });
 productSchema.index({ isBestSeller: 1 });
 productSchema.index({ tags: 1 });
+
+// Static method to generate SKU
+productSchema.statics.generateSKU = function(category = 'PRO') {
+  const prefix = category.substring(0, 3).toUpperCase();
+  const random = Math.floor(10000 + Math.random() * 90000);
+  return `${prefix}-${random}`;
+};
 
 module.exports = mongoose.model('Product', productSchema);
