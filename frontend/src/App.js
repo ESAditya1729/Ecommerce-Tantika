@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Register from "./pages/Register"; 
 import AdminPage from "./pages/AdminPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ProductDetails from './pages/ProductDetails';
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -80,13 +81,22 @@ function App() {
             </ProtectedRoute>
           } 
         />
-        
         <Route 
           path="/shop" 
           element={
             <ProtectedRoute>
               <MainLayout>
                 <Shop />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/product/:id" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <ProductDetails />
               </MainLayout>
             </ProtectedRoute>
           } 

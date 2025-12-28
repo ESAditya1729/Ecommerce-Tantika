@@ -20,7 +20,7 @@ const getProducts = async (req, res) => {
         let query = {};
 
         // Filter by category
-        if (category && category !== 'all') {
+        if (category && category !== 'all' && category !== 'All') {
             query.category = category;
         }
 

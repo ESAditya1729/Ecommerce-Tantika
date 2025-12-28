@@ -9,6 +9,7 @@ const morgan = require('morgan'); // Add for logging
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const orderRoutes = require('./routes/orderRoutes'); // Import order routes
 
 const app = express();
 
@@ -189,11 +190,12 @@ app.get('/', (req, res) => {
     endpoints: {
       auth: '/api/auth',
       products: '/api/products',
+      orders: '/api/orders',
       product_categories: '/api/products/categories',
       product_stats: '/api/products/stats/summary',
       upload: '/api/upload',
       health_check: '/health',
-      cors_test: '/api/cors-test' // Added test endpoint
+      cors_test: '/api/cors-test'
     },
     timestamp: new Date().toISOString()
   });
@@ -224,6 +226,9 @@ app.get('/health', (req, res) => {
       readyState: mongoose.connection.readyState
     },
     endpoints: {
+      auth: 'active',
+      products: 'active',
+      orders: 'active',
       upload: 'active'
     },
     uptime: process.uptime(),
@@ -273,6 +278,7 @@ app.post('/api/cors-test', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/orders', orderRoutes); // Order routes added
 
 // Add a test upload route
 app.get('/api/upload/test', (req, res) => {
@@ -297,6 +303,7 @@ app.use('/api/*', (req, res) => {
     availableEndpoints: [
       '/api/auth',
       '/api/products',
+      '/api/orders',
       '/api/upload',
       '/api/cors-test',
       '/health'

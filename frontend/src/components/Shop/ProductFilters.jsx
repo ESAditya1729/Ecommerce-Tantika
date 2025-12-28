@@ -1,49 +1,134 @@
-import { Filter, X } from 'lucide-react';
-import { categories } from '../../data/products';
+// components/Shop/ProductFilters.jsx
+import { Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 
-const ProductFilters = ({ 
-  selectedCategory, 
-  onCategoryChange, 
-  sortBy, 
+const ProductFilters = ({
+  categories = [],
+  selectedCategory,
+  onCategoryChange,
+  sortBy,
   onSortChange,
   priceRange,
   onPriceChange,
   isMobileFiltersOpen,
   onMobileFiltersToggle
 }) => {
+  const [isCategoryOpen, setIsCategoryOpen] = useState(true);
+  const [isPriceOpen, setIsPriceOpen] = useState(true);
+  const [localPriceRange, setLocalPriceRange] = useState(priceRange);
+  const debounceTimeout = useRef(null);
+
+  const sortOptions = [
+    { value: 'featured', label: 'Featured' },
+    { value: 'newest', label: 'Newest' },
+    { value: 'price-low', label: 'Price: Low to High' },
+    { value: 'price-high', label: 'Price: High to Low' },
+    { value: 'rating', label: 'Highest Rated' }
+  ];
+
+  // Sync local price range with prop
+  useEffect(() => {
+    setLocalPriceRange(priceRange);
+  }, [priceRange]);
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(price);
+  };
+
+  const handlePriceChange = (newRange) => {
+    setLocalPriceRange(newRange);
+    
+    // Debounce API calls
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+    
+    debounceTimeout.current = setTimeout(() => {
+      onPriceChange(newRange);
+    }, 300); // 300ms delay to prevent rapid API calls
+  };
+
+  const handleMinPriceChange = (e) => {
+    const newMin = Math.min(parseInt(e.target.value), localPriceRange.max);
+    handlePriceChange({ ...localPriceRange, min: newMin });
+  };
+
+  const handleMaxPriceChange = (e) => {
+    const newMax = Math.max(parseInt(e.target.value), localPriceRange.min);
+    handlePriceChange({ ...localPriceRange, max: newMax });
+  };
+
   return (
     <>
-      {/* Mobile Filter Button */}
-      <button
-        onClick={onMobileFiltersToggle}
-        className="md:hidden flex items-center justify-center w-full bg-white border border-gray-300 rounded-lg py-3 px-4 mb-6"
-      >
-        <Filter className="w-5 h-5 mr-2" />
-        Filters & Sort
-      </button>
-
-      {/* Filters Panel */}
-      <div className={`
-        ${isMobileFiltersOpen ? 'block' : 'hidden'} 
-        md:block bg-white rounded-xl border border-gray-200 p-6
-      `}>
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold flex items-center">
+      {/* Mobile filter toggle button */}
+      <div className="lg:hidden mb-4">
+        <button
+          onClick={onMobileFiltersToggle}
+          className="flex items-center justify-between w-full p-4 bg-white border border-gray-300 rounded-lg shadow-sm"
+        >
+          <div className="flex items-center">
             <Filter className="w-5 h-5 mr-2" />
-            Filters
-          </h3>
-          <button
-            onClick={onMobileFiltersToggle}
-            className="md:hidden text-gray-500"
-          >
-            <X className="w-5 h-5" />
-          </button>
+            <span className="font-medium">Filters & Sort</span>
+          </div>
+          <ChevronDown className={`w-5 h-5 transition-transform ${isMobileFiltersOpen ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {/* Filters sidebar */}
+      <div className={`
+        ${isMobileFiltersOpen ? 'block' : 'hidden lg:block'}
+        bg-white rounded-xl border border-gray-200 p-6 shadow-sm
+      `}>
+        {/* Sort Section */}
+        <div className="mb-8">
+          <label className="block text-sm font-semibold text-gray-700 mb-3">
+            Sort By
+          </label>
+          <div className="space-y-2">
+            {sortOptions.map((option) => (
+              <label key={option.value} className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="sort"
+                  value={option.value}
+                  checked={sortBy === option.value}
+                  onChange={(e) => onSortChange(e.target.value)}
+                  className="sr-only"
+                />
+                <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${
+                  sortBy === option.value 
+                    ? 'border-blue-500 bg-blue-500' 
+                    : 'border-gray-300'
+                }`}>
+                  {sortBy === option.value && (
+                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">{option.label}</span>
+              </label>
+            ))}
+          </div>
         </div>
 
-        {/* Category Filter */}
+        {/* Categories Section - FIXED: No duplicate "All" */}
         <div className="mb-8">
-          <h4 className="font-semibold mb-4 text-gray-700">Category</h4>
-          <div className="space-y-2">
+          <button
+            onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+            className="flex items-center justify-between w-full mb-3"
+          >
+            <span className="text-sm font-semibold text-gray-700">Categories</span>
+            {isCategoryOpen ? (
+              <ChevronUp className="w-4 h-4 text-gray-500" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            )}
+          </button>
+          
+          <div className={`space-y-2 ${isCategoryOpen ? 'block' : 'hidden'}`}>
             {categories.map((category) => (
               <label key={category} className="flex items-center cursor-pointer">
                 <input
@@ -52,70 +137,97 @@ const ProductFilters = ({
                   value={category}
                   checked={selectedCategory === category}
                   onChange={(e) => onCategoryChange(e.target.value)}
-                  className="mr-3 text-blue-600 focus:ring-blue-500"
+                  className="sr-only"
                 />
-                <span className={`
-                  ${selectedCategory === category ? 'text-blue-600 font-medium' : 'text-gray-600'}
-                `}>
-                  {category}
-                </span>
-                {category !== 'All' && (
-                  <span className="ml-auto text-sm text-gray-500">12</span>
-                )}
+                <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${
+                  selectedCategory === category 
+                    ? 'border-blue-500 bg-blue-500' 
+                    : 'border-gray-300'
+                }`}>
+                  {selectedCategory === category && (
+                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">{category}</span>
+                {/* Counts have been completely removed */}
               </label>
             ))}
           </div>
         </div>
 
-        {/* Price Range */}
-        <div className="mb-8">
-          <h4 className="font-semibold mb-4 text-gray-700">Price Range</h4>
-          <div className="space-y-4">
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>₹{priceRange.min}</span>
-              <span>₹{priceRange.max}</span>
+        {/* Price Range Section */}
+        <div className="mb-6">
+          <button
+            onClick={() => setIsPriceOpen(!isPriceOpen)}
+            className="flex items-center justify-between w-full mb-3"
+          >
+            <span className="text-sm font-semibold text-gray-700">Price Range</span>
+            {isPriceOpen ? (
+              <ChevronUp className="w-4 h-4 text-gray-500" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            )}
+          </button>
+          
+          <div className={`${isPriceOpen ? 'block' : 'hidden'}`}>
+            <div className="mb-4 space-y-6">
+              {/* Min Price Slider */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-2">
+                  Min Price: {formatPrice(localPriceRange.min)}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max={priceRange.max}
+                  value={localPriceRange.min}
+                  onChange={handleMinPriceChange}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500"
+                />
+              </div>
+              
+              {/* Max Price Slider */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-2">
+                  Max Price: {formatPrice(localPriceRange.max)}
+                </label>
+                <input
+                  type="range"
+                  min={priceRange.min}
+                  max={10000}
+                  value={localPriceRange.max}
+                  onChange={handleMaxPriceChange}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500"
+                />
+              </div>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="10000"
-              value={priceRange.max}
-              onChange={(e) => onPriceChange({ ...priceRange, max: e.target.value })}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            />
-            <div className="text-center text-sm text-gray-500">
-              Max: ₹{priceRange.max}
+            
+            <div className="flex items-center justify-between text-sm">
+              <div className="px-3 py-1.5 bg-gray-100 rounded-lg">
+                {formatPrice(localPriceRange.min)}
+              </div>
+              <span className="text-gray-400">to</span>
+              <div className="px-3 py-1.5 bg-gray-100 rounded-lg">
+                {formatPrice(localPriceRange.max)}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Sort By */}
-        <div className="mb-8">
-          <h4 className="font-semibold mb-4 text-gray-700">Sort By</h4>
-          <select
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+        {/* Clear Filters Button */}
+        {(selectedCategory !== 'All' || priceRange.min > 0 || priceRange.max < 10000) && (
+          <button
+            onClick={() => {
+              onCategoryChange('All');
+              onPriceChange({ min: 0, max: 10000 });
+              onSortChange('featured');
+              setLocalPriceRange({ min: 0, max: 10000 });
+            }}
+            className="w-full py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
           >
-            <option value="featured">Featured</option>
-            <option value="price-low">Price: Low to High</option>
-            <option value="price-high">Price: High to Low</option>
-            <option value="newest">Newest First</option>
-            <option value="rating">Highest Rated</option>
-          </select>
-        </div>
-
-        {/* Clear Filters */}
-        <button
-          onClick={() => {
-            onCategoryChange('All');
-            onPriceChange({ min: 0, max: 10000 });
-            onSortChange('featured');
-          }}
-          className="w-full border-2 border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          Clear All Filters
-        </button>
+            Clear All Filters
+          </button>
+        )}
       </div>
     </>
   );
