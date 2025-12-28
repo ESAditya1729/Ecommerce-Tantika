@@ -68,5 +68,8 @@ const authorize = (...roles) => {
     next();
   };
 };
-const admin = (req, res, next) => authorize('admin')(req, res, next);
+
+// CORRECTED: Call authorize('admin') which returns a middleware function
+const admin = authorize('admin');
+
 module.exports = { protect, authorize, admin };
