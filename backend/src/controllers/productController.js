@@ -151,11 +151,11 @@ const getProductById = async (req, res) => {
 // @access  Admin
 const createProduct = async (req, res) => {
     try {
-        // Auto-generate SKU if not provided
-        if (!req.body.sku) {
-            const count = await Product.countDocuments();
-            req.body.sku = `PROD${String(count + 1).padStart(6, '0')}`;
-        }
+        // REMOVE THIS BLOCK - Let the model handle SKU generation
+        // if (!req.body.sku) {
+        //     const count = await Product.countDocuments();
+        //     req.body.sku = `PROD${String(count + 1).padStart(6, '0')}`;
+        // }
 
         const product = await Product.create(req.body);
 
@@ -165,7 +165,7 @@ const createProduct = async (req, res) => {
             product
         });
     } catch (error) {
-        console.error(error);
+        console.error('Create product error:', error);
         if (error.code === 11000) {
             return res.status(400).json({
                 success: false,
