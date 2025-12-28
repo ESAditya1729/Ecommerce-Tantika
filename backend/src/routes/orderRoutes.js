@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const OrderController = require('../controllers/OrderController');
+const OrderController = require('../controllers/orderController'); 
 
 // Since OrderController is a class, access static methods with the class name
 router.post('/express-interest', OrderController.createOrder);
