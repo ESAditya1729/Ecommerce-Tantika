@@ -122,62 +122,84 @@ const ProductManagement = () => {
   }, [searchTerm, selectedCategory]);
 
   // Handle adding new product
-  const handleAddProduct = async () => {
-    try {
-      setActionLoading(true);
-      
-      // Validate required fields
-      if (!newProduct.name || !newProduct.category || !newProduct.price || !newProduct.image) {
-        alert('Please fill in all required fields (*)');
-        return;
-      }
-
-      // Prepare product data with images
-      const productData = {
-        name: newProduct.name,
-        description: newProduct.description || '',
-        category: newProduct.category,
-        price: parseFloat(newProduct.price),
-        stock: parseInt(newProduct.stock) || 0,
-        images: newProduct.images || [],
-        image: newProduct.image || (newProduct.images && newProduct.images[0]) || '',
-        status: newProduct.status,
-        rating: parseFloat(newProduct.rating) || 0,
-        sales: parseInt(newProduct.sales) || 0
-      };
-
-      const response = await axios.post(
-        `${API_BASE_URL}/products`, 
-        productData, 
-        { headers: getAuthHeaders() }
-      );
-
-      if (response.data.success) {
-        // Refresh products list
-        fetchProducts();
-        // Reset form and close modal
-        setNewProduct({
-          name: '',
-          description: '',
-          category: '',
-          price: '',
-          stock: '',
-          images: [],
-          image: '',
-          status: 'active',
-          rating: '',
-          sales: ''
-        });
-        setShowAddModal(false);
-        alert('Product added successfully!');
-      }
-    } catch (err) {
-      console.error('Error adding product:', err);
-      alert(err.response?.data?.message || 'Failed to add product');
-    } finally {
-      setActionLoading(false);
+// Change handleAddProduct to accept productData parameter
+const handleAddProduct = async (productDataFromModal) => {
+  try {
+    setActionLoading(true);
+    
+    // Use the data from modal OR fallback to newProduct state
+    const dataToSend = productDataFromModal || newProduct;
+    
+    // Validate required fields
+    if (!dataToSend.name || !dataToSend.category || !dataToSend.price || !dataToSend.image) {
+      alert('Please fill in all required fields (*)');
+      return;
     }
-  };
+
+    // Prepare product data
+    const productData = {
+      name: dataToSend.name,
+      description: dataToSend.description || '',
+      category: dataToSend.category,
+      price: parseFloat(dataToSend.price),
+      stock: parseInt(dataToSend.stock) || 0,
+      images: dataToSend.images || [],
+      image: dataToSend.image || (dataToSend.images && dataToSend.images[0]) || '',
+      status: dataToSend.status || 'active',
+      rating: parseFloat(dataToSend.rating) || 0,
+      sales: parseInt(dataToSend.sales) || 0,
+      // Add the new fields if they exist
+      specifications: dataToSend.specifications || [],
+      variants: dataToSend.variants || [],
+      sku: dataToSend.sku || generateSKU(dataToSend.category), // Helper function
+      tags: dataToSend.tags || []
+    };
+
+    console.log('Sending product data:', productData); // Debug log
+
+    const response = await axios.post(
+      `${API_BASE_URL}/products`, 
+      productData, 
+      { headers: getAuthHeaders() }
+    );
+
+    if (response.data.success) {
+      // Refresh products list
+      fetchProducts();
+      // Reset form and close modal
+      setNewProduct({
+        name: '',
+        description: '',
+        category: '',
+        price: '',
+        stock: '',
+        images: [],
+        image: '',
+        status: 'active',
+        rating: '',
+        sales: '',
+        specifications: [],
+        variants: [],
+        tags: []
+      });
+      setShowAddModal(false);
+      alert('Product added successfully!');
+    }
+  } catch (err) {
+    console.error('Error adding product:', err);
+    console.error('Error response:', err.response?.data); // Debug log
+    alert(err.response?.data?.message || 'Failed to add product');
+  } finally {
+    setActionLoading(false);
+  }
+};
+
+// Helper function to generate SKU
+const generateSKU = (category) => {
+  const prefix = (category || 'PRO').substring(0, 3).toUpperCase();
+  const random = Math.floor(10000 + Math.random() * 90000);
+  return `${prefix}-${random}`;
+};
 
   // Handle update product
   const handleUpdateProduct = async () => {

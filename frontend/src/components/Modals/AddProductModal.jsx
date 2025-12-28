@@ -63,42 +63,39 @@ const AddProductModal = ({
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Mark all fields as touched
-    const allFields = ['name', 'category', 'price', 'image', 'description'];
-    const touchedObj = {};
-    allFields.forEach(field => touchedObj[field] = true);
-    setTouched(touchedObj);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  // Mark all fields as touched
+  const allFields = ['name', 'category', 'price', 'image', 'description'];
+  const touchedObj = {};
+  allFields.forEach(field => touchedObj[field] = true);
+  setTouched(touchedObj);
 
-    const validationErrors = validateForm();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
+  const validationErrors = validateForm();
+  if (Object.keys(validationErrors).length > 0) {
+    setErrors(validationErrors);
+    return;
+  }
 
-    // Prepare product data with additional fields
-    const productData = {
-      ...newProduct,
-      images: featuredImages,
-      specifications: specifications.filter(spec => spec.key && spec.value),
-      variants: variants.filter(variant => variant.name),
-      createdAt: new Date().toISOString(),
-      sku: generateSKU(),
-    };
-
-    // Update product data
-    setNewProduct(productData);
-    
-    // Call the handleAddProduct function
-    await handleAddProduct();
-    
-    // Reset form on success
-    if (!actionLoading) {
-      resetForm();
-    }
+  // Prepare product data with additional fields
+  const productData = {
+    ...newProduct,
+    images: featuredImages,
+    specifications: specifications.filter(spec => spec.key && spec.value),
+    variants: variants.filter(variant => variant.name),
+    sku: generateSKU(),
+    tags: [] // Add tags if you have them
   };
+
+  console.log('Product data prepared:', productData); // Debug log
+  
+  // Call the handleAddProduct function WITH the prepared data
+  await handleAddProduct(productData);
+  
+  // Remove this line: setNewProduct(productData);
+  // Remove this line: if (!actionLoading) { resetForm(); }
+};
 
   const generateSKU = () => {
     const prefix = newProduct.category?.substring(0, 3).toUpperCase() || 'PRO';
