@@ -42,14 +42,38 @@ const AdminPage = () => {
     { id: 'TNT-2452', customer: 'Rajesh Mehta', amount: 899, status: 'delivered', date: '2024-01-12', items: 1 },
   ]);
 
-  // Check admin authentication
+  // Check admin authentication - FIXED: Use correct localStorage keys
   useEffect(() => {
     const checkAdminAuth = () => {
-      const adminToken = localStorage.getItem('admin_token');
-      const adminUser = localStorage.getItem('admin_user');
+      const token = localStorage.getItem('tantika_token');
+      const userStr = localStorage.getItem('tantika_user');
       
-      if (!adminToken || !adminUser) {
-        navigate('/admin/login');
+      if (!token || !userStr) {
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const user = JSON.parse(userStr);
+        // Check if user is actually an admin
+        if (user.role !== 'admin' && user.role !== 'superadmin') {
+          // If not admin, redirect to dashboard
+          navigate('/dashboard');
+          return;
+        }
+        
+        // Update adminData with actual user info
+        setAdminData({
+          name: user.username || 'Admin',
+          email: user.email || 'admin@tantika.com',
+          role: user.role === 'superadmin' ? 'Super Admin' : 'Admin'
+        });
+        
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('tantika_token');
+        localStorage.removeItem('tantika_user');
+        navigate('/login');
       }
     };
 
@@ -57,9 +81,10 @@ const AdminPage = () => {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
-    navigate('/admin/login');
+    // Remove the correct localStorage items
+    localStorage.removeItem('tantika_token');
+    localStorage.removeItem('tantika_user');
+    navigate('/login');
   };
 
   const handleTabChange = (tabId) => {

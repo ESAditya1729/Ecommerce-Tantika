@@ -1,115 +1,112 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import Home from './pages/Home';
-import About from './pages/About';
-import Shop from './pages/Shop';
-import Contact from './pages/Contact';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import ProtectedRoute from './components/ProtectedRoute';
-import Profile from './pages/Profile';
-// Admin imports
-import AdminLogin from './pages/AdminLogin';
-import AdminPage from './pages/AdminPage';
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Shop from "./pages/Shop";
+import About from "./pages/About"; 
+import Contact from "./pages/Contact";
+import Home from "./pages/Home"; 
+import Register from "./pages/Register"; 
+import AdminPage from "./pages/AdminPage";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+// Layout components
+import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+
+// Layout wrapper for pages that need Navbar & Footer
+const MainLayout = ({ children }) => {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-grow">{children}</main>
+      <Footer />
+    </div>
+  );
+};
+
+// Admin Layout without Navbar & Footer
+const AdminLayout = ({ children }) => {
+  return (
+    <div className="min-h-screen">
+      {children}
+    </div>
+  );
+};
 
 function App() {
-  const [authChecked, setAuthChecked] = useState(false);
-
-  useEffect(() => {
-    setTimeout(() => setAuthChecked(true), 500);
-  }, []);
-
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading তন্তিকা...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <Router>
-      <div className="min-h-screen flex flex-col">
-        {/* Conditionally render Navbar & Footer - Hide for admin routes */}
-        <Routes>
-          <Route path="/admin/*" element={null} />
-          <Route path="*" element={<Navbar />} />
-        </Routes>
+      <Routes>
+        {/* Public Pages - With Navbar & Footer */}
+        <Route path="/" element={
+          <MainLayout>
+            <Home />
+          </MainLayout>
+        } />
         
-        <main className="flex-grow">
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<Home />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/shop" element={<Shop />} />
-            <Route path="/contact" element={<Contact />} />
-            
-            {/* Auth Routes */}
-            <Route path="/login" element={
-              <ProtectedRoute requireAuth={false}>
-                <Login />
-              </ProtectedRoute>
-            } />
-            <Route path="/register" element={
-              <ProtectedRoute requireAuth={false}>
-                <Register />
-              </ProtectedRoute>
-            } />
-            
-            {/* Protected Routes */}
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
+        <Route path="/about" element={
+          <MainLayout>
+            <About />
+          </MainLayout>
+        } />
+        
+        <Route path="/contact" element={
+          <MainLayout>
+            <Contact />
+          </MainLayout>
+        } />
+        
+        {/* Authentication Pages - With Navbar & Footer */}
+        <Route path="/login" element={
+          <MainLayout>
+            <Login />
+          </MainLayout>
+        } />
+        
+        <Route path="/register" element={
+          <MainLayout>
+            <Register />
+          </MainLayout>
+        } />
+        
+        {/* Protected Pages - With Navbar & Footer */}
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
                 <Dashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            } />
-            
-            {/* Admin Routes - FIXED */}
-            {/* Remove the direct /admin route or wrap it with ProtectedRoute */}
-            <Route path="/admin/login" element={
-              <ProtectedRoute requireAuth={false} requireAdmin={false}>
-                <AdminLogin />
-              </ProtectedRoute>
-            } />
-            
-            {/* Alternative: Redirect /admin to /admin/login */}
-            <Route path="/admin" element={
-              <ProtectedRoute requireAuth={false} requireAdmin={false}>
-                <AdminLogin />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/admin/dashboard" element={
-              <ProtectedRoute requireAdmin={true}>
-                <AdminPage />
-              </ProtectedRoute>
-            } />
-            
-            {/* Add a catch-all for admin routes */}
-            <Route path="/admin/*" element={
-              <ProtectedRoute requireAdmin={true}>
-                <AdminPage />
-              </ProtectedRoute>
-            } />
-          </Routes>
-        </main>
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
         
-        {/* Conditionally render Footer - Hide for admin routes */}
-        <Routes>
-          <Route path="/admin/*" element={null} />
-          <Route path="*" element={<Footer />} />
-        </Routes>
-      </div>
+        <Route 
+          path="/shop" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Shop />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Admin Page - With Admin Layout (No Navbar & Footer) */}
+        <Route 
+          path="/admin/Addashboard" 
+          element={
+            <ProtectedRoute requireAdmin={true}>
+              <AdminLayout>
+                <AdminPage />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Default redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Router>
   );
 }

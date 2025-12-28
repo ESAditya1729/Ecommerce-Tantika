@@ -94,12 +94,8 @@ const handleSubmit = async (e) => {
       password: formData.password,
     };
 
-    console.log("🔍 Login attempt with:", credentials);
-
     // Use authServices for login
     const result = await authServices.login(credentials);
-
-    console.log("✅ Login API response:", result);
 
     if (result.success) {
       setLoginMessage("✅ Login successful! Redirecting...");
@@ -113,56 +109,36 @@ const handleSubmit = async (e) => {
         localStorage.removeItem("rememberedEmail");
       }
 
-      // ✅ CRITICAL: Force store in localStorage
-      // The axios interceptor should do this, but let's be sure
-      if (result.token) {
-        localStorage.setItem('tantika_token', result.token);
-        console.log("✅ Token stored:", result.token.substring(0, 20) + "...");
-      }
-      if (result.user) {
-        localStorage.setItem('tantika_user', JSON.stringify(result.user));
-        console.log("✅ User stored:", result.user.username);
-      }
-
-      // ✅ IMMEDIATE redirect (no setTimeout)
-      console.log("🔄 Navigating to dashboard...");
+      // ✅ CRITICAL: Store token and user data synchronously
+      localStorage.setItem('tantika_token', result.token);
+      localStorage.setItem('tantika_user', JSON.stringify(result.user));
       
-      // Force navigation immediately
-      if (result.user.role === "admin") {
-        navigate("/admin/dashboard", { replace: true });
-      } else {
-        navigate("/dashboard", { replace: true });
+      // ✅ Determine redirect path based on user role
+      let redirectPath = "/dashboard"; // Default for regular users
+      
+      // Check if user has admin role
+      if (result.user.role === "admin" || result.user.role === "superadmin") {
+        redirectPath = "/admin/Addashboard"; // Admin dashboard
       }
       
-      // Optional: Force page reload if navigation doesn't work
-      // setTimeout(() => {
-      //   window.location.href = "/dashboard";
-      // }, 100);
+      // ✅ CRITICAL FIX: Use window.location.href for hard navigation
+      // This ensures the app fully reloads and ProtectedRoute reads fresh localStorage
+      setTimeout(() => {
+        window.location.href = redirectPath;
+      }, 100);
+      
+    } else {
+      throw new Error(result.message || "Login failed");
     }
   } catch (error) {
-    console.error("Login error:", error);
-    
     // Handle different error formats
-    if (error.errors) {
-      setErrors(error.errors);
-    } else if (error.message) {
-      setErrors({ 
-        submit: error.message 
-      });
-    } else if (error.response?.data) {
-      const serverError = error.response.data;
-      if (serverError.errors) {
-        setErrors(serverError.errors);
-      } else {
-        setErrors({ 
-          submit: serverError.message || "Login failed. Please check your credentials." 
-        });
-      }
-    } else {
-      setErrors({ 
-        submit: "Network error. Please check your connection." 
-      });
-    }
+    const errorMessage = error.response?.data?.message || 
+                        error.message || 
+                        "Login failed. Please check your credentials.";
+    
+    setErrors({ 
+      submit: errorMessage 
+    });
   } finally {
     setIsSubmitting(false);
   }

@@ -16,95 +16,52 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError("");
 
-    try {
-      // Call actual login API
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
-        email: formData.email,
-        password: formData.password
-      });
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      email: formData.email,
+      password: formData.password,
+    });
 
-      if (response.data.success) {
-        const { token, user } = response.data;
-        
-        // Debug: Log what we're receiving
-        console.log('Login successful:', { token: token.substring(0, 20) + '...', user });
-        
-        // Store token based on rememberMe choice
-        if (formData.rememberMe) {
-          localStorage.setItem('token', token);
-        } else {
-          sessionStorage.setItem('token', token);
-        }
-        
-        // Store user info
-        localStorage.setItem('user', JSON.stringify(user));
-        
-        // Debug: Verify storage
-        console.log('Stored in:', formData.rememberMe ? 'localStorage' : 'sessionStorage');
-        console.log('Token stored:', !!localStorage.getItem('token') || !!sessionStorage.getItem('token'));
-        console.log('User stored:', !!localStorage.getItem('user'));
-        
-        // Check if user is admin
-        if (user.role !== 'admin' && user.role !== 'superadmin') {
-          setError('Access denied. Admin privileges required.');
-          localStorage.removeItem('token');
-          sessionStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setLoading(false);
-          return;
-        }
-
-        // Show success message - FIXED: Using username instead of name
-        alert(`Welcome back, ${user.username || user.email}!`);
-        
-        // Small delay to ensure state is updated
-        setTimeout(() => {
-          console.log('Navigating to /admin/dashboard...');
-          navigate('/admin/dashboard');
-        }, 100);
-      } else {
-        setError(response.data.message || 'Login failed');
-      }
-    } catch (err) {
-      console.error('Login error:', err);
-      
-      if (err.response) {
-        // Server responded with error
-        switch (err.response.status) {
-          case 400:
-            setError('Invalid email or password format');
-            break;
-          case 401:
-            setError('Invalid email or password');
-            break;
-          case 403:
-            setError('Account is disabled or not verified');
-            break;
-          case 404:
-            setError('User not found');
-            break;
-          case 429:
-            setError('Too many login attempts. Try again later.');
-            break;
-          default:
-            setError(err.response.data?.message || 'Login failed. Please try again.');
-        }
-      } else if (err.request) {
-        // Request made but no response
-        setError('Network error. Please check your connection.');
-      } else {
-        // Other errors
-        setError('An error occurred. Please try again.');
-      }
-    } finally {
+    if (!response.data.success) {
+      setError(response.data.message || "Login failed");
       setLoading(false);
+      return;
     }
-  };
+
+    const { token, user } = response.data;
+
+    if (user.role !== "admin" && user.role !== "superadmin") {
+      setError("Access denied. Admin privileges required.");
+      setLoading(false);
+      return;
+    }
+
+    // Store auth
+    if (formData.rememberMe) {
+      localStorage.setItem("token", token);
+    } else {
+      sessionStorage.setItem("token", token);
+    }
+
+    localStorage.setItem("user", JSON.stringify(user));
+
+    // ✅ IMMEDIATE redirect (no alert, no timeout)
+    navigate("/admin/dashboard", { replace: true });
+    return;
+
+  } catch (err) {
+    setError(
+      err.response?.data?.message || "Login failed. Please try again."
+    );
+    setLoading(false);
+  }
+};
+
 
   // Handle demo admin login (optional - remove in production)
   const handleDemoLogin = async () => {

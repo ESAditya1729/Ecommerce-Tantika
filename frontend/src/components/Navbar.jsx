@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { ShoppingBag, User, Home, Info, Phone, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ShoppingBag, User, Home, Info, Phone, X, LogOut, Shield } from "lucide-react";
 import logo from "../Assets/TantikaLogo.png";
-// import { useAuth } from "../context/AuthContext";
 import useAuth from '../Hooks/useAuth';
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const { user, logout, isAuthenticated } = useAuth();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -15,7 +16,59 @@ const Navbar = () => {
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
   };
-   const { user, logout, isAuthenticated } = useAuth();
+
+  // Check if user is admin
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+
+  // Handler for Shop navigation
+  const handleShopClick = (e) => {
+    e.preventDefault();
+    closeMobileMenu();
+    
+    if (isAuthenticated) {
+      navigate("/shop");
+    } else {
+      navigate("/login", { state: { from: "/shop" } });
+    }
+  };
+
+  // Handler for Enter Shop/Go to Shop navigation
+  const handleEnterShopClick = (e) => {
+    e.preventDefault();
+    closeMobileMenu();
+    
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    } else {
+      navigate("/login", { state: { from: "/dashboard" } });
+    }
+  };
+
+  // Handler for Join Us navigation
+  const handleJoinUsClick = (e) => {
+    e.preventDefault();
+    closeMobileMenu();
+    
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    } else {
+      navigate("/register");
+    }
+  };
+
+  // Handler for Admin Panel navigation
+  const handleAdminPanelClick = (e) => {
+    e.preventDefault();
+    closeMobileMenu();
+    navigate("/admin/Addashboard");
+  };
+
+  // Handler for Logout
+  const handleLogout = () => {
+    logout();
+    closeMobileMenu();
+    navigate("/");
+  };
 
   return (
     <nav className="bg-white shadow-lg sticky top-0 z-50">
@@ -27,13 +80,11 @@ const Navbar = () => {
             className="flex items-center space-x-3"
             onClick={closeMobileMenu}
           >
-            {/* Logo Image */}
             <img
               src={logo}
               alt="তন্তিকা Logo"
               className="h-16 w-16 md:h-20 md:w-20 object-contain"
             />
-            {/* Logo Text */}
             <span className="text-3xl font-bold text-blue-600">তন্তিকা</span>
           </Link>
 
@@ -42,20 +93,25 @@ const Navbar = () => {
             <Link
               to="/"
               className="flex items-center text-gray-800 hover:text-blue-600 font-semibold text-lg"
+              onClick={closeMobileMenu}
             >
               <Home className="w-5 h-5 mr-2" />
               Home
             </Link>
-            <Link
-              to="/products"
-              className="flex items-center text-gray-800 hover:text-blue-600 font-semibold text-lg"
+            
+            {/* Shop Link - Conditionally navigate based on auth */}
+            <button
+              onClick={handleShopClick}
+              className="flex items-center text-gray-800 hover:text-blue-600 font-semibold text-lg bg-transparent border-none cursor-pointer"
             >
               <ShoppingBag className="w-5 h-5 mr-2" />
               Shop
-            </Link>
+            </button>
+            
             <Link
               to="/about"
               className="flex items-center text-gray-800 hover:text-blue-600 font-semibold text-lg"
+              onClick={closeMobileMenu}
             >
               <Info className="w-5 h-5 mr-2" />
               About
@@ -63,6 +119,7 @@ const Navbar = () => {
             <Link
               to="/contact"
               className="flex items-center text-gray-800 hover:text-blue-600 font-semibold text-lg"
+              onClick={closeMobileMenu}
             >
               <Phone className="w-5 h-5 mr-2" />
               Contact
@@ -71,30 +128,70 @@ const Navbar = () => {
 
           {/* Right Side - Authentication Buttons */}
           <div className="flex items-center space-x-6">
-            {/* Cart Icon (optional) */}
-            <Link to="/cart" className="relative hidden md:block">
-              <ShoppingBag className="w-7 h-7 text-gray-700 hover:text-blue-600" />
-              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                0
-              </span>
-            </Link>
+            {/* Cart Icon - Only show if authenticated */}
+            {isAuthenticated && (
+              <Link to="/cart" className="relative hidden md:block">
+                <ShoppingBag className="w-7 h-7 text-gray-700 hover:text-blue-600" />
+                <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+                  0
+                </span>
+              </Link>
+            )}
 
-            {/* Desktop Authentication Buttons */}
+            {/* Desktop Authentication Buttons - Conditional */}
             <div className="hidden md:flex items-center space-x-4">
-              <Link
-                to="/login"
-                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center"
-              >
-                <User className="w-5 h-5 mr-2" />
-                Enter Shop
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  {/* User Profile/Dashboard */}
+                  <Link
+                    to="/dashboard"
+                    className="flex items-center text-gray-700 hover:text-blue-600 font-medium px-4 py-2"
+                    onClick={closeMobileMenu}
+                  >
+                    <User className="w-5 h-5 mr-2" />
+                    {user?.name || "Dashboard"}
+                  </Link>
+                  
+                  {/* ADMIN ONLY: Admin Panel Button */}
+                  {isAdmin && (
+                    <button
+                      onClick={handleAdminPanelClick}
+                      className="flex items-center bg-gradient-to-r from-purple-600 to-pink-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all duration-300 shadow-md hover:shadow-lg"
+                    >
+                      <Shield className="w-5 h-5 mr-2" />
+                      Admin Panel
+                    </button>
+                  )}
+                  
+                  {/* Logout Button */}
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center border-2 border-red-500 text-red-500 px-5 py-2.5 rounded-lg font-semibold hover:bg-red-50 transition-all duration-300"
+                  >
+                    <LogOut className="w-5 h-5 mr-2" />
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Enter Shop Button */}
+                  <button
+                    onClick={handleEnterShopClick}
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-300 shadow-md hover:shadow-lg flex items-center"
+                  >
+                    <User className="w-5 h-5 mr-2" />
+                    Enter Shop
+                  </button>
 
-              <Link
-                to="/register"
-                className="border-2 border-blue-500 text-blue-500 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-all duration-300 flex items-center"
-              >
-                Join Us
-              </Link>
+                  {/* Join Us Button */}
+                  <button
+                    onClick={handleJoinUsClick}
+                    className="border-2 border-blue-500 text-blue-500 px-6 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-all duration-300"
+                  >
+                    Join Us
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Mobile Menu Button */}
@@ -136,14 +233,16 @@ const Navbar = () => {
                 <Home className="w-5 h-5 mr-3" />
                 Home
               </Link>
-              <Link
-                to="/products"
-                className="flex items-center text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg"
-                onClick={closeMobileMenu}
+              
+              {/* Shop in Mobile Menu */}
+              <button
+                onClick={handleShopClick}
+                className="flex items-center text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg text-left w-full"
               >
                 <ShoppingBag className="w-5 h-5 mr-3" />
                 Shop
-              </Link>
+              </button>
+              
               <Link
                 to="/about"
                 className="flex items-center text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg"
@@ -161,37 +260,76 @@ const Navbar = () => {
                 Contact
               </Link>
 
-              {/* Cart in Mobile Menu */}
-              <Link
-                to="/cart"
-                className="flex items-center text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg"
-                onClick={closeMobileMenu}
-              >
-                <ShoppingBag className="w-5 h-5 mr-3" />
-                Cart
-                <span className="ml-auto bg-blue-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                  0
-                </span>
-              </Link>
+              {/* Cart in Mobile Menu - Only if authenticated */}
+              {isAuthenticated && (
+                <Link
+                  to="/cart"
+                  className="flex items-center text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg"
+                  onClick={closeMobileMenu}
+                >
+                  <ShoppingBag className="w-5 h-5 mr-3" />
+                  Cart
+                  <span className="ml-auto bg-blue-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+                    0
+                  </span>
+                </Link>
+              )}
 
-              {/* Mobile Authentication Buttons */}
+              {/* Mobile Authentication Buttons - Conditional */}
               <div className="pt-4 border-t border-gray-200">
                 <div className="flex flex-col space-y-3">
-                  <Link
-                    to="/login"
-                    className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-3 rounded-lg font-semibold text-center hover:from-blue-600 hover:to-purple-600 flex items-center justify-center"
-                    onClick={closeMobileMenu}
-                  >
-                    <User className="w-5 h-5 mr-2" />
-                    Go to Shop
-                  </Link>
-                  <Link
-                    to="/register"
-                    className="border-2 border-blue-500 text-blue-500 px-4 py-3 rounded-lg font-semibold text-center hover:bg-blue-50 flex items-center justify-center"
-                    onClick={closeMobileMenu}
-                  >
-                    Join Us
-                  </Link>
+                  {isAuthenticated ? (
+                    <>
+                      {/* Dashboard Link */}
+                      <Link
+                        to="/dashboard"
+                        className="flex items-center justify-center bg-blue-50 text-blue-600 px-4 py-3 rounded-lg font-semibold"
+                        onClick={closeMobileMenu}
+                      >
+                        <User className="w-5 h-5 mr-2" />
+                        Dashboard
+                      </Link>
+                      
+                      {/* ADMIN ONLY: Admin Panel Button (Mobile) */}
+                      {isAdmin && (
+                        <button
+                          onClick={handleAdminPanelClick}
+                          className="flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700"
+                        >
+                          <Shield className="w-5 h-5 mr-2" />
+                          Admin Panel
+                        </button>
+                      )}
+                      
+                      {/* Logout Button */}
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center justify-center border-2 border-red-500 text-red-500 px-4 py-3 rounded-lg font-semibold hover:bg-red-50"
+                      >
+                        <LogOut className="w-5 h-5 mr-2" />
+                        Logout
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Go to Shop Button */}
+                      <button
+                        onClick={handleEnterShopClick}
+                        className="flex items-center justify-center bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600"
+                      >
+                        <User className="w-5 h-5 mr-2" />
+                        Go to Shop
+                      </button>
+                      
+                      {/* Join Us Button */}
+                      <button
+                        onClick={handleJoinUsClick}
+                        className="flex items-center justify-center border-2 border-blue-500 text-blue-500 px-4 py-3 rounded-lg font-semibold hover:bg-blue-50"
+                      >
+                        Join Us
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

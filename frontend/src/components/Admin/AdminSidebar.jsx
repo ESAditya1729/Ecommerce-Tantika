@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   BarChart3,
   Package,
@@ -13,7 +14,9 @@ import {
   Activity,
   Shield,
   MessageSquare,
-  FileText
+  FileText,
+  ArrowLeft,
+  Store
 } from 'lucide-react';
 
 const AdminSidebar = ({ activeTab, setActiveTab, isOpen, onClose }) => {
@@ -82,6 +85,15 @@ const AdminSidebar = ({ activeTab, setActiveTab, isOpen, onClose }) => {
               <X className="w-6 h-6" />
             </button>
           </div>
+          
+          {/* Back to Main Site Button */}
+          <Link
+            to="/"
+            className="mt-4 flex items-center space-x-2 text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-2 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">Back to Main Site</span>
+          </Link>
         </div>
 
         {/* Navigation Menu */}
@@ -105,6 +117,29 @@ const AdminSidebar = ({ activeTab, setActiveTab, isOpen, onClose }) => {
               </button>
             ))}
           </nav>
+
+          {/* Quick Actions */}
+          <div className="mt-6">
+            <p className="text-xs uppercase text-gray-500 tracking-wider mb-4 px-3">
+              Quick Actions
+            </p>
+            <div className="space-y-2">
+              <Link
+                to="/shop"
+                className="flex items-center space-x-3 px-4 py-3 bg-blue-900/30 hover:bg-blue-900/50 rounded-lg transition-colors text-blue-300 hover:text-blue-100"
+              >
+                <Store className="w-5 h-5" />
+                <span className="font-medium">Visit Shop</span>
+              </Link>
+              <Link
+                to="/dashboard"
+                className="flex items-center space-x-3 px-4 py-3 bg-purple-900/30 hover:bg-purple-900/50 rounded-lg transition-colors text-purple-300 hover:text-purple-100"
+              >
+                <ShoppingBag className="w-5 h-5" />
+                <span className="font-medium">Customer Dashboard</span>
+              </Link>
+            </div>
+          </div>
 
           {/* Support Section */}
           <div className="mt-8">
