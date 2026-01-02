@@ -103,7 +103,7 @@ const UserManagement = () => {
   // Fetch stats - runs once
   const fetchStats = useCallback(async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("tantika_token");
       const response = await fetch(`${API_BASE_URL}/users/stats`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -123,7 +123,7 @@ const UserManagement = () => {
   // Fetch segments - runs once
   const fetchSegments = useCallback(async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("tantika_token");
       const response = await fetch(`${API_BASE_URL}/users/segments`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -193,7 +193,7 @@ const UserManagement = () => {
     if (!window.confirm(`Make ${user.name} an admin?`)) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("tantika_token");
       const response = await fetch(`${API_BASE_URL}/users/${user.id}/role`, {
         method: "PATCH",
         headers: {
@@ -219,7 +219,7 @@ const UserManagement = () => {
     if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${user.name}?`)) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("tantika_token");
       const response = await fetch(`${API_BASE_URL}/users/${user.id}/status`, {
         method: "PATCH",
         headers: {
@@ -253,7 +253,7 @@ const UserManagement = () => {
   const handleSaveUser = async (updatedUser) => {
     setIsSaving(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("tantika_token");
       const response = await fetch(`${API_BASE_URL}/users/${updatedUser.id}`, {
         method: "PUT",
         headers: {
@@ -280,7 +280,7 @@ const UserManagement = () => {
     if (!window.confirm(`Delete ${user.name} permanently?`)) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("tantika_token");
       const response = await fetch(`${API_BASE_URL}/users/${user.id}`, {
         method: "DELETE",
         headers: {
