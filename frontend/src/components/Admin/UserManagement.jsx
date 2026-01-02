@@ -1,260 +1,398 @@
-import React, { useState } from 'react';
+// pages/UserManagement.jsx
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
-  Search, 
-  Filter, 
   UserPlus, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  Shield, 
-  Star, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  CheckCircle,
-  Users,
-  ShoppingBag
-} from 'lucide-react';
+  Users, 
+  RefreshCw, 
+  AlertCircle
+} from "lucide-react";
+
+import UserStats from "../Admin/User-Management/UserStats";
+import UserFilters from "../Admin/User-Management/UserFilters";
+import UserAvatar from "../Admin/User-Management/UserAvatar";
+import RoleBadge from "../Admin/User-Management/RoleBadge";
+import StatusBadge from "../Admin/User-Management/StatusBadge";
+import UserActions from "../Admin/User-Management/UserAction";
+import UserSegmentation from "../Admin/User-Management/UserSegmentation";
+import ViewProfileModal from "../Modals/ViewProfileModal";
+import EditProfileModal from "../Modals/EditProfileModal";
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const UserManagement = () => {
-  const [users] = useState([
-    {
-      id: 1,
-      name: 'Rahul Sharma',
-      email: 'rahul@example.com',
-      phone: '+91 9876543210',
-      role: 'customer',
-      status: 'active',
-      orders: 5,
-      joined: '2023-11-15',
-      lastActive: '2024-01-15',
-      location: 'Kolkata'
-    },
-    {
-      id: 2,
-      name: 'Priya Patel',
-      email: 'priya@example.com',
-      phone: '+91 9876543211',
-      role: 'premium',
-      status: 'active',
-      orders: 12,
-      joined: '2023-10-20',
-      lastActive: '2024-01-14',
-      location: 'Mumbai'
-    },
-    {
-      id: 3,
-      name: 'Amit Kumar',
-      email: 'amit@example.com',
-      phone: '+91 9876543212',
-      role: 'customer',
-      status: 'inactive',
-      orders: 2,
-      joined: '2023-12-01',
-      lastActive: '2023-12-28',
-      location: 'Delhi'
-    },
-    {
-      id: 4,
-      name: 'Sneha Roy',
-      email: 'sneha@example.com',
-      phone: '+91 9876543213',
-      role: 'customer',
-      status: 'active',
-      orders: 8,
-      joined: '2023-09-10',
-      lastActive: '2024-01-13',
-      location: 'Kolkata'
-    },
-    {
-      id: 5,
-      name: 'Rajesh Mehta',
-      email: 'rajesh@example.com',
-      phone: '+91 9876543214',
-      role: 'vip',
-      status: 'active',
-      orders: 25,
-      joined: '2023-08-05',
-      lastActive: '2024-01-12',
-      location: 'Chennai'
-    },
-  ]);
-
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = filterRole === 'all' || user.role === filterRole;
-    const matchesStatus = filterStatus === 'all' || user.status === filterStatus;
-    return matchesSearch && matchesRole && matchesStatus;
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+  const [segments, setSegments] = useState(null);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({
+    page: 1,
+    limit: 10,
+    role: "all",
+    status: "all",
+    location: "all",
+    search: "",
   });
+  
+  // Modal states
+  const [viewingUser, setViewingUser] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const getRoleBadge = (role) => {
-    const roleConfig = {
-      customer: { color: 'blue', label: 'Customer' },
-      premium: { color: 'purple', label: 'Premium' },
-      vip: { color: 'amber', label: 'VIP' },
-      admin: { color: 'red', label: 'Admin' }
+  // Refs to prevent multiple calls
+  const isFetching = useRef(false);
+  const abortControllerRef = useRef(null);
+
+  // Single fetch function for users
+  const fetchUsers = useCallback(async () => {
+    if (isFetching.current) {
+      return;
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    isFetching.current = true;
+    abortControllerRef.current = new AbortController();
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem("token");
+      const queryParams = new URLSearchParams();
+
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== "all") {
+          queryParams.append(key, value);
+        }
+      });
+
+      const response = await fetch(
+        `${API_BASE_URL}/users?${queryParams.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          signal: abortControllerRef.current.signal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setUsers(data.data || data || []);
+    } catch (err) {
+      if (err.name === "AbortError") {
+        return;
+      }
+
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      isFetching.current = false;
+    }
+  }, [filters]);
+
+  // Fetch stats - runs once
+  const fetchStats = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/users/stats`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch stats");
+
+      const data = await response.json();
+      setStats(data.data || data);
+    } catch (err) {
+      // Silent fail for stats
+    }
+  }, []);
+
+  // Fetch segments - runs once
+  const fetchSegments = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/users/segments`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch segments");
+
+      const data = await response.json();
+      setSegments(data.data || data);
+    } catch (err) {
+      // Silent fail for segments
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    const loadAllData = async () => {
+      await fetchStats();
+      await fetchSegments();
+      await fetchUsers();
     };
 
-    const config = roleConfig[role] || roleConfig.customer;
-    
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full bg-${config.color}-100 text-${config.color}-800`}>
-        {config.label}
-      </span>
-    );
+    loadAllData();
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Effect to fetch users when filters change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchUsers();
+    }, 300);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [filters, fetchUsers]);
+
+  // Handler functions
+  const handleSearch = (searchTerm) => {
+    setFilters((prev) => ({ ...prev, search: searchTerm, page: 1 }));
   };
 
-  const getStatusBadge = (status) => {
-    return status === 'active' ? (
-      <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-        <CheckCircle className="w-3 h-3 mr-1" />
-        Active
-      </span>
-    ) : (
-      <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-        Inactive
-      </span>
-    );
+  const handleRoleFilter = (role) => {
+    setFilters((prev) => ({ ...prev, role, page: 1 }));
   };
 
-  const handleSendEmail = (email) => {
-    window.location.href = `mailto:${email}`;
+  const handleStatusFilter = (status) => {
+    setFilters((prev) => ({ ...prev, status, page: 1 }));
   };
 
-  const handleMakeVIP = (userId) => {
-    console.log(`Making user ${userId} VIP`);
-    // API call would go here
+  const handleLocationFilter = (location) => {
+    setFilters((prev) => ({ ...prev, location, page: 1 }));
+  };
+
+  const handleSendEmail = async (user) => {
+    window.location.href = `mailto:${user.email}`;
+  };
+
+  const handleMakeAdmin = async (user) => {
+    if (!window.confirm(`Make ${user.name} an admin?`)) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/users/${user.id}/role`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: "admin" }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update role");
+
+      alert("User role updated successfully");
+      fetchUsers();
+    } catch (err) {
+      alert("Failed to update user role: " + err.message);
+    }
+  };
+
+  const handleToggleStatus = async (user) => {
+    const newStatus = user.status === "active" ? "inactive" : "active";
+    const action = newStatus === "active" ? "activate" : "deactivate";
+
+    if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${user.name}?`)) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/users/${user.id}/status`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update status");
+
+      alert(`User ${action}d successfully`);
+      fetchUsers();
+    } catch (err) {
+      alert(`Failed to ${action} user: ${err.message}`);
+    }
+  };
+
+  // View Profile Handler
+  const handleViewProfile = (user) => {
+    setViewingUser(user);
+    setShowViewModal(true);
+  };
+
+  // Edit Profile Handlers
+  const handleEditUser = (user) => {
+    setEditingUser(user);
+    setShowEditModal(true);
+  };
+
+  const handleSaveUser = async (updatedUser) => {
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/users/${updatedUser.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedUser),
+      });
+
+      if (!response.ok) throw new Error("Failed to update user");
+
+      alert("User updated successfully");
+      setShowEditModal(false);
+      setEditingUser(null);
+      fetchUsers(); // Refresh the list
+    } catch (err) {
+      alert("Failed to update user: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (!window.confirm(`Delete ${user.name} permanently?`)) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/users/${user.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to delete user");
+
+      alert("User deleted successfully");
+      fetchUsers(); // Refresh the list
+    } catch (err) {
+      alert("Failed to delete user: " + err.message);
+    }
+  };
+
+  const handleAddUser = () => {
+    alert("Add new user functionality would open here.");
+  };
+
+  const handleRefresh = () => {
+    Promise.all([fetchStats(), fetchSegments(), fetchUsers()]);
+  };
+
+  const handlePageChange = (newPage) => {
+    setFilters((prev) => ({ ...prev, page: newPage }));
+  };
+
+  // Close modals
+  const closeViewModal = () => {
+    setShowViewModal(false);
+    setViewingUser(null);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditingUser(null);
   };
 
   return (
-    <div>
+    <div className="p-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
-          <p className="text-gray-600">Manage registered users and their accounts</p>
+          <p className="text-gray-600">
+            Manage registered users and their accounts
+          </p>
         </div>
-        <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          <UserPlus className="w-5 h-5 mr-2" />
-          Add New User
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleRefresh}
+            className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            title="Refresh All Data"
+            disabled={loading}
+          >
+            <RefreshCw
+              className={`w-5 h-5 mr-2 ${loading ? "animate-spin" : ""}`}
+            />
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+          <button
+            onClick={handleAddUser}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus className="w-5 h-5 mr-2" />
+            Add New User
+          </button>
+        </div>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="flex items-center bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+          <AlertCircle className="w-5 h-5 mr-2" />
+          <span>Error: {error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Modals */}
+      <ViewProfileModal
+        user={viewingUser}
+        isOpen={showViewModal}
+        onClose={closeViewModal}
+      />
+
+      <EditProfileModal
+        user={editingUser}
+        isOpen={showEditModal}
+        onClose={closeEditModal}
+        onSave={handleSaveUser}
+        isLoading={isSaving}
+      />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">Total Users</h3>
-            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">{users.length}</p>
-          <p className="text-sm text-gray-600 mt-2">Registered users</p>
-        </div>
-        
-        <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">Active Users</h3>
-            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">
-            {users.filter(u => u.status === 'active').length}
-          </p>
-          <p className="text-sm text-gray-600 mt-2">Currently active</p>
-        </div>
-        
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">Premium Users</h3>
-            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-              <Star className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">
-            {users.filter(u => u.role === 'premium' || u.role === 'vip').length}
-          </p>
-          <p className="text-sm text-gray-600 mt-2">VIP & Premium</p>
-        </div>
-        
-        <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-6 rounded-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">Avg. Orders</h3>
-            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-              <ShoppingBag className="w-6 h-6 text-amber-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900">
-            {Math.round(users.reduce((sum, u) => sum + u.orders, 0) / users.length)}
-          </p>
-          <p className="text-sm text-gray-600 mt-2">Per user</p>
-        </div>
-      </div>
+      <UserStats stats={stats} loading={loading || !stats} />
 
       {/* Filters */}
-      <div className="bg-gray-50 p-4 rounded-xl mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search Users</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="search"
-                placeholder="Search by name or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Roles</option>
-              <option value="customer">Customer</option>
-              <option value="premium">Premium</option>
-              <option value="vip">VIP</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option value="all">All Locations</option>
-              <option value="Kolkata">Kolkata</option>
-              <option value="Mumbai">Mumbai</option>
-              <option value="Delhi">Delhi</option>
-              <option value="Chennai">Chennai</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <UserFilters
+        onSearch={handleSearch}
+        onRoleFilter={handleRoleFilter}
+        onStatusFilter={handleStatusFilter}
+        onLocationFilter={handleLocationFilter}
+        currentFilters={filters}
+      />
 
       {/* Users Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 mb-6">
@@ -282,152 +420,203 @@ const UserManagement = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredUsers.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold">
-                        {user.name.charAt(0).toUpperCase()}
-                      </span>
+            {loading ? (
+              // Loading skeleton
+              Array.from({ length: 5 }).map((_, index) => (
+                <tr key={index} className="animate-pulse">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                      <div className="ml-4">
+                        <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded w-16"></div>
+                      </div>
                     </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                      <div className="text-sm text-gray-500">ID: U{user.id.toString().padStart(4, '0')}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-24"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-6 bg-gray-200 rounded w-16"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-6 bg-gray-200 rounded w-16"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 bg-gray-200 rounded w-20 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-24"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex space-x-2">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div
+                          key={i}
+                          className="w-8 h-8 bg-gray-200 rounded"
+                        ></div>
+                      ))}
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{user.email}</div>
-                  <div className="text-sm text-gray-500">{user.phone}</div>
-                  <div className="text-xs text-gray-500">{user.location}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {getRoleBadge(user.role)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {getStatusBadge(user.status)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{user.orders} orders</div>
-                  <div className="text-sm text-gray-500">Last active: {new Date(user.lastActive).toLocaleDateString()}</div>
-                  <div className="text-xs text-gray-500">Joined: {new Date(user.joined).toLocaleDateString()}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center space-x-2">
+                  </td>
+                </tr>
+              ))
+            ) : users.length > 0 ? (
+              users.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <UserAvatar user={user} />
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {user.name || user.username || "Unknown User"}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          ID:{" "}
+                          {user.id
+                            ? user.id.toString().slice(-4).padStart(4, "0")
+                            : "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {user.email || "No email"}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {user.phone || "No phone"}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {user.location || "Unknown"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <RoleBadge role={user.role} />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <StatusBadge status={user.status} />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {user.orders || 0} orders
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Joined:{" "}
+                      {user.createdAt || user.joined
+                        ? new Date(
+                            user.createdAt || user.joined
+                          ).toLocaleDateString()
+                        : "N/A"}
+                    </div>
+                    {user.lastActive && (
+                      <div className="text-xs text-gray-500">
+                        Last active:{" "}
+                        {new Date(user.lastActive).toLocaleDateString()}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <UserActions
+                      user={user}
+                      onEdit={handleEditUser}
+                      onDelete={handleDeleteUser}
+                      onView={handleViewProfile}
+                      onSendEmail={handleSendEmail}
+                      onToggleStatus={handleToggleStatus}
+                      onMakeAdmin={handleMakeAdmin}
+                    />
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" className="px-6 py-12 text-center">
+                  <div className="flex flex-col items-center justify-center">
+                    <Users className="w-16 h-16 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      No users found
+                    </h3>
+                    <p className="text-gray-500">
+                      No users match your current filters
+                    </p>
                     <button
-                      onClick={() => handleSendEmail(user.email)}
-                      className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg"
-                      title="Send Email"
+                      onClick={() => {
+                        setFilters({
+                          page: 1,
+                          limit: 10,
+                          role: "all",
+                          status: "all",
+                          location: "all",
+                          search: "",
+                        });
+                      }}
+                      className="mt-2 text-blue-600 hover:text-blue-800"
                     >
-                      <Mail className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => console.log('View profile:', user.id)}
-                      className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg"
-                      title="View Profile"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleMakeVIP(user.id)}
-                      className="p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg"
-                      title="Make VIP"
-                    >
-                      <Star className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => console.log('Edit user:', user.id)}
-                      className="p-2 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50 rounded-lg"
-                      title="Edit User"
-                    >
-                      <Edit className="w-4 h-4" />
+                      Reset filters
                     </button>
                   </div>
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
-
-        {filteredUsers.length === 0 && (
-          <div className="text-center py-12">
-            {/* Using User icon from lucide-react */}
-            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
-            <p className="text-gray-500">No users match your current filters</p>
-          </div>
-        )}
       </div>
+
+      {/* Pagination */}
+      {users.length > 0 && (
+        <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+          <div className="flex flex-1 justify-between sm:hidden">
+            <button
+              onClick={() => handlePageChange(filters.page - 1)}
+              disabled={filters.page <= 1}
+              className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => handlePageChange(filters.page + 1)}
+              className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Next
+            </button>
+          </div>
+          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Showing <span className="font-medium">{(filters.page - 1) * filters.limit + 1}</span> to{" "}
+                <span className="font-medium">
+                  {Math.min(filters.page * filters.limit, users.length)}
+                </span>{" "}
+                of <span className="font-medium">{users.length}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm">
+                <button
+                  onClick={() => handlePageChange(filters.page - 1)}
+                  disabled={filters.page <= 1}
+                  className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="sr-only">Previous</span>
+                  &larr;
+                </button>
+                <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 focus:z-20 focus:outline-offset-0">
+                  Page {filters.page}
+                </span>
+                <button
+                  onClick={() => handlePageChange(filters.page + 1)}
+                  className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
+                >
+                  <span className="sr-only">Next</span>
+                  &rarr;
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User Segmentation */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl">
-          <h3 className="font-bold text-gray-900 mb-4">User Segments</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <span className="text-sm font-medium">New Customers</span>
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-                {users.filter(u => new Date(u.joined) > new Date('2024-01-01')).length}
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <span className="text-sm font-medium">Loyal Customers</span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
-                {users.filter(u => u.orders > 5).length}
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <span className="text-sm font-medium">Inactive Users</span>
-              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-                {users.filter(u => u.status === 'inactive').length}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl">
-          <h3 className="font-bold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="space-y-3">
-            <button className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium">
-              Send Newsletter
-            </button>
-            <button className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-              Export User Data
-            </button>
-            <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
-              Create User Segment
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl">
-          <h3 className="font-bold text-gray-900 mb-4">Top Customers</h3>
-          <div className="space-y-3">
-            {users
-              .sort((a, b) => b.orders - a.orders)
-              .slice(0, 3)
-              .map(user => (
-                <div key={user.id} className="flex items-center justify-between p-3 bg-white rounded-lg">
-                  <div className="flex items-center">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">
-                        {user.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.orders} orders</p>
-                    </div>
-                  </div>
-                  <button className="text-xs text-blue-600 hover:text-blue-800">
-                    View
-                  </button>
-                </div>
-              ))}
-          </div>
-        </div>
-      </div>
+      <UserSegmentation segments={segments} loading={loading || !segments} />
     </div>
   );
 };

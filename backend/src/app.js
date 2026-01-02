@@ -9,7 +9,8 @@ const morgan = require('morgan'); // Add for logging
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
-const orderRoutes = require('./routes/orderRoutes'); // Import order routes
+const orderRoutes = require('./routes/orderRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
@@ -278,7 +279,8 @@ app.post('/api/cors-test', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/orders', orderRoutes); // Order routes added
+app.use('/api/orders', orderRoutes);
+app.use('/api/users', userRoutes);
 
 // Add a test upload route
 app.get('/api/upload/test', (req, res) => {

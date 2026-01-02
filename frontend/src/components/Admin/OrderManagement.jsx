@@ -1,552 +1,52 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Search, Filter, Download, Eye, Edit, Truck, Package, 
-  CheckCircle, XCircle, Printer, MessageSquare, RefreshCw,
-  AlertCircle, Calendar, Clock, MapPin, ShoppingBag, CreditCard,
-  ExternalLink, Phone, Mail
+  Download, Printer, RefreshCw, AlertCircle, 
+  ShoppingBag, MessageSquare, Truck, Eye, Package
 } from 'lucide-react';
 import axios from 'axios';
+import OrderDetailsModal from '../Modals/OrderDetailsModal';
+import QuickStats from './Order-Management/QuickStats';
+import OrderFilters from './Order-Management/OrderFilters';
+import OrderTable from './Order-Management/OrderTable';
+import { API_BASE_URL } from './Order-Management/constants';
 
-// API configuration - Match with your backend routes
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-// Status configuration based on your backend
-const STATUS_CONFIG = {
-  pending: { 
-    color: 'yellow', 
-    bgColor: 'bg-yellow-100', 
-    textColor: 'text-yellow-800',
-    icon: '⏳', 
-    label: 'Pending'
-  },
-  contacted: { 
-    color: 'blue', 
-    bgColor: 'bg-blue-100', 
-    textColor: 'text-blue-800',
-    icon: '📞', 
-    label: 'Contacted'
-  },
-  confirmed: { 
-    color: 'green', 
-    bgColor: 'bg-green-100', 
-    textColor: 'text-green-800',
-    icon: '✓', 
-    label: 'Confirmed'
-  },
-  processing: { 
-    color: 'purple', 
-    bgColor: 'bg-purple-100', 
-    textColor: 'text-purple-800',
-    icon: '🔄', 
-    label: 'Processing'
-  },
-  shipped: { 
-    color: 'indigo', 
-    bgColor: 'bg-indigo-100', 
-    textColor: 'text-indigo-800',
-    icon: '🚚', 
-    label: 'Shipped'
-  },
-  delivered: { 
-    color: 'green', 
-    bgColor: 'bg-green-100', 
-    textColor: 'text-green-800',
-    icon: '🎁', 
-    label: 'Delivered'
-  },
-  cancelled: { 
-    color: 'red', 
-    bgColor: 'bg-red-100', 
-    textColor: 'text-red-800',
-    icon: '✗', 
-    label: 'Cancelled'
-  },
-};
-
-// Status flow based on your backend
-const STATUS_FLOW = {
-  pending: ['contacted', 'cancelled'],
-  contacted: ['confirmed', 'cancelled'],
-  confirmed: ['processing', 'cancelled'],
-  processing: ['shipped', 'cancelled'],
-  shipped: ['delivered'],
-  delivered: [],
-  cancelled: []
-};
-
-// Payment method configuration based on your backend
-const PAYMENT_CONFIG = {
-  cod: { color: 'orange', bgColor: 'bg-orange-100', textColor: 'text-orange-800', label: 'COD' },
-  card: { color: 'green', bgColor: 'bg-green-100', textColor: 'text-green-800', label: 'Card' },
-  upi: { color: 'blue', bgColor: 'bg-blue-100', textColor: 'text-blue-800', label: 'UPI' },
-  netbanking: { color: 'purple', bgColor: 'bg-purple-100', textColor: 'text-purple-800', label: 'Net Banking' },
-};
-
-// Status Badge Component
-const StatusBadge = ({ status }) => {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-  
-  return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${config.bgColor} ${config.textColor}`}>
-      <span className="mr-2">{config.icon}</span>
-      {config.label}
-    </span>
-  );
-};
-
-// Payment Badge Component
-const PaymentBadge = ({ method }) => {
-  const config = PAYMENT_CONFIG[method?.toLowerCase()] || PAYMENT_CONFIG.cod;
-  
-  return (
-    <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.bgColor} ${config.textColor}`}>
-      {config.label}
-    </span>
-  );
-};
-
-// Order Details Modal Component
-const OrderDetailsModal = ({ order, onClose, onStatusUpdate }) => {
-  const [loading, setLoading] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [activeTab, setActiveTab] = useState('details');
-  const config = STATUS_CONFIG[order.status];
-
-  const handleStatusUpdate = async (newStatus) => {
-    try {
-      setLoading(true);
-      await onStatusUpdate(order._id, newStatus, notes);
-      setNotes('');
-      alert(`Order status updated to ${STATUS_CONFIG[newStatus].label}`);
-    } catch (error) {
-      alert('Failed to update status');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleContactWhatsApp = () => {
-    const message = `Hello ${order.customerDetails.name}, this is তন্তিকা regarding your order ${order.orderNumber}`;
-    const phoneNumber = order.customerDetails.phone.replace(/\D/g, '');
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
-  const handleContactEmail = () => {
-    const subject = `Regarding your order ${order.orderNumber}`;
-    const body = `Hello ${order.customerDetails.name},\n\nThis is regarding your order ${order.orderNumber} for ${order.productName}.\n\nBest regards,\nতন্তিকা Team`;
-    window.open(`mailto:${order.customerDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-  };
-
-  const handleCallCustomer = () => {
-    window.open(`tel:${order.customerDetails.phone}`);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900">Order Details</h3>
-            <p className="text-gray-600">{order.orderNumber}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b px-6">
-          <div className="flex space-x-6">
-            <button
-              onClick={() => setActiveTab('details')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'details' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-            >
-              Order Details
-            </button>
-            <button
-              onClick={() => setActiveTab('customer')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'customer' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-            >
-              Customer Info
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'history' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-            >
-              Contact History
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
-          {activeTab === 'details' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Order Info */}
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-2">Order Information</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Order Number:</span>
-                      <span className="font-medium">{order.orderNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Date:</span>
-                      <span className="font-medium">
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Status:</span>
-                      <StatusBadge status={order.status} />
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Payment:</span>
-                      <PaymentBadge method={order.paymentMethod} />
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Payment Status:</span>
-                      <span className="font-medium capitalize">{order.paymentStatus}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Product Info */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-2">Product Information</h4>
-                  <div className="flex items-start space-x-4 p-3 bg-gray-50 rounded-lg">
-                    {order.productImage && (
-                      <img 
-                        src={order.productImage} 
-                        alt={order.productName}
-                        className="w-20 h-20 object-cover rounded"
-                      />
-                    )}
-                    <div>
-                      <p className="font-medium">{order.productName}</p>
-                      <p className="text-sm text-gray-600">Artisan: {order.artisan}</p>
-                      <p className="text-sm text-gray-600">Location: {order.productLocation}</p>
-                      <p className="font-bold text-lg">₹{order.productPrice.toLocaleString()}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Admin Notes */}
-                {order.adminNotes && order.adminNotes.length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-2">Admin Notes</h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {order.adminNotes.map((note, index) => (
-                        <div key={index} className="p-3 bg-blue-50 rounded">
-                          <p className="text-sm">{note.note}</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            By {note.addedBy} • {new Date(note.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Customer Message */}
-              <div>
-                <div className="mb-6">
-                  <h4 className="font-medium text-gray-700 mb-2">Customer Message</h4>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-gray-700">{order.customerDetails.message || 'No message provided'}</p>
-                  </div>
-                </div>
-
-                {/* Status Update Section */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-2">Update Order Status</h4>
-                  <div className="space-y-3">
-                    {STATUS_FLOW[order.status]?.map((nextStatus) => (
-                      <button
-                        key={nextStatus}
-                        onClick={() => handleStatusUpdate(nextStatus)}
-                        disabled={loading}
-                        className={`w-full px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center ${STATUS_CONFIG[nextStatus]?.bgColor.replace('bg-', 'bg-').replace('-100', '-600')}`}
-                      >
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Mark as {STATUS_CONFIG[nextStatus]?.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Notes Input */}
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Add Note (Optional)
-                    </label>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Add any notes about this status update..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      rows="3"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'customer' && (
-            <div className="space-y-6">
-              {/* Customer Details */}
-              <div>
-                <h4 className="font-medium text-gray-700 mb-2">Customer Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Full Name</p>
-                    <p className="font-medium">{order.customerDetails.name}</p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Email</p>
-                    <p className="font-medium">{order.customerDetails.email}</p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Phone</p>
-                    <p className="font-medium">{order.customerDetails.phone}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Shipping Address */}
-              <div>
-                <h4 className="font-medium text-gray-700 mb-2 flex items-center">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  Shipping Address
-                </h4>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="font-medium">{order.customerDetails.address}</p>
-                  <p className="text-gray-600">
-                    {order.customerDetails.city}, {order.customerDetails.state} - {order.customerDetails.pincode}
-                  </p>
-                </div>
-              </div>
-
-              {/* Contact Actions */}
-              <div>
-                <h4 className="font-medium text-gray-700 mb-2">Quick Contact</h4>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={handleContactWhatsApp}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    WhatsApp
-                  </button>
-                  <button
-                    onClick={handleContactEmail}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Mail className="w-4 h-4 mr-2" />
-                    Email
-                  </button>
-                  <button
-                    onClick={handleCallCustomer}
-                    className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                  >
-                    <Phone className="w-4 h-4 mr-2" />
-                    Call
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'history' && (
-            <div>
-              <h4 className="font-medium text-gray-700 mb-2">Contact History</h4>
-              {order.contactHistory && order.contactHistory.length > 0 ? (
-                <div className="space-y-3">
-                  {order.contactHistory.map((contact, index) => (
-                    <div key={index} className="p-4 border rounded-lg">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium capitalize">{contact.method}</p>
-                          <p className="text-gray-600 text-sm mt-1">{contact.notes}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-600">
-                            {new Date(contact.date).toLocaleDateString()}
-                          </p>
-                          <p className="text-xs text-gray-500">By {contact.contactedBy}</p>
-                        </div>
-                      </div>
-                      {contact.nextFollowUp && (
-                        <div className="mt-2 pt-2 border-t">
-                          <p className="text-sm text-gray-600">
-                            Next follow-up: {new Date(contact.nextFollowUp).toLocaleDateString()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-600">No contact history yet</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="border-t pt-6 mt-6">
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => window.print()}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Print Invoice
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Quick Stats Component
-const QuickStats = ({ orders, onStatusFilter, loading }) => {
-  const stats = [
-    { status: 'pending', label: 'Pending' },
-    { status: 'contacted', label: 'Contacted' },
-    { status: 'confirmed', label: 'Confirmed' },
-    { status: 'processing', label: 'Processing' },
-    { status: 'shipped', label: 'Shipped' },
-    { status: 'delivered', label: 'Delivered' },
-    { status: 'cancelled', label: 'Cancelled' },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
-      {stats.map((stat) => {
-        const config = STATUS_CONFIG[stat.status];
-        const count = orders.filter(o => o.status === stat.status).length;
-        
-        return (
-          <button
-            key={stat.status}
-            onClick={() => onStatusFilter(stat.status)}
-            disabled={loading}
-            className={`p-4 border rounded-xl hover:opacity-90 transition-all disabled:opacity-50 ${config.bgColor}`}
-          >
-            <div className="text-2xl mb-2">{config.icon}</div>
-            <p className="font-medium text-gray-900 text-sm">{stat.label}</p>
-            <p className="text-xs text-gray-600">{count} orders</p>
-          </button>
-        );
-      })}
-    </div>
-  );
-};
-
-// Order Filters Component
-const OrderFilters = ({ 
-  searchTerm, 
-  onSearchChange, 
-  filterStatus, 
-  onStatusFilter, 
-  dateRange, 
-  onDateRangeChange,
-  loading 
-}) => {
-  return (
-    <div className="bg-gray-50 p-4 rounded-xl mb-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Search */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Search Orders
-          </label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="search"
-              placeholder="Search by order number, customer, email..."
-              value={searchTerm}
-              onChange={onSearchChange}
-              disabled={loading}
-              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-            />
-          </div>
-        </div>
-        
-        {/* Status Filter */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-          <select
-            value={filterStatus}
-            onChange={onStatusFilter}
-            disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-          >
-            <option value="all">All Status</option>
-            {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-              <option key={key} value={key}>{config.label}</option>
-            ))}
-          </select>
-        </div>
-        
-        {/* Date Range */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-          <select
-            value={dateRange}
-            onChange={onDateRangeChange}
-            disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-          >
-            <option value="all">All Time</option>
-            <option value="today">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="lastMonth">Last Month</option>
-          </select>
-        </div>
-        
-        {/* Sort By */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-          <select
-            disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-          >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="priceHigh">Price: High to Low</option>
-            <option value="priceLow">Price: Low to High</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Main OrderManagement Component
-const OrderManagement = () => {
+// Custom hooks (you can move these to separate files if they grow)
+const useOrderData = () => {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  return {
+    orders,
+    setOrders,
+    filteredOrders,
+    setFilteredOrders,
+    loading,
+    setLoading,
+    error,
+    setError
+  };
+};
+
+const OrderManagement = () => {
+  // State
+  const {
+    orders,
+    setOrders,
+    filteredOrders,
+    setFilteredOrders,
+    loading,
+    setLoading,
+    error,
+    setError
+  } = useOrderData();
+
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
 
   // Fetch orders from backend
   const fetchOrders = useCallback(async () => {
@@ -554,24 +54,16 @@ const OrderManagement = () => {
       setLoading(true);
       setError(null);
       
-      // Build query parameters based on your backend's getAllOrders method
       const params = {
-        limit: 100, // Fetch more orders for filtering
+        limit: 100,
         sortBy: 'createdAt',
         sortOrder: 'desc'
       };
       
-      // If we have a specific status filter, apply it
-      if (filterStatus !== 'all') {
-        params.status = filterStatus;
-      }
+      if (filterStatus !== 'all') params.status = filterStatus;
+      if (searchTerm) params.search = searchTerm;
       
-      // If we have a search term, apply it
-      if (searchTerm) {
-        params.search = searchTerm;
-      }
-      
-      // If we have a date range, apply it
+      // Apply date range
       if (dateRange !== 'all') {
         const now = new Date();
         const startDate = new Date();
@@ -673,7 +165,7 @@ const OrderManagement = () => {
   useEffect(() => {
     let result = orders;
 
-    // Apply search filter (additional client-side filtering)
+    // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(order =>
@@ -685,13 +177,28 @@ const OrderManagement = () => {
       );
     }
 
-    // Apply status filter (additional client-side filtering)
+    // Apply status filter
     if (filterStatus !== 'all') {
       result = result.filter(order => order.status === filterStatus);
     }
 
+    // Apply sorting
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest':
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        case 'priceHigh':
+          return b.productPrice - a.productPrice;
+        case 'priceLow':
+          return a.productPrice - b.productPrice;
+        case 'newest':
+        default:
+          return new Date(b.createdAt) - new Date(a.createdAt);
+      }
+    });
+
     setFilteredOrders(result);
-  }, [orders, searchTerm, filterStatus]);
+  }, [orders, searchTerm, filterStatus, sortBy]);
 
   // Initial fetch
   useEffect(() => {
@@ -714,7 +221,6 @@ const OrderManagement = () => {
       });
 
       if (response.data.success) {
-        // Update local state
         setOrders(prevOrders =>
           prevOrders.map(order =>
             order._id === orderId
@@ -742,7 +248,7 @@ const OrderManagement = () => {
       });
 
       if (response.data.success) {
-        fetchOrders(); // Refresh orders
+        fetchOrders();
         alert('Order cancelled successfully');
       } else {
         throw new Error(response.data.error);
@@ -772,7 +278,7 @@ const OrderManagement = () => {
         order.customerDetails.phone,
         order.productName,
         `₹${order.productPrice.toLocaleString()}`,
-        STATUS_CONFIG[order.status]?.label || order.status,
+        order.status,
         new Date(order.createdAt).toLocaleDateString()
       ]);
 
@@ -837,11 +343,7 @@ const OrderManagement = () => {
                   <td>${order.customerDetails.name}</td>
                   <td>${order.productName}</td>
                   <td>₹${order.productPrice.toLocaleString()}</td>
-                  <td>
-                    <span class="status" style="background-color: ${STATUS_CONFIG[order.status]?.bgColor || '#f5f5f5'}; color: ${STATUS_CONFIG[order.status]?.textColor || '#333'}">
-                      ${STATUS_CONFIG[order.status]?.label || order.status}
-                    </span>
-                  </td>
+                  <td>${order.status}</td>
                   <td>${new Date(order.createdAt).toLocaleDateString()}</td>
                 </tr>
               `).join('')}
@@ -862,6 +364,14 @@ const OrderManagement = () => {
   const handleRefresh = () => {
     fetchOrders();
     alert('Refreshing orders...');
+  };
+
+  // Clear filters
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setDateRange('all');
+    setSortBy('newest');
   };
 
   // Calculate dashboard metrics
@@ -947,6 +457,8 @@ const OrderManagement = () => {
             onStatusFilter={(e) => setFilterStatus(e.target.value)}
             dateRange={dateRange}
             onDateRangeChange={(e) => setDateRange(e.target.value)}
+            sortBy={sortBy}
+            onSortChange={(e) => setSortBy(e.target.value)}
             loading={loading}
           />
 
@@ -958,114 +470,27 @@ const OrderManagement = () => {
           />
 
           {/* Orders Table */}
-          <div className="overflow-x-auto rounded-lg border border-gray-200 mb-6">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Order ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
-                  <tr key={order._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-blue-600">{order.orderNumber}</div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{order.customerDetails.name}</div>
-                      <div className="text-sm text-gray-500">{order.customerDetails.email}</div>
-                      <div className="text-xs text-gray-500">{order.customerDetails.phone}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">{order.productName}</div>
-                      <div className="text-sm text-gray-500">{order.artisan}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg font-bold text-gray-900">
-                        ₹{order.productPrice.toLocaleString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <StatusBadge status={order.status} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <PaymentBadge method={order.paymentMethod} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleContactCustomer(order)}
-                          className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg"
-                          title="Contact Customer"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                        </button>
-                        {order.status === 'pending' && (
-                          <button
-                            onClick={() => handleCancelOrder(order._id)}
-                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-                            title="Cancel Order"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <OrderTable
+            orders={filteredOrders}
+            onViewDetails={setSelectedOrder}
+            onContactCustomer={handleContactCustomer}
+            onCancelOrder={handleCancelOrder}
+            loading={loading}
+          />
 
-            {filteredOrders.length === 0 && !loading && (
-              <div className="text-center py-12">
-                <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
-                <p className="text-gray-500">No orders match your current filters</p>
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFilterStatus('all');
-                    setDateRange('all');
-                  }}
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Clear Filters
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Clear Filters Button */}
+          {filteredOrders.length === 0 && orders.length > 0 && (
+            <div className="text-center mb-6">
+              <button
+                onClick={handleClearFilters}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
 
-          {/* Order Summary Cards */}
+          {/* Dashboard Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Order Summary */}
             <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl">
@@ -1097,7 +522,7 @@ const OrderManagement = () => {
               </div>
             </div>
 
-            {/* Customer Communication */}
+            {/* Quick Actions */}
             <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center">
                 <MessageSquare className="w-5 h-5 mr-2" />
@@ -1145,7 +570,7 @@ const OrderManagement = () => {
               </div>
             </div>
 
-            {/* Shipping Management */}
+            {/* Shipping Status */}
             <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center">
                 <Truck className="w-5 h-5 mr-2" />
