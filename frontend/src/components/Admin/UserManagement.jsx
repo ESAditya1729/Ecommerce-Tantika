@@ -62,7 +62,7 @@ const UserManagement = () => {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("tantika_token");
       const queryParams = new URLSearchParams();
 
       Object.entries(filters).forEach(([key, value]) => {
