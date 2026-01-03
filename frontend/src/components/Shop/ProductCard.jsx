@@ -1,14 +1,19 @@
 // src/components/Product/ProductCard.jsx
-import { ShoppingBag, Star, MapPin, Eye, Heart, Share2, Info } from 'lucide-react';
+import { ShoppingBag, Star, MapPin, Eye, Heart, Share2, Info, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import OrderModal from '../Modals/OrderModal'; // Adjust path as needed
 
-const ProductCard = ({ product, onOrderClick, onShare, onAddToWishlist }) => {
+const ProductCard = ({ product, onOrderClick, onShare }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const navigate = useNavigate();
+
+  // Get API base URL from environment
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+  // REMOVED: The useEffect that was making initial wishlist API call
 
   // Get product image
   const getProductImage = () => {
@@ -32,17 +37,103 @@ const ProductCard = ({ product, onOrderClick, onShare, onAddToWishlist }) => {
         });
       } else {
         navigator.clipboard.writeText(`${window.location.origin}/product/${product._id}`);
-        alert('Product link copied to clipboard!');
+        showNotification('Product link copied to clipboard!', 'info');
       }
     }
   };
 
-  // Handle wishlist button click
-  const handleWishlist = (e) => {
+  // Handle wishlist button click - SIMPLIFIED: No pre-check, direct toggle
+  const handleWishlist = async (e) => {
     e.stopPropagation();
-    setIsWishlisted(!isWishlisted);
-    if (onAddToWishlist) {
-      onAddToWishlist(product, !isWishlisted);
+    
+    // Check if user is logged in
+    const token = localStorage.getItem('tantika_token');
+    if (!token) {
+      // Redirect to login or show login modal
+      navigate('/login', { 
+        state: { from: 'wishlist', productId: product._id } 
+      });
+      return;
+    }
+
+    setWishlistLoading(true);
+    
+    try {
+      // First check current status (one API call instead of pre-check on mount)
+      const checkResponse = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/check/${product._id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      let isCurrentlyWishlisted = false;
+      
+      if (checkResponse.ok) {
+        const checkData = await checkResponse.json();
+        isCurrentlyWishlisted = checkData.data.isInWishlist;
+      }
+
+      // Then toggle based on current status
+      if (isCurrentlyWishlisted) {
+        // Remove from wishlist
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/${product._id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          showNotification('Removed from wishlist', 'info');
+        }
+      } else {
+        // Add to wishlist
+        const wishlistData = {
+          productId: product._id,
+          productName: product.name,
+          productImage: product.images?.[0] || product.image || '',
+          productPrice: product.price,
+          artisan: product.artisan || 'Unknown Artisan',
+          category: product.category || ''
+        };
+
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(wishlistData)
+        });
+
+        if (response.ok) {
+          showNotification('Added to wishlist', 'success');
+        } else if (response.status === 400) {
+          const data = await response.json();
+          if (data.message === 'Product already in wishlist') {
+            showNotification('Already in wishlist', 'info');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating wishlist:', error);
+      showNotification('Failed to update wishlist', 'error');
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  // Show notification (you can replace with your toast system)
+  const showNotification = (message, type = 'info') => {
+    // Using alert for simplicity - replace with your toast/notification system
+    if (type === 'success') {
+      alert(`✅ ${message}`);
+    } else if (type === 'error') {
+      alert(`❌ ${message}`);
+    } else {
+      alert(`ℹ️ ${message}`);
     }
   };
 
@@ -147,14 +238,19 @@ const ProductCard = ({ product, onOrderClick, onShare, onAddToWishlist }) => {
               <Eye className="w-5 h-5 text-gray-600" />
             </button>
             
-            {/* Wishlist Button */}
+            {/* Wishlist Button - SIMPLIFIED: Always shows gray heart */}
             <button
               onClick={handleWishlist}
-              className="bg-white/90 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all duration-200 hover:scale-110"
-              aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-              title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+              disabled={wishlistLoading}
+              className="bg-white/90 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Add to wishlist"
+              title="Add to Wishlist"
             >
-              <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+              {wishlistLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
+              ) : (
+                <Heart className="w-5 h-5 text-gray-600" />
+              )}
             </button>
             
             {/* Share Button */}
@@ -299,7 +395,6 @@ const ProductCard = ({ product, onOrderClick, onShare, onAddToWishlist }) => {
 ProductCard.defaultProps = {
   onOrderClick: null,
   onShare: null,
-  onAddToWishlist: null,
 };
 
 export default ProductCard;

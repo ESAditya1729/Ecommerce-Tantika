@@ -11,6 +11,7 @@ const productRoutes = require('./routes/productRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const userRoutes = require('./routes/userRoutes');
+const userNormRoutes = require('./routes/userNormRoutes');
 
 const app = express();
 
@@ -281,7 +282,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
-
+app.use('/api/usernorms', userNormRoutes);
 // Add a test upload route
 app.get('/api/upload/test', (req, res) => {
   res.json({

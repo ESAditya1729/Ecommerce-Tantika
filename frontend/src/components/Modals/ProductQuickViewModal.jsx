@@ -1,11 +1,45 @@
-// src/components/Product/ProductQuickViewModal.jsx
-import React from 'react';
-import { X, Star, ShoppingBag, Heart, Share2, Package, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  X, Star, ShoppingBag, Heart, Share2, Package, 
+  ChevronLeft, ChevronRight, Loader2 
+} from 'lucide-react';
 
 const ProductQuickViewModal = ({ product, isOpen, onClose, onExpressInterest }) => {
-  const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
-  const [isWishlisted, setIsWishlisted] = React.useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   
+  // Get API base URL from environment
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+  // Check wishlist status when modal opens
+  useEffect(() => {
+    const checkWishlistStatus = async () => {
+      if (!isOpen || !product) return;
+
+      try {
+        const token = localStorage.getItem('tantika_token');
+        if (!token) return;
+
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/check/${product._id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setIsWishlisted(data.data.isInWishlist);
+        }
+      } catch (error) {
+        console.error('Error checking wishlist status:', error);
+      }
+    };
+
+    checkWishlistStatus();
+  }, [isOpen, product]);
+
   if (!isOpen || !product) return null;
 
   const formatPrice = (price) => {
@@ -31,6 +65,116 @@ const ProductQuickViewModal = ({ product, isOpen, onClose, onExpressInterest }) 
   const prevImage = () => {
     const totalImages = product.images?.length || (product.image ? 1 : 0);
     setCurrentImageIndex((prev) => (prev - 1 + totalImages) % totalImages);
+  };
+
+  // Handle wishlist with API
+  const handleWishlistToggle = async () => {
+    // Check if user is logged in
+    const token = localStorage.getItem('tantika_token');
+    if (!token) {
+      // Redirect to login
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}&productId=${product._id}`;
+      return;
+    }
+
+    setWishlistLoading(true);
+    
+    try {
+      if (isWishlisted) {
+        // Remove from wishlist
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/${product._id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          setIsWishlisted(false);
+          showNotification('Removed from wishlist', 'info');
+        }
+      } else {
+        // Add to wishlist
+        const wishlistData = {
+          productId: product._id,
+          productName: product.name,
+          productImage: product.images?.[0] || product.image || '',
+          productPrice: product.price,
+          artisan: product.artisan || 'Unknown Artisan',
+          category: product.category || ''
+        };
+
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(wishlistData)
+        });
+
+        if (response.ok) {
+          setIsWishlisted(true);
+          showNotification('Added to wishlist', 'success');
+        } else if (response.status === 400) {
+          const data = await response.json();
+          if (data.message === 'Product already in wishlist') {
+            setIsWishlisted(true);
+            showNotification('Already in wishlist', 'info');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating wishlist:', error);
+      showNotification('Failed to update wishlist', 'error');
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  // Show notification
+  const showNotification = (message, type = 'info') => {
+    // Replace with your toast/notification system
+    if (type === 'success') {
+      alert(`✅ ${message}`);
+    } else if (type === 'error') {
+      alert(`❌ ${message}`);
+    } else {
+      alert(`ℹ️ ${message}`);
+    }
+  };
+
+  // Handle share
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: product.name,
+        text: product.description,
+        url: `${window.location.origin}/product/${product._id}`,
+      });
+    } else {
+      navigator.clipboard.writeText(`${window.location.origin}/product/${product._id}`);
+      showNotification('Product link copied to clipboard!', 'info');
+    }
+  };
+
+  // Handle express interest
+  const handleExpressInterest = () => {
+    if (onExpressInterest) {
+      onExpressInterest(product);
+      onClose();
+    } else {
+      // Default action
+      onClose();
+      window.location.href = `/product/${product._id}`;
+    }
+  };
+
+  // Navigate to product details
+  const handleViewDetails = () => {
+    onClose();
+    window.location.href = `/product/${product._id}`;
   };
 
   return (
@@ -184,30 +328,24 @@ const ProductQuickViewModal = ({ product, isOpen, onClose, onExpressInterest }) 
               {/* Quick Actions */}
               <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
                 <button
-                  onClick={() => setIsWishlisted(!isWishlisted)}
-                  className={`p-3 rounded-full border ${
+                  onClick={handleWishlistToggle}
+                  disabled={wishlistLoading}
+                  className={`p-3 rounded-full border hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     isWishlisted 
                       ? 'bg-red-50 border-red-200 text-red-600' 
                       : 'bg-gray-50 border-gray-200 text-gray-600'
-                  } hover:scale-105 transition-all`}
+                  }`}
                   title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
                 >
-                  <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
+                  {wishlistLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
+                  )}
                 </button>
                 
                 <button
-                  onClick={() => {
-                    if (navigator.share) {
-                      navigator.share({
-                        title: product.name,
-                        text: product.description,
-                        url: window.location.href,
-                      });
-                    } else {
-                      navigator.clipboard.writeText(window.location.href);
-                      alert('Link copied to clipboard!');
-                    }
-                  }}
+                  onClick={handleShare}
                   className="p-3 rounded-full border border-gray-200 bg-gray-50 text-gray-600 hover:scale-105 transition-all"
                   title="Share Product"
                 >
@@ -217,10 +355,7 @@ const ProductQuickViewModal = ({ product, isOpen, onClose, onExpressInterest }) 
               
               {/* Express Interest Button */}
               <button
-                onClick={() => {
-                  onExpressInterest(product);
-                  onClose();
-                }}
+                onClick={handleExpressInterest}
                 disabled={product.stock === 0}
                 className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center transition-all ${
                   product.stock === 0
@@ -234,14 +369,11 @@ const ProductQuickViewModal = ({ product, isOpen, onClose, onExpressInterest }) 
               
               {/* View Full Details */}
               <button
-                onClick={() => {
-                  onClose();
-                  // You can navigate to product details page here
-                  window.location.href = `/product/${product._id}`;
-                }}
-                className="w-full py-3 text-blue-600 hover:text-blue-700 font-medium"
+                onClick={handleViewDetails}
+                className="w-full py-3 text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center gap-2"
               >
-                View full product details →
+                View full product details
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>

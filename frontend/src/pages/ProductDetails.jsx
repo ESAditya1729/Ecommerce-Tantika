@@ -16,10 +16,12 @@ const ProductDetails = () => {
   const [error, setError] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
 
-  // Get API URL from environment variable
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  // Get API URLs from environment variables
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+  const PRODUCTS_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
     fetchProduct();
@@ -28,7 +30,7 @@ const ProductDetails = () => {
   const fetchProduct = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/products/${id}`);
+      const response = await fetch(`${PRODUCTS_API_URL}/products/${id}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -38,6 +40,8 @@ const ProductDetails = () => {
       
       if (data.success) {
         setProduct(data.product);
+        // Check wishlist status after product is loaded
+        checkWishlistStatus(data.product._id);
       } else {
         setError(data.message || 'Product not found');
       }
@@ -46,6 +50,28 @@ const ProductDetails = () => {
       setError('Failed to load product. Please try again later.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Check wishlist status
+  const checkWishlistStatus = async (productId) => {
+    try {
+      const token = localStorage.getItem('tantika_token');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/check/${productId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setIsWishlisted(data.data.isInWishlist);
+      }
+    } catch (error) {
+      console.error('Error checking wishlist status:', error);
     }
   };
 
@@ -62,14 +88,92 @@ const ProductDetails = () => {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Product link copied to clipboard!');
+      showNotification('Product link copied to clipboard!', 'info');
     }
   };
 
-  const handleWishlist = () => {
-    setIsWishlisted(!isWishlisted);
-    // TODO: Add API call to update wishlist
-    console.log(`${isWishlisted ? 'Removed from' : 'Added to'} wishlist:`, product._id);
+  // Handle wishlist with API
+  const handleWishlist = async () => {
+    // Check if user is logged in
+    const token = localStorage.getItem('tantika_token');
+    if (!token) {
+      // Redirect to login
+      navigate('/login', { 
+        state: { 
+          from: 'product-details', 
+          productId: product._id,
+          productName: product.name
+        } 
+      });
+      return;
+    }
+
+    setWishlistLoading(true);
+    
+    try {
+      if (isWishlisted) {
+        // Remove from wishlist
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/${product._id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          setIsWishlisted(false);
+          showNotification('Removed from wishlist', 'info');
+        }
+      } else {
+        // Add to wishlist
+        const wishlistData = {
+          productId: product._id,
+          productName: product.name,
+          productImage: product.images?.[0] || product.image || '',
+          productPrice: product.price,
+          artisan: product.artisan || 'Unknown Artisan',
+          category: product.category || ''
+        };
+
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(wishlistData)
+        });
+
+        if (response.ok) {
+          setIsWishlisted(true);
+          showNotification('Added to wishlist', 'success');
+        } else if (response.status === 400) {
+          const data = await response.json();
+          if (data.message === 'Product already in wishlist') {
+            setIsWishlisted(true);
+            showNotification('Already in wishlist', 'info');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating wishlist:', error);
+      showNotification('Failed to update wishlist', 'error');
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  // Show notification
+  const showNotification = (message, type = 'info') => {
+    // Replace with your toast/notification system
+    if (type === 'success') {
+      alert(`✅ ${message}`);
+    } else if (type === 'error') {
+      alert(`❌ ${message}`);
+    } else {
+      alert(`ℹ️ ${message}`);
+    }
   };
 
   const formatPrice = (price) => {
@@ -378,14 +482,19 @@ const ProductDetails = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={handleWishlist}
-                    className={`py-3 rounded-lg font-medium flex items-center justify-center transition-all border ${
+                    disabled={wishlistLoading}
+                    className={`py-3 rounded-lg font-medium flex items-center justify-center transition-all border disabled:opacity-50 disabled:cursor-not-allowed ${
                       isWishlisted
                         ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
                         : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <Heart className={`w-5 h-5 mr-2 ${isWishlisted ? 'fill-current' : ''}`} />
-                    {isWishlisted ? 'Wishlisted' : 'Wishlist'}
+                    {wishlistLoading ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : (
+                      <Heart className={`w-5 h-5 mr-2 ${isWishlisted ? 'fill-current' : ''}`} />
+                    )}
+                    {wishlistLoading ? 'Processing...' : (isWishlisted ? 'Wishlisted' : 'Wishlist')}
                   </button>
                   <button
                     onClick={handleShare}

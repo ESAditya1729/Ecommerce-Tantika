@@ -16,7 +16,7 @@ const {
     getFilterOptions,
     searchUsers,
     bulkUpdateUsers
-} = require('../controllers/userController');
+} = require('../controllers/userAdminController');
 
 const { protect, authorize } = require('../middleware/authMiddleware');
 

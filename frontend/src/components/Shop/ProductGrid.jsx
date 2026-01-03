@@ -1,10 +1,13 @@
 // components/Shop/ProductGrid.jsx
-import { Star, ShoppingBag, Eye, Heart, Share2, Info } from 'lucide-react';
+import { Star, ShoppingBag, Eye, Heart, Share2, Info, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 
-const ProductGrid = ({ products, isLoading, onExpressInterest, onShare, onAddToWishlist }) => {
-  const [wishlistedProducts, setWishlistedProducts] = useState({});
+const ProductGrid = ({ products, isLoading, onExpressInterest, onShare }) => {
+  const [wishlistLoading, setWishlistLoading] = useState({}); // { productId: boolean }
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+  // REMOVED: The useEffect that was making API calls for all products
 
   if (isLoading) {
     return (
@@ -60,34 +63,118 @@ const ProductGrid = ({ products, isLoading, onExpressInterest, onShare, onAddToW
     return null;
   };
 
+  // Handle wishlist - SIMPLIFIED: No pre-check, direct toggle
+  const handleWishlist = async (e, product) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Check if user is logged in
+    const token = localStorage.getItem('tantika_token');
+    if (!token) {
+      // Redirect to login
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+
+    // Set loading state for this specific product
+    setWishlistLoading(prev => ({
+      ...prev,
+      [product._id]: true
+    }));
+
+    try {
+      // First, check current status (one API call instead of N)
+      const checkResponse = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/check/${product._id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      let currentStatus = false;
+      
+      if (checkResponse.ok) {
+        const checkData = await checkResponse.json();
+        currentStatus = checkData.data.isInWishlist;
+      }
+
+      // Then toggle based on current status
+      if (currentStatus) {
+        // Remove from wishlist
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/${product._id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          showNotification('Removed from wishlist', 'info');
+        }
+      } else {
+        // Add to wishlist
+        const wishlistData = {
+          productId: product._id,
+          productName: product.name,
+          productImage: product.images?.[0] || product.image || '',
+          productPrice: product.price,
+          artisan: product.artisan || 'Unknown Artisan',
+          category: product.category || ''
+        };
+
+        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(wishlistData)
+        });
+
+        if (response.ok) {
+          showNotification('Added to wishlist', 'success');
+        } else if (response.status === 400) {
+          const data = await response.json();
+          if (data.message === 'Product already in wishlist') {
+            showNotification('Already in wishlist', 'info');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating wishlist:', error);
+      showNotification('Failed to update wishlist', 'error');
+    } finally {
+      // Clear loading state
+      setWishlistLoading(prev => ({
+        ...prev,
+        [product._id]: false
+      }));
+    }
+  };
+
+  // Show notification
+  const showNotification = (message, type = 'info') => {
+    // Replace with your toast/notification system
+    if (type === 'success') {
+      alert(`✅ ${message}`);
+    } else if (type === 'error') {
+      alert(`❌ ${message}`);
+    } else {
+      alert(`ℹ️ ${message}`);
+    }
+  };
+
   // Handle express interest
   const handleExpressInterest = (e, product) => {
     e.stopPropagation();
     e.preventDefault();
-    
-    console.log('Express Interest clicked for:', product.name);
     
     if (onExpressInterest) {
       onExpressInterest(product);
     } else {
       // Fallback: alert or navigate
       alert(`Express interest for: ${product.name}. This would open the order modal.`);
-    }
-  };
-
-  // Handle wishlist
-  const handleWishlist = (e, product) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const isCurrentlyWishlisted = wishlistedProducts[product._id];
-    setWishlistedProducts(prev => ({
-      ...prev,
-      [product._id]: !isCurrentlyWishlisted
-    }));
-    
-    if (onAddToWishlist) {
-      onAddToWishlist(product, !isCurrentlyWishlisted);
     }
   };
 
@@ -117,7 +204,7 @@ const ProductGrid = ({ products, isLoading, onExpressInterest, onShare, onAddToW
       {products.map((product) => {
         const stockStatus = getStockStatus(product.stock || 0);
         const productImage = getProductImage(product);
-        const isWishlisted = wishlistedProducts[product._id] || false;
+        const isWishlistLoading = wishlistLoading[product._id] || false;
         
         return (
           <div
@@ -176,10 +263,15 @@ const ProductGrid = ({ products, isLoading, onExpressInterest, onShare, onAddToW
               <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <button 
                   onClick={(e) => handleWishlist(e, product)}
-                  className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors"
-                  title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+                  disabled={isWishlistLoading}
+                  className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Add to Wishlist"
                 >
-                  <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+                  {isWishlistLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
+                  ) : (
+                    <Heart className="w-4 h-4 text-gray-600" />
+                  )}
                 </button>
                 <Link 
                   to={`/product/${product._id}`}
@@ -279,7 +371,6 @@ const ProductGrid = ({ products, isLoading, onExpressInterest, onShare, onAddToW
 ProductGrid.defaultProps = {
   onExpressInterest: null,
   onShare: null,
-  onAddToWishlist: null,
 };
 
 export default ProductGrid;
