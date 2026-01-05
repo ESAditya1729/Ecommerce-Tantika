@@ -499,9 +499,9 @@ const Dashboard = () => {
   // API Service
   const apiService = {
     fetchDashboardData: async (token) => {
-      console.log('Fetching from:', `${API_BASE_URL}/api/usernorms/dashboard/summary`);
+      console.log('Fetching from:', `${API_BASE_URL}/usernorms/dashboard/summary`);
       
-      const response = await fetch(`${API_BASE_URL}/api/usernorms/dashboard/summary`, {
+      const response = await fetch(`${API_BASE_URL}/usernorms/dashboard/summary`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
