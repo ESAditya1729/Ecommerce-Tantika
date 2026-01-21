@@ -28,6 +28,17 @@ router.get('/wishlist/check/:productId', protect, userNormController.checkWishli
 router.get('/wishlist/count', protect, userNormController.getWishlistCount);
 router.put('/wishlist/availability/:productId', protect, userNormController.updateItemAvailability);
 
+// Address routes (using the new controller)
+router.get('/addresses', protect, userNormController.getUserAddresses);
+router.get('/addresses/default', protect, userNormController.getDefaultAddress);
+router.get('/addresses/count', protect, userNormController.getAddressCount);
+router.get('/addresses/:addressId', protect, userNormController.getAddressById);
+router.post('/addresses', protect, userNormController.createAddress);
+router.put('/addresses/:addressId', protect, userNormController.updateAddress);
+router.delete('/addresses/:addressId', protect, userNormController.deleteAddress);
+router.put('/addresses/:addressId/set-default', protect, userNormController.setDefaultAddress);
+
+
 // Account management
 router.put('/deactivate', protect, userNormController.deactivateAccount);
 router.put('/reactivate', userNormController.reactivateAccount);

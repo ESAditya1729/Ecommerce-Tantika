@@ -21,7 +21,7 @@ const Products = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [error, setError] = useState(null);
-  
+  const [user, setUser] = useState(null);
   // Add OrderModal state
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [selectedProductForOrder, setSelectedProductForOrder] = useState(null);
@@ -185,6 +185,19 @@ const Products = () => {
   useEffect(() => {
     fetchProducts(1);
   }, [selectedCategory, priceRange, sortBy, itemsPerPage, fetchProducts]);
+
+  useEffect(() => {
+    // Get user from localStorage
+    const userStr = localStorage.getItem('tantika_user');
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        setUser(userData);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
 
   // Handle page change
   const handlePageChange = (page) => {
@@ -359,6 +372,7 @@ const Products = () => {
           setShowOrderModal(false);
           setSelectedProductForOrder(null);
         }}
+        userId={user?.id}
         product={getProductForModal(selectedProductForOrder)}
       />
     </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, ShoppingBag, User, Phone, Mail, MapPin, AlertCircle } from 'lucide-react';
+import { X, ShoppingBag, User, Phone, Mail, MapPin, AlertCircle, Plus, ChevronDown, Check } from 'lucide-react';
 import axios from 'axios';
 
-const OrderModal = ({ isOpen, onClose, product }) => {
+const OrderModal = ({ isOpen, onClose, product, userId }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,20 +17,37 @@ const OrderModal = ({ isOpen, onClose, product }) => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [orderDetails, setOrderDetails] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  
+  // Address selection states
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [showAddAddressForm, setShowAddAddressForm] = useState(false);
+  const [newAddressData, setNewAddressData] = useState({
+    name: '',
+    phone: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    pincode: '',
+    country: 'India',
+    type: 'home'
+  });
 
-  // API base URL - update this with your backend URL
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-  // RESET STATE WHEN MODAL OPENS/CLOSES OR PRODUCT CHANGES
   useEffect(() => {
     if (!isOpen) {
-      // Reset everything when modal closes
       resetAllState();
     } else {
-      // Reset state when modal opens with a new product
       resetAllState();
+      if (userId) {
+        fetchSavedAddresses();
+      }
     }
-  }, [isOpen, product]); // Reset when modal opens/closes OR product changes
+  }, [isOpen, product, userId]);
 
   const resetAllState = () => {
     setFormData({
@@ -47,12 +64,125 @@ const OrderModal = ({ isOpen, onClose, product }) => {
     setSubmitSuccess(false);
     setOrderDetails(null);
     setErrorMessage('');
+    setSelectedAddressId(null);
+    setShowAddressDropdown(false);
+    setShowAddAddressForm(false);
+    setNewAddressData({
+      name: '',
+      phone: '',
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      state: '',
+      pincode: '',
+      country: 'India',
+      type: 'home'
+    });
+  };
+
+  // Fetch saved addresses
+  const fetchSavedAddresses = async () => {
+    if (!userId) return;
+    
+    try {
+      setLoadingAddresses(true);
+      const token = localStorage.getItem('tantika_token');
+      
+      const response = await fetch(`${API_BASE_URL}/api/usernorms/addresses`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSavedAddresses(data.data || []);
+          
+          // Auto-select default address if available
+          const defaultAddress = data.data.find(addr => addr.isDefault);
+          if (defaultAddress) {
+            selectAddress(defaultAddress);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching addresses:', error);
+    } finally {
+      setLoadingAddresses(false);
+    }
+  };
+
+  // Select an address and populate form
+  const selectAddress = (address) => {
+    setSelectedAddressId(address._id);
+    
+    // Populate form with selected address
+    setFormData(prev => ({
+      ...prev,
+      name: address.name,
+      phone: address.phone,
+      address: `${address.addressLine1}${address.addressLine2 ? ', ' + address.addressLine2 : ''}`,
+      city: address.city,
+      state: address.state,
+      pincode: address.pincode
+    }));
+    
+    setShowAddressDropdown(false);
+  };
+
+  // Add new address
+  const handleAddAddress = async () => {
+    try {
+      const token = localStorage.getItem('tantika_token');
+      const response = await fetch(`${API_BASE_URL}/api/usernorms/addresses`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newAddressData)
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh addresses list
+        await fetchSavedAddresses();
+        
+        // Select the newly added address
+        if (data.data) {
+          selectAddress(data.data);
+        }
+        
+        // Close add address form
+        setShowAddAddressForm(false);
+        
+        // Reset new address form
+        setNewAddressData({
+          name: '',
+          phone: '',
+          addressLine1: '',
+          addressLine2: '',
+          city: '',
+          state: '',
+          pincode: '',
+          country: 'India',
+          type: 'home'
+        });
+      } else {
+        setErrorMessage(data.message || 'Failed to add address');
+      }
+    } catch (error) {
+      console.error('Error adding address:', error);
+      setErrorMessage('Failed to add address. Please try again.');
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Prevent double submission
     if (isSubmitting) return;
     
     setIsSubmitting(true);
@@ -66,6 +196,7 @@ const OrderModal = ({ isOpen, onClose, product }) => {
         productImage: product.images?.[0] || '',
         artisan: product.artisan || 'Unknown Artisan',
         productLocation: product.location || 'Unknown Location',
+        shippingAddress: selectedAddressId, // Send selected address ID
         customerDetails: {
           name: formData.name.trim(),
           email: formData.email.trim().toLowerCase(),
@@ -88,7 +219,7 @@ const OrderModal = ({ isOpen, onClose, product }) => {
             'Content-Type': 'application/json',
           },
           withCredentials: true,
-          timeout: 10000 // 10 second timeout
+          timeout: 10000
         }
       );
       
@@ -98,7 +229,7 @@ const OrderModal = ({ isOpen, onClose, product }) => {
         setSubmitSuccess(true);
         setOrderDetails(response.data.data);
         
-        // Reset form immediately
+        // Reset form
         setFormData({
           name: '',
           email: '',
@@ -109,13 +240,13 @@ const OrderModal = ({ isOpen, onClose, product }) => {
           pincode: '',
           message: ''
         });
+        setSelectedAddressId(null);
         
         // Close modal after 5 seconds
         const closeTimer = setTimeout(() => {
           handleCloseModal();
         }, 5000);
         
-        // Clean up timer
         return () => clearTimeout(closeTimer);
       } else {
         throw new Error(response.data.error || 'Failed to submit interest');
@@ -135,9 +266,6 @@ const OrderModal = ({ isOpen, onClose, product }) => {
       }
       
       setErrorMessage(errorMsg);
-      
-      // Optional: Show toast instead of alert
-      // toast.error(`❌ ${errorMsg}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -150,15 +278,266 @@ const OrderModal = ({ isOpen, onClose, product }) => {
     });
   };
 
+  const handleNewAddressChange = (e) => {
+    setNewAddressData({
+      ...newAddressData,
+      [e.target.name]: e.target.value
+    });
+  };
+
   const handleCloseModal = () => {
-    // Reset all state first
     resetAllState();
-    // Then close the modal
     onClose();
   };
 
-  // Don't render if not open
   if (!isOpen) return null;
+
+  // Address dropdown component
+  const renderAddressDropdown = () => (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setShowAddressDropdown(!showAddressDropdown)}
+        className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50"
+      >
+        <div className="flex items-center">
+          <MapPin className="w-4 h-4 mr-2 text-gray-500" />
+          <span className="text-sm">
+            {selectedAddressId 
+              ? `Selected Address (${savedAddresses.find(a => a._id === selectedAddressId)?.name})`
+              : 'Select a saved address'
+            }
+          </span>
+        </div>
+        <ChevronDown className={`w-4 h-4 transition-transform ${showAddressDropdown ? 'rotate-180' : ''}`} />
+      </button>
+      
+      {showAddressDropdown && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+          <div className="p-2">
+            {loadingAddresses ? (
+              <div className="py-4 text-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+              </div>
+            ) : savedAddresses.length === 0 ? (
+              <div className="py-3 px-4 text-center text-gray-500">
+                <p className="mb-2">No saved addresses</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddressDropdown(false);
+                    setShowAddAddressForm(true);
+                  }}
+                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add new address
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {savedAddresses.map((address) => (
+                  <button
+                    key={address._id}
+                    type="button"
+                    onClick={() => selectAddress(address)}
+                    className={`w-full text-left px-3 py-2 rounded-md hover:bg-gray-100 transition-colors flex items-center justify-between ${
+                      selectedAddressId === address._id ? 'bg-blue-50 border border-blue-200' : ''
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center">
+                        <span className="font-medium">{address.name}</span>
+                        {address.isDefault && (
+                          <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 truncate">
+                        {address.addressLine1}, {address.city} - {address.pincode}
+                      </p>
+                    </div>
+                    {selectedAddressId === address._id && (
+                      <Check className="w-4 h-4 text-blue-600" />
+                    )}
+                  </button>
+                ))}
+                <div className="pt-2 border-t">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddressDropdown(false);
+                      setShowAddAddressForm(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add New Address
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Add address form component
+  const renderAddAddressForm = () => (
+    <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="font-semibold">Add New Address</h4>
+        <button
+          type="button"
+          onClick={() => setShowAddAddressForm(false)}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Full Name *
+          </label>
+          <input
+            type="text"
+            name="name"
+            value={newAddressData.name}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="Enter full name"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Phone Number *
+          </label>
+          <input
+            type="tel"
+            name="phone"
+            value={newAddressData.phone}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="10-digit mobile number"
+            required
+          />
+        </div>
+        
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Address Line 1 *
+          </label>
+          <input
+            type="text"
+            name="addressLine1"
+            value={newAddressData.addressLine1}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="House no., Building, Street, Area"
+            required
+          />
+        </div>
+        
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Address Line 2 (Optional)
+          </label>
+          <input
+            type="text"
+            name="addressLine2"
+            value={newAddressData.addressLine2}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="Landmark, Nearby location"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            City *
+          </label>
+          <input
+            type="text"
+            name="city"
+            value={newAddressData.city}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="Enter city"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            State *
+          </label>
+          <input
+            type="text"
+            name="state"
+            value={newAddressData.state}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="Enter state"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Pincode *
+          </label>
+          <input
+            type="text"
+            name="pincode"
+            value={newAddressData.pincode}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+            placeholder="6-digit pincode"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Address Type
+          </label>
+          <select
+            name="type"
+            value={newAddressData.type}
+            onChange={handleNewAddressChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+          >
+            <option value="home">Home</option>
+            <option value="work">Work</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={handleAddAddress}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+        >
+          Save Address
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAddAddressForm(false)}
+          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -199,7 +578,6 @@ const OrderModal = ({ isOpen, onClose, product }) => {
                 We'll contact you within 24 hours to discuss your order.
               </p>
               
-              {/* Order Details */}
               <div className="mt-4 p-3 bg-white border border-green-100 rounded">
                 <h4 className="font-semibold text-gray-700 mb-2">Order Details:</h4>
                 <div className="space-y-1 text-sm">
@@ -214,10 +592,6 @@ const OrderModal = ({ isOpen, onClose, product }) => {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Product:</span>
                     <span className="font-medium">{orderDetails.productName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Estimated Contact:</span>
-                    <span className="font-medium">{orderDetails.estimatedContact}</span>
                   </div>
                 </div>
               </div>
@@ -281,6 +655,22 @@ const OrderModal = ({ isOpen, onClose, product }) => {
                     </p>
                   </div>
                 </div>
+
+                {/* Address Selection */}
+                {userId && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Select Saved Address (Optional)
+                      </label>
+                      <span className="text-xs text-gray-500">
+                        {savedAddresses.length} saved
+                      </span>
+                    </div>
+                    {renderAddressDropdown()}
+                    {showAddAddressForm && renderAddAddressForm()}
+                  </div>
+                )}
 
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
                   {/* Name */}

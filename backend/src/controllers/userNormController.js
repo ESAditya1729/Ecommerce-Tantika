@@ -2,6 +2,7 @@
 const User = require('../models/User');
 const Order = require('../models/Order');
 const Wishlist = require('../models/Wishlist');
+const Address = require('../models/Address');
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcryptjs');
 
@@ -901,4 +902,291 @@ exports.updateItemAvailability = asyncHandler(async (req, res) => {
             productName: wishlist.items[itemIndex].productName
         }
     });
+});
+
+// @desc    Get all addresses for a user
+// @route   GET /api/usernorms/addresses
+// @access  Private
+exports.getUserAddresses = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const addresses = await Address.find({ userId, isActive: true })
+    .sort({ isDefault: -1, createdAt: -1 })
+    .select('-__v');
+
+  res.json({
+    success: true,
+    count: addresses.length,
+    data: addresses
+  });
+});
+
+// @desc    Get a single address
+// @route   GET /api/usernorms/addresses/:addressId
+// @access  Private
+exports.getAddressById = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { addressId } = req.params;
+
+  const address = await Address.findOne({ 
+    _id: addressId, 
+    userId, 
+    isActive: true 
+  });
+
+  if (!address) {
+    return res.status(404).json({
+      success: false,
+      message: 'Address not found'
+    });
+  }
+
+  res.json({
+    success: true,
+    data: address
+  });
+});
+
+// @desc    Create a new address
+// @route   POST /api/usernorms/addresses
+// @access  Private
+exports.createAddress = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { 
+    name, 
+    phone, 
+    addressLine1, 
+    addressLine2, 
+    city, 
+    state, 
+    pincode, 
+    country, 
+    type, 
+    isDefault 
+  } = req.body;
+
+  // Validate required fields
+  if (!name || !phone || !addressLine1 || !city || !state || !pincode) {
+    return res.status(400).json({
+      success: false,
+      message: 'Please provide all required fields: name, phone, addressLine1, city, state, pincode'
+    });
+  }
+
+  // If setting as default, unset other defaults
+  if (isDefault) {
+    await Address.updateMany(
+      { userId },
+      { $set: { isDefault: false } }
+    );
+  }
+
+  const address = await Address.create({
+    userId,
+    name,
+    phone,
+    addressLine1,
+    addressLine2: addressLine2 || '',
+    city,
+    state,
+    pincode,
+    country: country || 'India',
+    type: type || 'home',
+    isDefault: isDefault || false
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Address created successfully',
+    data: address
+  });
+});
+
+// @desc    Update an address
+// @route   PUT /api/usernorms/addresses/:addressId
+// @access  Private
+exports.updateAddress = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { addressId } = req.params;
+  const updateData = req.body;
+
+  // Find the address
+  let address = await Address.findOne({ 
+    _id: addressId, 
+    userId 
+  });
+
+  if (!address) {
+    return res.status(404).json({
+      success: false,
+      message: 'Address not found'
+    });
+  }
+
+  // If setting as default, unset other defaults
+  if (updateData.isDefault === true) {
+    await Address.updateMany(
+      { userId, _id: { $ne: addressId } },
+      { $set: { isDefault: false } }
+    );
+  }
+
+  // Update the address
+  Object.keys(updateData).forEach(key => {
+    if (key !== 'userId' && key !== '_id') {
+      address[key] = updateData[key];
+    }
+  });
+
+  address.updatedAt = Date.now();
+  await address.save();
+
+  res.json({
+    success: true,
+    message: 'Address updated successfully',
+    data: address
+  });
+});
+
+// @desc    Delete an address (soft delete)
+// @route   DELETE /api/usernorms/addresses/:addressId
+// @access  Private
+exports.deleteAddress = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { addressId } = req.params;
+
+  const address = await Address.findOne({ 
+    _id: addressId, 
+    userId, 
+    isActive: true 
+  });
+
+  if (!address) {
+    return res.status(404).json({
+      success: false,
+      message: 'Address not found'
+    });
+  }
+
+  // Check if it's the default address
+  const wasDefault = address.isDefault;
+
+  // Soft delete by setting isActive to false
+  address.isActive = false;
+  address.updatedAt = Date.now();
+  await address.save();
+
+  // If we deleted the default address, set the most recent address as default
+  if (wasDefault) {
+    const nextAddress = await Address.findOne({ 
+      userId, 
+      isActive: true,
+      _id: { $ne: addressId }
+    }).sort({ createdAt: -1 });
+
+    if (nextAddress) {
+      nextAddress.isDefault = true;
+      await nextAddress.save();
+    }
+  }
+
+  res.json({
+    success: true,
+    message: 'Address deleted successfully'
+  });
+});
+
+// @desc    Set an address as default
+// @route   PUT /api/usernorms/addresses/:addressId/set-default
+// @access  Private
+exports.setDefaultAddress = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { addressId } = req.params;
+
+  // Unset all other default addresses for this user
+  await Address.updateMany(
+    { userId, _id: { $ne: addressId } },
+    { $set: { isDefault: false } }
+  );
+
+  // Set the specified address as default
+  const address = await Address.findOneAndUpdate(
+    { _id: addressId, userId, isActive: true },
+    { 
+      $set: { 
+        isDefault: true,
+        updatedAt: Date.now()
+      } 
+    },
+    { new: true, runValidators: true }
+  );
+
+  if (!address) {
+    return res.status(404).json({
+      success: false,
+      message: 'Address not found'
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'Default address updated successfully',
+    data: address
+  });
+});
+
+// @desc    Get user's default address
+// @route   GET /api/usernorms/addresses/default
+// @access  Private
+exports.getDefaultAddress = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const address = await Address.findOne({ 
+    userId, 
+    isDefault: true, 
+    isActive: true 
+  });
+
+  if (!address) {
+    // If no default, return the most recent address
+    const recentAddress = await Address.findOne({ 
+      userId, 
+      isActive: true 
+    }).sort({ createdAt: -1 });
+
+    if (!recentAddress) {
+      return res.json({
+        success: true,
+        message: 'No addresses found',
+        data: null
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: recentAddress
+    });
+  }
+
+  res.json({
+    success: true,
+    data: address
+  });
+});
+
+// @desc    Get address count for dashboard
+// @route   GET /api/usernorms/addresses/count
+// @access  Private
+exports.getAddressCount = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const count = await Address.countDocuments({ 
+    userId, 
+    isActive: true 
+  });
+
+  res.json({
+    success: true,
+    data: { count }
+  });
 });

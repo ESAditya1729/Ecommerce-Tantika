@@ -1,36 +1,32 @@
-const DashboardHeader = ({ user }) => (
-  <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl shadow-xl p-8 mb-8 text-white">
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-      <div className="mb-6 md:mb-0">
-        <h1 className="text-3xl md:text-4xl font-bold mb-2">
-          তন্তিকাতে স্বাগতম, <span className="text-yellow-300">{user.username}!</span> 👋
-        </h1>
-        <p className="text-blue-100 text-lg">
-          Your personalized Bengali craft journey awaits
-        </p>
-        <div className="flex items-center space-x-4 mt-4">
-          <span className="inline-flex items-center px-3 py-1 bg-white/20 rounded-full">
-            <Mail className="w-4 h-4 mr-2" />
-            {user.email}
-          </span>
-          {user.phone && (
-            <span className="inline-flex items-center px-3 py-1 bg-white/20 rounded-full">
-              <Phone className="w-4 h-4 mr-2" />
-              {user.phone}
+import { Bell, RefreshCw } from 'lucide-react';
+
+export const DashboardHeader = ({ user, onRefresh }) => (
+  <div className="bg-white border-b border-gray-200 shadow-sm">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="flex justify-between items-center py-4">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-lg">
+              {user?.username?.charAt(0).toUpperCase() || 'U'}
             </span>
-          )}
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-gray-500">Welcome back, {user?.username}</p>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center space-x-4">
-        <div className="relative">
-          <div className="w-24 h-24 bg-gradient-to-r from-white/20 to-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border-2 border-white/30">
-            <span className="text-white text-3xl font-bold">
-              {user.username?.charAt(0).toUpperCase() || 'U'}
-            </span>
-          </div>
-          <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-            {user.role === 'premium' ? '⭐ Premium' : 'Member'}
-          </div>
+        <div className="flex items-center space-x-4">
+          <button className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors">
+            <Bell className="w-6 h-6" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+          </button>
+          <button 
+            onClick={onRefresh}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
         </div>
       </div>
     </div>
