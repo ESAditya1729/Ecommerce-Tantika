@@ -1,4 +1,6 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
+const Artisan = require('../models/Artisan');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
@@ -9,8 +11,8 @@ const generateToken = (id) => {
   });
 };
 
-// Send Token Response
-const sendTokenResponse = (user, statusCode, res) => {
+// Send Token Response with artisan data if applicable
+const sendTokenResponse = async (user, statusCode, res, artisanData = null) => {
   const token = generateToken(user._id);
 
   const options = {
@@ -22,39 +24,52 @@ const sendTokenResponse = (user, statusCode, res) => {
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
   };
 
-  // Return user data (without sensitive info)
+  // Prepare user response
   const userResponse = {
     id: user._id,
     username: user.username,
     email: user.email,
     phone: user.phone || '',
     role: user.role,
+    artisanId: user.artisanId || null,
     isActive: user.isActive,
     createdAt: user.createdAt
   };
 
+  // Prepare response
+  const response = {
+    success: true,
+    token,
+    user: userResponse,
+    message: statusCode === 201 ? 'Registration successful!' : 'Login successful!'
+  };
+
+  // Add artisan data if exists
+  if (artisanData) {
+    response.artisan = artisanData;
+  }
+
   res
     .status(statusCode)
     .cookie('token', token, options)
-    .json({
-      success: true,
-      token,
-      user: userResponse,
-      message: statusCode === 201 ? 'Registration successful!' : 'Login successful!'
-    });
+    .json(response);
 };
 
-// @desc    Register user
+// @desc    Register user (regular user registration)
 // @route   POST /api/auth/register
 // @access  Public
 exports.register = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     console.log('Register request received:', req.body);
     
-    const { username, email, password, phone } = req.body;
+    const { username, email, password, phone, role = 'user' } = req.body;
     
     // Basic validation
     if (!username || !email || !password) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Please provide username, email, and password'
@@ -62,9 +77,20 @@ exports.register = async (req, res) => {
     }
     
     if (password.length < 8) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 8 characters'
+      });
+    }
+    
+    // Validate role
+    const validRoles = ['user', 'admin', 'artisan', 'pending_artisan'];
+    if (!validRoles.includes(role)) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified'
       });
     }
     
@@ -74,61 +100,51 @@ exports.register = async (req, res) => {
     });
     
     if (existingUser) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'User already exists with this email or username'
       });
     }
     
-    // ✅ FIXED: Hash password BEFORE creating user
+    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     
-    // Create user with already-hashed password
-    const user = await User.create({
+    // Create user
+    const user = await User.create([{
       username,
       email: email.toLowerCase(),
-      password: hashedPassword, // Already hashed
+      password: hashedPassword,
       phone: phone || '',
       isActive: true,
-      role: 'user'
-    });
+      role: role
+    }], { session });
     
-    // Generate token
-    const token = generateToken(user._id);
-    
-    // Return user without password
-    const userResponse = {
-      id: user._id,
-      username: user.username,
-      email: user.email,
-      phone: user.phone || '',
-      role: user.role,
-      isActive: user.isActive,
-      createdAt: user.createdAt
-    };
+    await session.commitTransaction();
     
     // Send response
-    const options = {
-      expires: new Date(
-        Date.now() + (process.env.JWT_COOKIE_EXPIRE || 7) * 24 * 60 * 60 * 1000
-      ),
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+    const userResponse = {
+      id: user[0]._id,
+      username: user[0].username,
+      email: user[0].email,
+      phone: user[0].phone || '',
+      role: user[0].role,
+      isActive: user[0].isActive,
+      createdAt: user[0].createdAt
     };
 
-    res
-      .status(201)
-      .cookie('token', token, options)
-      .json({
-        success: true,
-        token,
-        user: userResponse,
-        message: 'Registration successful!'
-      });
+    const token = generateToken(user[0]._id);
+    
+    res.status(201).json({
+      success: true,
+      token,
+      user: userResponse,
+      message: 'Registration successful!'
+    });
     
   } catch (error) {
+    await session.abortTransaction();
     console.error('Registration error:', error);
     
     // Handle duplicate key errors
@@ -145,10 +161,197 @@ exports.register = async (req, res) => {
       message: 'Server error during registration',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
+  } finally {
+    session.endSession();
   }
 };
 
-// @desc    Login user
+// @desc    Register as artisan
+// @route   POST /api/auth/register/artisan
+// @access  Public
+exports.registerArtisan = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    console.log('Artisan registration request received:', req.body);
+    
+    const { 
+      username, 
+      email, 
+      password, 
+      phone,
+      // Artisan-specific fields
+      businessName,
+      fullName,
+      address,
+      idProof,
+      specialization,
+      yearsOfExperience,
+      description,
+      portfolioLink,
+      website,
+      socialLinks,
+      bankDetails,
+      documents
+    } = req.body;
+    
+    // Basic validation
+    if (!username || !email || !password) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide username, email, and password'
+      });
+    }
+    
+    if (password.length < 8) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters'
+      });
+    }
+    
+    // Artisan-specific validation
+    if (!businessName || !fullName || !address || !idProof || !description) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required artisan information'
+      });
+    }
+    
+    if (description.length < 50) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Description must be at least 50 characters'
+      });
+    }
+    
+    // Check if user exists
+    const existingUser = await User.findOne({ 
+      $or: [{ email: email.toLowerCase() }, { username }] 
+    });
+    
+    if (existingUser) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'User already exists with this email or username'
+      });
+    }
+    
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    
+    // Step 1: Create User (basic info only)
+    const user = await User.create([{
+      username,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      phone: phone || '',
+      isActive: true,
+      role: 'pending_artisan' // Initial role
+    }], { session });
+    
+    // Step 2: Create Artisan record with all business data
+    const artisan = await Artisan.create([{
+      userId: user[0]._id,
+      businessName,
+      fullName,
+      email: email.toLowerCase(),
+      phone: phone || '',
+      address: {
+        street: address.street || '',
+        city: address.city || '',
+        state: address.state || '',
+        postalCode: address.postalCode || '',
+        country: address.country || 'India'
+      },
+      idProof: {
+        type: idProof.type || 'aadhaar',
+        number: idProof.number || '',
+        documentUrl: idProof.documentUrl || '',
+        verified: false
+      },
+      specialization: specialization || [],
+      yearsOfExperience: yearsOfExperience || 0,
+      description: description || '',
+      portfolioLink: portfolioLink || '',
+      website: website || '',
+      socialLinks: socialLinks || {},
+      bankDetails: bankDetails || {},
+      documents: documents || [],
+      status: 'pending',
+      submittedAt: new Date()
+    }], { session });
+    
+    // Step 3: Update user with artisanId reference
+    await User.findByIdAndUpdate(
+      user[0]._id,
+      { artisanId: artisan[0]._id },
+      { session }
+    );
+    
+    await session.commitTransaction();
+    
+    console.log(`✅ Artisan application created: ${artisan[0]._id}`);
+    
+    // TODO: Notify admin about new artisan application
+    // await notifyAdminNewArtisan(artisan[0]);
+    
+    // Send response
+    const token = generateToken(user[0]._id);
+    
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: user[0]._id,
+        username: user[0].username,
+        email: user[0].email,
+        phone: user[0].phone || '',
+        role: user[0].role,
+        artisanId: artisan[0]._id,
+        isActive: user[0].isActive,
+        createdAt: user[0].createdAt
+      },
+      artisan: {
+        id: artisan[0]._id,
+        businessName: artisan[0].businessName,
+        status: artisan[0].status,
+        submittedAt: artisan[0].submittedAt
+      },
+      message: 'Artisan application submitted successfully! Our team will review your application within 3-5 business days.'
+    });
+    
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Artisan registration error:', error);
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        success: false,
+        message: `${field} already exists. Please use a different ${field}.`
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Server error during artisan registration',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    session.endSession();
+  }
+};
+
+// @desc    Login user (with artisan data if applicable)
 // @route   POST /api/auth/login
 // @access  Public
 exports.login = async (req, res) => {
@@ -182,7 +385,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    // ✅ Check if account is active
+    // Check if account is active
     if (!user.isActive) {
       return res.status(401).json({
         success: false,
@@ -203,12 +406,58 @@ exports.login = async (req, res) => {
       });
     }
     
-    // Update login info
+    // Get artisan data if applicable
+    let artisanData = null;
+    if (user.role === 'artisan' || user.role === 'pending_artisan') {
+      artisanData = await Artisan.findOne({ userId: user._id })
+        .select('businessName status rating totalProducts totalSales submittedAt approvedAt');
+    }
+    
+    // Update user login info
     user.lastLogin = Date.now();
     user.loginCount = (user.loginCount || 0) + 1;
     await user.save({ validateBeforeSave: false });
     
-    sendTokenResponse(user, 200, res);
+    // Prepare response
+    const token = generateToken(user._id);
+    
+    const userResponse = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      phone: user.phone || '',
+      role: user.role,
+      artisanId: user.artisanId || null,
+      isActive: user.isActive,
+      createdAt: user.createdAt
+    };
+    
+    const response = {
+      success: true,
+      token,
+      user: userResponse,
+      message: getLoginMessage(user.role, artisanData?.status)
+    };
+    
+    // Add artisan data if exists
+    if (artisanData) {
+      response.artisan = artisanData;
+    }
+    
+    // Set cookie
+    const options = {
+      expires: new Date(
+        Date.now() + (process.env.JWT_COOKIE_EXPIRE || 7) * 24 * 60 * 60 * 1000
+      ),
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+    };
+    
+    res
+      .status(200)
+      .cookie('token', token, options)
+      .json(response);
     
   } catch (error) {
     console.error('Login error:', error);
@@ -216,6 +465,182 @@ exports.login = async (req, res) => {
       success: false,
       message: 'Server error during login',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Helper function for login messages
+const getLoginMessage = (role, artisanStatus) => {
+  switch(role) {
+    case 'admin':
+      return 'Welcome back, Admin!';
+    case 'artisan':
+      return artisanStatus === 'approved' 
+        ? 'Welcome to your artisan dashboard!' 
+        : 'Artisan dashboard access granted!';
+    case 'pending_artisan':
+      return 'Your artisan application is under review. We\'ll notify you once approved.';
+    default:
+      return 'Login successful!';
+  }
+};
+
+// @desc    Get current logged in user with artisan data
+// @route   GET /api/auth/me
+// @access  Private
+exports.getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Get artisan data if applicable
+    let artisanData = null;
+    if (user.role === 'artisan' || user.role === 'pending_artisan') {
+      artisanData = await Artisan.findOne({ userId: user._id })
+        .select('businessName status rating totalProducts totalSales submittedAt approvedAt');
+    }
+
+    // Prepare response
+    const response = {
+      success: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone || '',
+        role: user.role,
+        artisanId: user.artisanId || null,
+        isActive: user.isActive,
+        createdAt: user.createdAt
+      }
+    };
+
+    // Add artisan data if exists
+    if (artisanData) {
+      response.artisan = artisanData;
+    }
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('Get me error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get artisan profile (for approved artisans)
+// @route   GET /api/auth/me/artisan
+// @access  Private (Artisan only)
+exports.getMyArtisanProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Check if user is an artisan
+    if (user.role !== 'artisan' && user.role !== 'pending_artisan') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Artisan role required.'
+      });
+    }
+    
+    // Get artisan profile
+    const artisan = await Artisan.findOne({ userId: user._id });
+    
+    if (!artisan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Artisan profile not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      artisan: artisan
+    });
+    
+  } catch (error) {
+    console.error('Get artisan profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Update artisan profile
+// @route   PUT /api/auth/me/artisan
+// @access  Private (Artisan only)
+exports.updateArtisanProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Check if user is an artisan
+    if (user.role !== 'artisan' && user.role !== 'pending_artisan') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Artisan role required.'
+      });
+    }
+    
+    // Get allowed fields for update (exclude sensitive fields)
+    const allowedUpdates = [
+      'description', 'portfolioLink', 'website', 'socialLinks',
+      'specialization', 'yearsOfExperience'
+    ];
+    
+    const updates = {};
+    allowedUpdates.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+    
+    // Update artisan profile
+    const artisan = await Artisan.findOneAndUpdate(
+      { userId: user._id },
+      updates,
+      { new: true, runValidators: true }
+    );
+    
+    if (!artisan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Artisan profile not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Artisan profile updated successfully',
+      artisan: artisan
+    });
+    
+  } catch (error) {
+    console.error('Update artisan profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
     });
   }
 };
@@ -233,40 +658,6 @@ exports.logout = async (req, res) => {
     success: true,
     message: 'Logged out successfully'
   });
-};
-
-// @desc    Get current logged in user
-// @route   GET /api/auth/me
-// @access  Private
-exports.getMe = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        phone: user.phone || '',
-        role: user.role,
-        isActive: user.isActive,
-        createdAt: user.createdAt
-      }
-    });
-  } catch (error) {
-    console.error('Get me error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
 };
 
 // @desc    Admin: Deactivate user
@@ -292,6 +683,14 @@ exports.deactivateUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'You cannot deactivate your own account'
+      });
+    }
+    
+    // If user is artisan, also update artisan status
+    if (user.role === 'artisan' && user.artisanId) {
+      await Artisan.findByIdAndUpdate(user.artisanId, {
+        status: 'suspended',
+        suspensionReason: reason || ''
       });
     }
     
@@ -337,6 +736,17 @@ exports.activateUser = async (req, res) => {
         success: false,
         message: 'User not found'
       });
+    }
+    
+    // If user is suspended artisan, also update artisan status
+    if (user.role === 'artisan' && user.artisanId) {
+      const artisan = await Artisan.findById(user.artisanId);
+      if (artisan && artisan.status === 'suspended') {
+        await Artisan.findByIdAndUpdate(user.artisanId, {
+          status: 'approved',
+          suspensionReason: ''
+        });
+      }
     }
     
     // Activate user

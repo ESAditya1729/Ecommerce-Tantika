@@ -1,3 +1,4 @@
+// src/models/User.js (Simplified version)
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -28,8 +29,13 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin'],
+    enum: ['user', 'admin', 'artisan', 'pending_artisan'],
     default: 'user'
+  },
+  artisanId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Artisan',
+    default: null
   },
   isActive: {
     type: Boolean,
@@ -45,10 +51,10 @@ const UserSchema = new mongoose.Schema({
   }
 });
 
-// ⚠️ **TEMPORARY FIX: Remove ALL pre-save hooks for now**
-// We'll handle password hashing in the controller
+// ✅ REMOVED: Pre-save hooks to avoid "next is not a function" error
+// Password is already hashed in the controller
 
-// Compare password method
+// ✅ Simple compare password method
 UserSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
