@@ -544,14 +544,29 @@ productSchema.pre('save', async function(next) {
   next();
 });
 
-// ==================== QUERY MIDDLEWARE ====================
-// Filter out non-approved products for non-artisans
-productSchema.pre(/^find/, function(next) {
-  // For regular queries, only show approved products
-  if (!this.getOptions().showAll) {
-    this.find({ approvalStatus: 'approved', status: 'active' });
-  }
-  next();
-});
+// // ==================== QUERY MIDDLEWARE ====================
+// // Filter out non-approved products for non-artisans
+// productSchema.pre(/^find/, function(next) {
+//   try {
+//     // Check if next is available (it should be in middleware context)
+//     if (typeof next === 'function') {
+//       // For regular queries, only show approved products
+//       if (!this.getOptions().showAll) {
+//         this.find({ approvalStatus: 'approved', status: 'active' });
+//       }
+//       next();
+//     } else {
+//       // If no next function, just modify the query
+//       if (!this.getOptions().showAll) {
+//         this.find({ approvalStatus: 'approved', status: 'active' });
+//       }
+//     }
+//   } catch (error) {
+//     // If error occurs, continue without filter
+//     console.error('Query middleware error:', error);
+//     // Don't call next with error to avoid breaking queries
+//   }
+// });
+
 
 module.exports = mongoose.model('Product', productSchema);

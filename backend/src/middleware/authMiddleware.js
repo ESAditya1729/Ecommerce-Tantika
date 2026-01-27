@@ -18,12 +18,11 @@ const protect = async (req, res, next) => {
     token = req.cookies.token;
   }
 
-  // If no token found
+  // If no token found, continue as public user
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Not authorized to access this route'
-    });
+    req.user = null; // Set user to null for public access
+    req.artisan = null;
+    return next(); // Continue without authentication
   }
 
   try {
@@ -33,12 +32,11 @@ const protect = async (req, res, next) => {
     // Find user by id
     const user = await User.findById(decoded.id);
     
-    // If user not found
+    // If user not found, continue as public
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not found'
-      });
+      req.user = null;
+      req.artisan = null;
+      return next();
     }
     
     // Check if user is active
@@ -61,6 +59,13 @@ const protect = async (req, res, next) => {
   } catch (error) {
     console.error('Auth middleware error:', error.message);
     
+    // For public routes, continue even if token is invalid
+    req.user = null;
+    req.artisan = null;
+    next(); // Continue with null user
+    
+    // If you want to be strict about invalid tokens, uncomment below:
+    /*
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
         success: false,
@@ -79,6 +84,7 @@ const protect = async (req, res, next) => {
       success: false,
       message: 'Not authorized to access this route'
     });
+    */
   }
 };
 

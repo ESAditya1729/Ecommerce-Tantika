@@ -7,26 +7,26 @@ const getProducts = async (req, res) => {
     try {
         const { 
             category, 
-            status, 
             minPrice, 
             maxPrice, 
-            search, 
             sort = 'createdAt', 
             order = 'desc',
             page = 1,
             limit = 10
         } = req.query;
 
-        let query = {};
+        // SIMPLE FILTER: Only approved, active products
+        let query = {status: 'active',
+            approvalStatus: 'approved'
+        }
+        // let query = {
+        //     approvalStatus: 'approved', // ADD THIS
+        //     status: 'active' // ADD THIS
+        // };
 
         // Filter by category
         if (category && category !== 'all' && category !== 'All') {
             query.category = category;
-        }
-
-        // Filter by status
-        if (status && status !== 'all') {
-            query.status = status;
         }
 
         // Filter by price range
@@ -36,14 +36,6 @@ const getProducts = async (req, res) => {
             if (maxPrice) query.price.$lte = Number(maxPrice);
         }
 
-        // Search by name or category
-        if (search) {
-            query.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { category: { $regex: search, $options: 'i' } }
-            ];
-        }
-
         // Sorting
         const sortOptions = {};
         sortOptions[sort] = order === 'desc' ? -1 : 1;
@@ -51,46 +43,14 @@ const getProducts = async (req, res) => {
         // Pagination
         const skip = (page - 1) * limit;
 
-        const [products, total] = await Promise.all([
-            Product.find(query)
-                .sort(sortOptions)
-                .skip(skip)
-                .limit(Number(limit))
-                .lean(),
-            Product.countDocuments(query)
-        ]);
+        // Simple query - no middleware interference
+        const products = await Product.find(query)
+            .sort(sortOptions)
+            .skip(skip)
+            .limit(Number(limit))
+            .lean();
 
-        // Calculate summary stats
-        const summary = await Product.aggregate([
-            { $match: query },
-            {
-                $group: {
-                    _id: null,
-                    totalProducts: { $sum: 1 },
-                    totalStock: { $sum: '$stock' },
-                    totalSales: { $sum: '$sales' },
-                    avgRating: { $avg: '$rating' },
-                    lowStockCount: {
-                        $sum: {
-                            $cond: [
-                                { $and: [{ $gt: ['$stock', 0] }, { $lt: ['$stock', 5] }] },
-                                1,
-                                0
-                            ]
-                        }
-                    },
-                    outOfStockCount: {
-                        $sum: {
-                            $cond: [
-                                { $eq: ['$stock', 0] },
-                                1,
-                                0
-                            ]
-                        }
-                    }
-                }
-            }
-        ]);
+        const total = await Product.countDocuments(query);
 
         res.json({
             success: true,
@@ -98,18 +58,10 @@ const getProducts = async (req, res) => {
             total,
             totalPages: Math.ceil(total / limit),
             currentPage: Number(page),
-            summary: summary[0] || {
-                totalProducts: 0,
-                totalStock: 0,
-                totalSales: 0,
-                avgRating: 0,
-                lowStockCount: 0,
-                outOfStockCount: 0
-            },
             products
         });
     } catch (error) {
-        console.error(error);
+        console.error('Get products error:', error);
         res.status(500).json({
             success: false,
             message: 'Server error',
