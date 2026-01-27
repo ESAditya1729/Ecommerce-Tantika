@@ -327,7 +327,7 @@ export const WishlistModal = ({
                         </Link>
                         
                         <div className="flex space-x-2">
-                          <button
+                          {/* <button
                             onClick={() => handleMoveToCart(item)}
                             disabled={addingToCartId === item.productId}
                             className="px-3 py-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -339,7 +339,7 @@ export const WishlistModal = ({
                               <ShoppingCart className="w-3 h-3 mr-1" />
                             )}
                             Cart
-                          </button>
+                          </button> */}
                           
                           <button
                             onClick={() => handleRemoveItem(item.productId)}

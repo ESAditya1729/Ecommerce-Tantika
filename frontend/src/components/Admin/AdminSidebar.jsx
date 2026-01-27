@@ -25,6 +25,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, isOpen, onClose }) => {
     { id: 'products', label: 'Products', icon: <Package className="w-5 h-5" /> },
     { id: 'orders', label: 'Orders', icon: <ShoppingBag className="w-5 h-5" /> },
     { id: 'users', label: 'Users', icon: <Users className="w-5 h-5" /> },
+    { id: 'artisans', label: 'Artisans', icon: <Users className="w-5 h-5" /> },
     { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-5 h-5" /> },
     { id: 'inventory', label: 'Inventory', icon: <Database className="w-5 h-5" /> },
     { id: 'reports', label: 'Reports', icon: <FileText className="w-5 h-5" /> },

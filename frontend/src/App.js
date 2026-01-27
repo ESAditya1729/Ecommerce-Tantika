@@ -9,6 +9,8 @@ import Register from "./pages/Register";
 import AdminPage from "./pages/AdminPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProductDetails from './pages/ProductDetails';
+import ArtisanStories from "./pages/ArtisiansStories";
+import ArtisanPendingApproval from './pages/ArtisanPendingApproval';
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -101,7 +103,26 @@ function App() {
             </ProtectedRoute>
           } 
         />
-
+        <Route 
+          path="/artisans" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <ArtisanStories />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/artisan/pending-approval" 
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <ArtisanPendingApproval />
+              </MainLayout>
+            </ProtectedRoute>
+          } 
+        />
         {/* Admin Page - With Admin Layout (No Navbar & Footer) */}
         <Route 
           path="/admin/Addashboard" 

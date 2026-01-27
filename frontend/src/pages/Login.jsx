@@ -120,6 +120,9 @@ const handleSubmit = async (e) => {
       if (result.user.role === "admin" || result.user.role === "superadmin") {
         redirectPath = "/admin/Addashboard"; // Admin dashboard
       }
+      if (result.user.role === "pending_artisan") {
+        redirectPath = "/artisan/pending-approval"; // Pending approval page
+      }
       
       // ✅ CRITICAL FIX: Use window.location.href for hard navigation
       // This ensures the app fully reloads and ProtectedRoute reads fresh localStorage

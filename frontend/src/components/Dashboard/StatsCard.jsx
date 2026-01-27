@@ -6,7 +6,7 @@ export const StatCard = ({
   icon: Icon, 
   color, 
   link, 
-  onClick,  // NEW: Add onClick prop
+  onClick, 
   trend, 
   subtitle 
 }) => {

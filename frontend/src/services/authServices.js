@@ -17,7 +17,7 @@ const getBaseURL = () => {
     
     // Option 2: If backend is deployed separately (on Railway, Render, Heroku, etc.)
     return process.env.REACT_APP_API_URL || 
-           'https://your-backend-production-url.herokuapp.com/api'; // CHANGE THIS!
+           'http://localhost:5000/api'; // CHANGE THIS!
   } else {
     // In development, use localhost
     return process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -180,15 +180,37 @@ const authServices = {
     }
   },
 
-  // Register new user
+  // Register new user (updated for artisan support)
   register: async (userData) => {
     try {
-      const response = await API.post('/auth/register', userData);
+      // Prepare the data based on user role
+      const registrationData = {
+        username: userData.username,
+        email: userData.email,
+        phone: userData.phone,
+        password: userData.password,
+        confirmPassword: userData.confirmPassword,
+        role: userData.role || 'user' // Default to 'user' if not specified
+      };
+
+      // Add artisan-specific data if registering as artisan
+      if (userData.role === 'pending_artisan' || userData.role === 'artisan') {
+        registrationData.artisanProfile = {
+          ...userData.artisanProfile,
+          status: 'pending', // Default status for new artisans
+          submittedAt: new Date().toISOString()
+        };
+      }
+
+      const response = await API.post('/auth/register', registrationData);
       return {
         success: true,
         token: response.data.token,
         user: response.data.user,
-        message: response.data.message
+        message: response.data.message || 
+          (userData.role === 'pending_artisan' 
+            ? 'Artisan application submitted successfully!' 
+            : 'Registration successful!')
       };
     } catch (error) {
       // Re-throw the error for the component to handle
@@ -196,15 +218,42 @@ const authServices = {
     }
   },
 
-  // Login user
+  // Register as artisan (convenience function)
+registerArtisan: async (userData) => {
+  try {
+    console.log('Registering artisan:', userData);
+    const response = await API.post('/auth/register/artisan', userData);
+    return {
+      success: true,
+      token: response.data.token,
+      user: response.data.user,
+      artisan: response.data.artisan,
+      message: response.data.message
+    };
+  } catch (error) {
+    console.error('Artisan registration error:', error);
+    throw error.response?.data || error;
+  }
+},
+
+  // Login user (updated for role-based redirection)
   login: async (credentials) => {
     try {
       const response = await API.post('/auth/login', credentials);
+      
+      // Store user role for redirection logic
+      if (response.data.user) {
+        response.data.user.role = response.data.user.role || 'user';
+      }
+      
       return {
         success: true,
         token: response.data.token,
         user: response.data.user,
-        message: response.data.message
+        message: response.data.message || 
+          (response.data.user?.role === 'pending_artisan' 
+            ? 'Artisan application under review' 
+            : 'Login successful!')
       };
     } catch (error) {
       throw error.response?.data || error;
@@ -230,6 +279,12 @@ const authServices = {
   getCurrentUser: async () => {
     try {
       const response = await API.get('/auth/me');
+      
+      // Ensure role is set
+      if (response.data.user) {
+        response.data.user.role = response.data.user.role || 'user';
+      }
+      
       return {
         success: true,
         user: response.data.user
@@ -240,6 +295,89 @@ const authServices = {
         localStorage.removeItem('tantika_token');
         localStorage.removeItem('tantika_user');
       }
+      throw error.response?.data || error;
+    }
+  },
+
+  // Get artisan profile (if user is artisan)
+  getArtisanProfile: async (userId) => {
+    try {
+      const response = await API.get(`/artisan/profile/${userId || ''}`);
+      return {
+        success: true,
+        profile: response.data.profile,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Update artisan profile
+  updateArtisanProfile: async (userId, profileData) => {
+    try {
+      const response = await API.put(`/artisan/profile/${userId}`, profileData);
+      return {
+        success: true,
+        profile: response.data.profile,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Check artisan approval status
+  checkArtisanApprovalStatus: async (userId) => {
+    try {
+      const response = await API.get(`/artisan/status/${userId}`);
+      return {
+        success: true,
+        status: response.data.status,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Admin: Get pending artisans
+  getPendingArtisans: async () => {
+    try {
+      const response = await API.get('/admin/artisans/pending');
+      return {
+        success: true,
+        artisans: response.data.artisans,
+        total: response.data.total
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Admin: Approve artisan
+  approveArtisan: async (artisanId, adminData) => {
+    try {
+      const response = await API.post(`/admin/artisans/${artisanId}/approve`, adminData);
+      return {
+        success: true,
+        message: response.data.message,
+        artisan: response.data.artisan
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Admin: Reject artisan
+  rejectArtisan: async (artisanId, rejectionData) => {
+    try {
+      const response = await API.post(`/admin/artisans/${artisanId}/reject`, rejectionData);
+      return {
+        success: true,
+        message: response.data.message
+      };
+    } catch (error) {
       throw error.response?.data || error;
     }
   },
@@ -286,19 +424,88 @@ const authServices = {
     }
   },
 
+  // Check if user is approved artisan
+  isApprovedArtisan: () => {
+    const user = authServices.getStoredUser();
+    return user && user.role === 'artisan' && 
+           user.artisanProfile?.status === 'approved';
+  },
+
+  // Check if user is pending artisan
+  isPendingArtisan: () => {
+    const user = authServices.getStoredUser();
+    return user && user.role === 'pending_artisan';
+  },
+
+  // Check if user is admin
+  isAdmin: () => {
+    const user = authServices.getStoredUser();
+    return user && user.role === 'admin';
+  },
+
   // Get stored user data
   getStoredUser: () => {
     const userStr = localStorage.getItem('tantika_user');
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+    
+    try {
+      const user = JSON.parse(userStr);
+      // Ensure role is set for backward compatibility
+      user.role = user.role || 'user';
+      return user;
+    } catch (error) {
+      console.error('Error parsing stored user:', error);
+      return null;
+    }
   },
 
   // Update stored user data
   updateStoredUser: (userData) => {
     const currentUser = authServices.getStoredUser();
     if (currentUser) {
-      const updatedUser = { ...currentUser, ...userData };
+      const updatedUser = { 
+        ...currentUser, 
+        ...userData,
+        // Preserve role if not provided in update
+        role: userData.role || currentUser.role
+      };
       localStorage.setItem('tantika_user', JSON.stringify(updatedUser));
     }
+  },
+
+  // Helper: Get redirect path based on user role
+  getRedirectPath: () => {
+    const user = authServices.getStoredUser();
+    
+    if (!user) return '/login';
+    
+    switch (user.role) {
+      case 'admin':
+        return '/admin/dashboard';
+      case 'artisan':
+        if (user.artisanProfile?.status === 'approved') {
+          return '/artisan/dashboard';
+        } else {
+          return '/artisan/pending-approval';
+        }
+      case 'pending_artisan':
+        return '/artisan/pending-approval';
+      default:
+        return '/dashboard';
+    }
+  },
+
+  // Helper: Check if user can access artisan dashboard
+  canAccessArtisanDashboard: () => {
+    const user = authServices.getStoredUser();
+    return user && user.role === 'artisan' && 
+           user.artisanProfile?.status === 'approved';
+  },
+
+  // Helper: Check if user can access admin dashboard
+  canAccessAdminDashboard: () => {
+    const user = authServices.getStoredUser();
+    return user && user.role === 'admin';
   },
 
   // Get API configuration (for debugging)
@@ -309,6 +516,154 @@ const authServices = {
       frontendUrl: window.location.origin,
       backendUrl: API.defaults.baseURL
     };
+  },
+
+  // Get artisan dashboard data
+getArtisanDashboard: async () => {
+  try {
+    const response = await API.get('/artisan/dashboard');
+    return {
+      success: true,
+      data: response.data.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+// Get pending artisan status
+getPendingArtisanStatus: async () => {
+  try {
+    const response = await API.get('/artisan/pending-status');
+    return {
+      success: true,
+      data: response.data.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+// Get artisan profile
+getArtisanProfile: async () => {
+  try {
+    const response = await API.get('/artisan/profile');
+    return {
+      success: true,
+      data: response.data.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+// Update artisan profile
+updateArtisanProfile: async (profileData) => {
+  try {
+    const response = await API.put('/artisan/profile', profileData);
+    return {
+      success: true,
+      data: response.data.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+// Admin: Get pending artisans
+getPendingArtisans: async (page = 1, limit = 10, search = '') => {
+  try {
+    const response = await API.get(`/admin/artisans/pending?page=${page}&limit=${limit}&search=${search}`);
+    return {
+      success: true,
+      data: response.data.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+// Admin: Approve artisan
+approveArtisan: async (artisanId, adminNotes = '') => {
+  try {
+    const response = await API.put(`/admin/artisans/${artisanId}/approve`, { adminNotes });
+    return {
+      success: true,
+      data: response.data.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+// Admin: Reject artisan
+rejectArtisan: async (artisanId, rejectionReason) => {
+  try {
+    const response = await API.put(`/admin/artisans/${artisanId}/reject`, { rejectionReason });
+    return {
+      success: true,
+      data: response.data.data,
+      message: response.data.message
+    };
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+},
+
+  // ========================
+  // Role-Based Access Control
+  // ========================
+
+  // Middleware-like functions for route protection
+  requireAuth: (requiredRole = null) => {
+    if (!authServices.isAuthenticated()) {
+      return {
+        allowed: false,
+        redirect: '/login',
+        message: 'Please login to access this page'
+      };
+    }
+
+    const user = authServices.getStoredUser();
+    
+    if (requiredRole) {
+      if (user.role !== requiredRole) {
+        // Special case: pending artisans trying to access regular artisan dashboard
+        if (requiredRole === 'artisan' && user.role === 'pending_artisan') {
+          return {
+            allowed: false,
+            redirect: '/artisan/pending-approval',
+            message: 'Your artisan application is under review'
+          };
+        }
+        
+        // Deny access for other role mismatches
+        return {
+          allowed: false,
+          redirect: '/dashboard',
+          message: 'You do not have permission to access this page'
+        };
+      }
+      
+      // Additional checks for specific roles
+      if (requiredRole === 'artisan') {
+        if (user.artisanProfile?.status !== 'approved') {
+          return {
+            allowed: false,
+            redirect: '/artisan/pending-approval',
+            message: 'Your artisan application is not yet approved'
+          };
+        }
+      }
+    }
+
+    return { allowed: true, user };
   }
 };
 

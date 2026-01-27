@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
+const ProtectedRoute = ({ children, requireAdmin = false, allowedRoles = [] }) => {
   const location = useLocation();
   
   // Synchronous check - no useEffect, no loading state
@@ -16,7 +16,17 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
   try {
     const user = JSON.parse(userStr);
-    const isAdmin = user.role === "admin" || user.role === "superadmin";
+    const userRole = user.role;
+    const isAdmin = userRole === "admin" || userRole === "superadmin";
+
+    // ⚠️ CRITICAL FIX: Check for pending_artisan role first!
+    if (userRole === "pending_artisan") {
+      // Only allow access to pending approval page
+      if (location.pathname !== "/artisan/pending-approval") {
+        console.log("❌ Pending artisan accessing restricted route, redirecting to pending-approval");
+        return <Navigate to="/artisan/pending-approval" replace />;
+      }
+    }
 
     // If admin access is required but user is not admin
     if (requireAdmin && !isAdmin) {
@@ -24,8 +34,22 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
       return <Navigate to="/dashboard" replace />;
     }
 
+    // ✅ Optional: Role-based access control with allowedRoles
+    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+      console.log(`❌ Role ${userRole} not in allowed roles: ${allowedRoles}`);
+      
+      // Redirect based on role
+      if (userRole === "pending_artisan") {
+        return <Navigate to="/artisan/pending-approval" replace />;
+      } else if (isAdmin) {
+        return <Navigate to="/admin/Addashboard" replace />;
+      } else {
+        return <Navigate to="/dashboard" replace />;
+      }
+    }
+
     // If everything is good, render the children
-    console.log("✅ Access granted!");
+    console.log("✅ Access granted for role:", userRole);
     return children;
 
   } catch (error) {
