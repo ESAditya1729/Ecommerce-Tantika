@@ -18,12 +18,29 @@ const AddProductModal = ({
   const [specifications, setSpecifications] = useState([{ key: "", value: "" }]);
   const [variants, setVariants] = useState([{ name: "", price: "", stock: "" }]);
 
+  // Define available status options
+  const approvedStatusOptions = [
+    { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-800" },
+    { value: "approved", label: "Approved", color: "bg-green-100 text-green-800" },
+    { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-800" },
+    { value: "under_review", label: "Under Review", color: "bg-blue-100 text-blue-800" },
+    { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-800" },
+  ];
+
   useEffect(() => {
     if (showAddModal) {
       // Initialize with existing data or defaults
       setFeaturedImages(newProduct.images || []);
       setSpecifications(newProduct.specifications || [{ key: "", value: "" }]);
       setVariants(newProduct.variants || [{ name: "", price: "", stock: "" }]);
+      
+      // Initialize approvedStatus if not set
+      if (!newProduct.approvedStatus) {
+        setNewProduct(prev => ({
+          ...prev,
+          approvedStatus: "pending" // Default to pending
+        }));
+      }
     }
   }, [showAddModal, newProduct]);
 
@@ -37,6 +54,11 @@ const AddProductModal = ({
       newErrors.price = "Valid price is required";
     }
     if (!newProduct.image) newErrors.image = "Main image is required";
+    
+    // Validate approvedStatus
+    if (!newProduct.approvedStatus) {
+      newErrors.approvedStatus = "Approval status is required";
+    }
 
     // Validation rules
     if (newProduct.name && newProduct.name.length > 100) {
@@ -63,39 +85,37 @@ const AddProductModal = ({
     return Object.keys(errors).length === 0;
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  // Mark all fields as touched
-  const allFields = ['name', 'category', 'price', 'image', 'description'];
-  const touchedObj = {};
-  allFields.forEach(field => touchedObj[field] = true);
-  setTouched(touchedObj);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Mark all fields as touched
+    const allFields = ['name', 'category', 'price', 'image', 'description', 'approvedStatus'];
+    const touchedObj = {};
+    allFields.forEach(field => touchedObj[field] = true);
+    setTouched(touchedObj);
 
-  const validationErrors = validateForm();
-  if (Object.keys(validationErrors).length > 0) {
-    setErrors(validationErrors);
-    return;
-  }
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
 
-  // Prepare product data with additional fields
-  const productData = {
-    ...newProduct,
-    images: featuredImages,
-    specifications: specifications.filter(spec => spec.key && spec.value),
-    variants: variants.filter(variant => variant.name),
-    sku: generateSKU(),
-    tags: [] // Add tags if you have them
+    // Prepare product data with additional fields
+    const productData = {
+      ...newProduct,
+      approvedStatus: newProduct.approvedStatus || "pending", // Ensure approvedStatus is set
+      images: featuredImages,
+      specifications: specifications.filter(spec => spec.key && spec.value),
+      variants: variants.filter(variant => variant.name),
+      sku: generateSKU(),
+      tags: [] // Add tags if you have them
+    };
+
+    console.log('Product data prepared:', productData); // Debug log
+    
+    // Call the handleAddProduct function WITH the prepared data
+    await handleAddProduct(productData);
   };
-
-  console.log('Product data prepared:', productData); // Debug log
-  
-  // Call the handleAddProduct function WITH the prepared data
-  await handleAddProduct(productData);
-  
-  // Remove this line: setNewProduct(productData);
-  // Remove this line: if (!actionLoading) { resetForm(); }
-};
 
   const generateSKU = () => {
     const prefix = newProduct.category?.substring(0, 3).toUpperCase() || 'PRO';
@@ -112,6 +132,7 @@ const handleSubmit = async (e) => {
       stock: "",
       image: "",
       status: "active",
+      approvedStatus: "pending", // Default to pending
       rating: "",
       sales: "",
       images: [],
@@ -200,6 +221,12 @@ const handleSubmit = async (e) => {
   if (!showAddModal) return null;
 
   const isButtonDisabled = actionLoading || !isFormValid();
+
+  // Function to get status badge color
+  const getStatusBadge = (status) => {
+    const option = approvedStatusOptions.find(opt => opt.value === status);
+    return option ? option.color : "bg-gray-100 text-gray-800";
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
@@ -510,10 +537,11 @@ const handleSubmit = async (e) => {
             </div>
 
             {/* Additional Settings */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              {/* Status (Product Status) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
+                  Product Status
                 </label>
                 <select
                   value={newProduct.status || "active"}
@@ -530,6 +558,61 @@ const handleSubmit = async (e) => {
                 </select>
               </div>
 
+              {/* Approval Status - NEW FIELD */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                  Approval Status <span className="text-red-500">*</span>
+                  {touched.approvedStatus && errors.approvedStatus && (
+                    <Info className="w-4 h-4 text-red-500" />
+                  )}
+                </label>
+                <div className="relative">
+                  <select
+                    value={newProduct.approvedStatus || "pending"}
+                    onChange={(e) => {
+                      setNewProduct({ ...newProduct, approvedStatus: e.target.value });
+                      if (errors.approvedStatus) {
+                        setErrors({ ...errors, approvedStatus: undefined });
+                      }
+                    }}
+                    onBlur={() => handleBlur('approvedStatus')}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none ${
+                      touched.approvedStatus && errors.approvedStatus
+                        ? "border-red-300 bg-red-50"
+                        : "border-gray-300 hover:border-gray-400"
+                    }`}
+                    disabled={actionLoading}
+                  >
+                    {approvedStatusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                {touched.approvedStatus && errors.approvedStatus && (
+                  <p className="text-red-500 text-sm mt-2">{errors.approvedStatus}</p>
+                )}
+                
+                {/* Status Badge Preview */}
+                {newProduct.approvedStatus && (
+                  <div className="mt-2">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(newProduct.approvedStatus)}`}>
+                      {approvedStatusOptions.find(opt => opt.value === newProduct.approvedStatus)?.label}
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">
+                      This determines product visibility
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Initial Rating */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Initial Rating
@@ -547,6 +630,7 @@ const handleSubmit = async (e) => {
                 />
               </div>
 
+              {/* Initial Sales */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Initial Sales
@@ -561,6 +645,18 @@ const handleSubmit = async (e) => {
                   disabled={actionLoading}
                 />
               </div>
+            </div>
+
+            {/* Help Text for Statuses */}
+            <div className="mb-8 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <h4 className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-1">
+                <Info className="w-4 h-4" /> Status Information
+              </h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li><span className="font-medium">Product Status:</span> Controls product availability and visibility to customers</li>
+                <li><span className="font-medium">Approval Status:</span> Internal workflow status for admin review process</li>
+                <li><span className="font-medium">Only "Approved" products</span> will be visible to customers on the frontend</li>
+              </ul>
             </div>
 
             {/* Action Buttons */}
