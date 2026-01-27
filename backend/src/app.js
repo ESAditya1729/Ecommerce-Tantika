@@ -12,6 +12,8 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const userRoutes = require('./routes/userRoutes');
 const userNormRoutes = require('./routes/userNormRoutes');
+const artisanRoutes = require('./routes/artisanNormRoutes');
+const adminArtisanRoutes = require('./routes/artisanRoutes');
 
 const app = express();
 
@@ -25,6 +27,8 @@ const allowedOrigins = [
   'http://127.0.0.1:3000',
   'https://tantika.vercel.app', // Change 'your-project-name' to your actual project name
   'https://*.vercel.app', // Allow all Vercel previews
+  'https://ecommercetantika.netlify.app', // Your Netlify site
+  'https://*.netlify.app', // All Netlify sites
   // Add more if needed:
   // 'https://tantika-frontend.vercel.app',
   // 'http://localhost:5173', // Vite dev server
@@ -283,6 +287,8 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/usernorms', userNormRoutes);
+app.use('/api/artisan', artisanRoutes);
+app.use('/api/admin/artisans', adminArtisanRoutes);
 // Add a test upload route
 app.get('/api/upload/test', (req, res) => {
   res.json({
