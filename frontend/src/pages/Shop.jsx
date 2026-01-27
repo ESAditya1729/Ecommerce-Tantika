@@ -1,19 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
-import ShopHero from '../components/Shop/ShopHero';
-import ProductFilters from '../components/Shop/ProductFilters';
-import ProductGrid from '../components/Shop/ProductGrid';
-import Pagination from '../components/Shop/Pagination';
-import OrderModal from '../components/Modals/OrderModal'; // Add this import
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from "react";
+import ShopHero from "../components/Shop/ShopHero";
+import ProductFilters from "../components/Shop/ProductFilters";
+import ProductGrid from "../components/Shop/ProductGrid";
+import Pagination from "../components/Shop/Pagination";
+import OrderModal from "../components/Modals/OrderModal"; // Add this import
+import { Loader2 } from "lucide-react";
 
 const Products = () => {
   // State
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [categories, setCategories] = useState(['All']);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [sortBy, setSortBy] = useState('featured');
+  const [categories, setCategories] = useState(["All"]);
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [sortBy, setSortBy] = useState("featured");
   const [priceRange, setPriceRange] = useState({ min: 0, max: 10000 });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
@@ -27,7 +27,7 @@ const Products = () => {
   const [selectedProductForOrder, setSelectedProductForOrder] = useState(null);
 
   // Get API URL from environment variable
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
   // Fetch categories from API
   const fetchCategories = useCallback(async () => {
@@ -35,105 +35,112 @@ const Products = () => {
       const response = await fetch(`${API_URL}/products/categories`);
       const data = await response.json();
       if (data.success) {
-        setCategories(['All', ...data.categories]);
+        setCategories(["All", ...data.categories]);
       }
     } catch (err) {
-      console.error('Error fetching categories:', err);
+      console.error("Error fetching categories:", err);
     }
   }, [API_URL]);
 
   // Fetch products from API
-  const fetchProducts = useCallback(async (page = 1) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: itemsPerPage.toString(),
-        sort: getSortField(sortBy),
-        order: getSortOrder(sortBy)
-      });
+  const fetchProducts = useCallback(
+    async (page = 1) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: itemsPerPage.toString(),
+          sort: getSortField(sortBy),
+          order: getSortOrder(sortBy),
+        });
 
-      // Add category filter if not "All"
-      if (selectedCategory !== 'All') {
-        params.append('category', selectedCategory);
-      }
-
-      // Add price range filter
-      if (priceRange.min > 0 || priceRange.max < 10000) {
-        params.append('minPrice', priceRange.min.toString());
-        params.append('maxPrice', priceRange.max.toString());
-      }
-
-      const response = await fetch(`${API_URL}/products?${params.toString()}`); // Fixed URL - added /api
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-
-      if (data.success) {
-        setProducts(data.products);
-        setFilteredProducts(data.products);
-        setTotalProducts(data.total);
-        setTotalPages(data.totalPages);
-        setCurrentPage(data.currentPage);
-        
-        // Update price range if needed
-        if (priceRange.max === 10000 && data.products.length > 0) {
-          const maxPriceInProducts = Math.max(...data.products.map(p => p.price));
-          setPriceRange(prev => ({ 
-            ...prev, 
-            max: Math.ceil(maxPriceInProducts / 100) * 100 // Round up to nearest 100
-          }));
+        // Add category filter if not "All"
+        if (selectedCategory !== "All") {
+          params.append("category", selectedCategory);
         }
-      } else {
-        throw new Error(data.message || 'Failed to fetch products');
+
+        // Add price range filter
+        if (priceRange.min > 0 || priceRange.max < 10000) {
+          params.append("minPrice", priceRange.min.toString());
+          params.append("maxPrice", priceRange.max.toString());
+        }
+
+        const response = await fetch(
+          `${API_URL}/products?${params.toString()}`,
+        ); // Fixed URL - added /api
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+          setProducts(data.products);
+          setFilteredProducts(data.products);
+          setTotalProducts(data.total);
+          setTotalPages(data.totalPages);
+          setCurrentPage(data.currentPage);
+
+          // Update price range if needed
+          if (priceRange.max === 10000 && data.products.length > 0) {
+            const maxPriceInProducts = Math.max(
+              ...data.products.map((p) => p.price),
+            );
+            setPriceRange((prev) => ({
+              ...prev,
+              max: Math.ceil(maxPriceInProducts / 100) * 100, // Round up to nearest 100
+            }));
+          }
+        } else {
+          throw new Error(data.message || "Failed to fetch products");
+        }
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error('Error fetching products:', err);
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedCategory, priceRange, sortBy, itemsPerPage, API_URL]);
+    },
+    [selectedCategory, priceRange, sortBy, itemsPerPage, API_URL],
+  );
 
   // Helper functions for sorting
   const getSortField = (sortOption) => {
     switch (sortOption) {
-      case 'price-low':
-      case 'price-high':
-        return 'price';
-      case 'newest':
-        return 'createdAt';
-      case 'rating':
-        return 'rating';
-      case 'featured':
+      case "price-low":
+      case "price-high":
+        return "price";
+      case "newest":
+        return "createdAt";
+      case "rating":
+        return "rating";
+      case "featured":
       default:
-        return 'sales';
+        return "sales";
     }
   };
 
   const getSortOrder = (sortOption) => {
     switch (sortOption) {
-      case 'price-low':
-        return 'asc';
-      case 'price-high':
-        return 'desc';
-      case 'newest':
-        return 'desc';
-      case 'rating':
-        return 'desc';
-      case 'featured':
+      case "price-low":
+        return "asc";
+      case "price-high":
+        return "desc";
+      case "newest":
+        return "desc";
+      case "rating":
+        return "desc";
+      case "featured":
       default:
-        return 'desc';
+        return "desc";
     }
   };
 
   // Handle express interest from ProductGrid
   const handleExpressInterest = (product) => {
-    console.log('Opening order modal for:', product.name);
+    console.log("Opening order modal for:", product.name);
     setSelectedProductForOrder(product);
     setShowOrderModal(true);
   };
@@ -147,31 +154,37 @@ const Products = () => {
         url: `${window.location.origin}/product/${product._id}`,
       });
     } else {
-      navigator.clipboard.writeText(`${window.location.origin}/product/${product._id}`);
-      alert('Product link copied to clipboard!');
+      navigator.clipboard.writeText(
+        `${window.location.origin}/product/${product._id}`,
+      );
+      alert("Product link copied to clipboard!");
     }
   };
 
   // Handle wishlist from ProductGrid
   const handleAddToWishlist = (product, added) => {
-    console.log(`${added ? 'Added' : 'Removed'} from wishlist:`, product.name);
+    console.log(`${added ? "Added" : "Removed"} from wishlist:`, product.name);
     // TODO: Add API call to update wishlist
   };
 
   // Prepare product data for OrderModal
   const getProductForModal = (product) => {
     if (!product) return null;
-    
+
     return {
       id: product._id,
       name: product.name,
       price: product.price,
-      images: product.images && product.images.length > 0 ? product.images : 
-              product.image ? [product.image] : [],
-      artisan: product.artisan || 'Handcrafted by Artisans',
-      location: product.location || 'Across India',
+      images:
+        product.images && product.images.length > 0
+          ? product.images
+          : product.image
+            ? [product.image]
+            : [],
+      artisan: product.artisan || "Handcrafted by Artisans",
+      location: product.location || "Across India",
       category: product.category,
-      description: product.description
+      description: product.description,
     };
   };
 
@@ -188,13 +201,13 @@ const Products = () => {
 
   useEffect(() => {
     // Get user from localStorage
-    const userStr = localStorage.getItem('tantika_user');
+    const userStr = localStorage.getItem("tantika_user");
     if (userStr) {
       try {
         const userData = JSON.parse(userStr);
         setUser(userData);
       } catch (error) {
-        console.error('Error parsing user data:', error);
+        console.error("Error parsing user data:", error);
       }
     }
   }, []);
@@ -220,7 +233,7 @@ const Products = () => {
   const stats = {
     total: totalProducts,
     filtered: products.length,
-    categories: categories.length - 1 // Exclude "All"
+    categories: categories.length - 1, // Exclude "All"
   };
 
   // Handle price range change
@@ -231,7 +244,7 @@ const Products = () => {
   return (
     <div>
       <ShopHero />
-      
+
       <div className="container mx-auto px-4 py-8">
         {/* Stats Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8 p-4 bg-gray-50 rounded-lg">
@@ -245,8 +258,10 @@ const Products = () => {
               <span className="text-red-600">Error: {error}</span>
             ) : (
               <>
-                Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalProducts)} of {totalProducts} products
-                {selectedCategory !== 'All' && (
+                Showing {(currentPage - 1) * itemsPerPage + 1}-
+                {Math.min(currentPage * itemsPerPage, totalProducts)} of{" "}
+                {totalProducts} products
+                {selectedCategory !== "All" && (
                   <span className="font-medium"> in "{selectedCategory}"</span>
                 )}
               </>
@@ -301,7 +316,7 @@ const Products = () => {
                   onShare={handleShare} // Pass share handler
                   onAddToWishlist={handleAddToWishlist} // Pass wishlist handler
                 />
-                
+
                 {/* Pagination */}
                 {!isLoading && products.length > 0 && (
                   <Pagination
@@ -312,7 +327,7 @@ const Products = () => {
                     onItemsPerPageChange={handleItemsPerPageChange}
                   />
                 )}
-                
+
                 {!isLoading && products.length === 0 && (
                   <div className="text-center py-12">
                     <div className="text-gray-500 mb-2">No products found</div>
@@ -331,7 +346,9 @@ const Products = () => {
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 py-12 mt-12">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
-            <h3 className="text-2xl font-bold text-center mb-8">How Our Order Process Works</h3>
+            <h3 className="text-2xl font-bold text-center mb-8">
+              How Our Order Process Works
+            </h3>
             <div className="grid md:grid-cols-3 gap-8">
               <div className="text-center p-6 bg-white rounded-xl shadow-sm">
                 <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -357,7 +374,8 @@ const Products = () => {
                 </div>
                 <h4 className="font-bold mb-2">Personalized Service</h4>
                 <p className="text-gray-600 text-sm">
-                  We handle delivery, customization, and payment as per your preference
+                  We handle delivery, customization, and payment as per your
+                  preference
                 </p>
               </div>
             </div>
@@ -374,6 +392,8 @@ const Products = () => {
         }}
         userId={user?.id}
         product={getProductForModal(selectedProductForOrder)}
+        // Add this empty next function to prevent error
+        next={() => {}}
       />
     </div>
   );
