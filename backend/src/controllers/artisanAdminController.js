@@ -581,3 +581,95 @@ exports.getArtisanStats = async (req, res) => {
     });
   }
 };
+
+// @desc    Get all artisans (with optional status filter)
+// @route   GET /api/admin/artisans
+// @access  Private (Admin only)
+exports.getAllArtisans = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build search query
+    const searchQuery = {};
+
+    // Add status filter if provided and not 'all'
+    if (status && status !== 'all') {
+      searchQuery.status = status;
+    }
+
+    if (search) {
+      searchQuery.$or = [
+        { businessName: { $regex: search, $options: 'i' } },
+        { fullName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Get artisans with user data
+    const artisans = await Artisan.aggregate([
+      { $match: searchQuery },
+      { $sort: { submittedAt: -1 } },
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: '$user' },
+      {
+        $project: {
+          _id: 1,
+          businessName: 1,
+          fullName: 1,
+          email: 1,
+          phone: 1,
+          status: 1,
+          submittedAt: 1,
+          approvedAt: 1,
+          rejectedAt: 1,
+          suspendedAt: 1,
+          'user.username': 1,
+          'user.createdAt': 1,
+          address: 1,
+          idProof: 1,
+          bankDetails: 1,
+          specialization: 1,
+          yearsOfExperience: 1,
+          description: 1,
+          totalProducts: 1,
+          totalSales: 1,
+          totalRevenue: 1,
+          rating: 1
+        }
+      }
+    ]);
+
+    // Get total count
+    const total = await Artisan.countDocuments(searchQuery);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        artisans,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get all artisans error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching artisans'
+    });
+  }
+};

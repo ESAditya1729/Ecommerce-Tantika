@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getPendingArtisans,
+  getAllArtisans,
   getApprovedArtisans,
   getArtisanById,
   approveArtisan,
@@ -19,6 +20,7 @@ router.use(protect);
 router.use(authorize('admin'));
 
 // Artisan management routes
+router.get('/', getAllArtisans);
 router.get('/pending', getPendingArtisans);
 router.get('/approved', getApprovedArtisans);
 router.get('/stats', getArtisanStats);
