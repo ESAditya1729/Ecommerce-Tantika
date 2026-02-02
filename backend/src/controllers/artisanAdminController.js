@@ -673,3 +673,262 @@ exports.getAllArtisans = async (req, res) => {
     });
   }
 };
+
+// @desc    Update artisan details
+// @route   PUT /api/admin/artisans/:id
+// @access  Private (Admin only)
+exports.updateArtisan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Find the artisan
+    const artisan = await Artisan.findById(id);
+    
+    if (!artisan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Artisan not found'
+      });
+    }
+
+    // Check what fields are being updated
+    console.log('Updating artisan:', id);
+    console.log('Update data:', updateData);
+
+    // Update allowed fields
+    const allowedUpdates = [
+      'businessName',
+      'fullName',
+      'phone',
+      'specialization',
+      'yearsOfExperience',
+      'status',
+      'email',
+      'description'
+    ];
+
+    // Update basic fields
+    allowedUpdates.forEach(field => {
+      if (updateData[field] !== undefined) {
+        artisan[field] = updateData[field];
+      }
+    });
+
+    // Update address if provided
+    if (updateData.address) {
+      artisan.address = {
+        ...artisan.address,
+        ...updateData.address
+      };
+    }
+
+    // Save the updated artisan
+    await artisan.save();
+
+    // Get updated artisan with user data
+    const updatedArtisan = await Artisan.findById(id)
+      .populate('userId', 'username email');
+
+    res.status(200).json({
+      success: true,
+      message: 'Artisan updated successfully',
+      data: updatedArtisan
+    });
+
+  } catch (error) {
+    console.error('Update artisan error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: messages
+      });
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate field value entered',
+        field: Object.keys(error.keyPattern)[0]
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating artisan',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Bulk approve artisans
+// @route   POST /api/admin/artisans/bulk-approve
+// @access  Private (Admin only)
+exports.bulkApproveArtisans = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { artisanIds } = req.body;
+
+    if (!artisanIds || !Array.isArray(artisanIds) || artisanIds.length === 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of artisan IDs'
+      });
+    }
+
+    const results = {
+      approved: 0,
+      failed: [],
+      alreadyApproved: 0
+    };
+
+    for (const artisanId of artisanIds) {
+      try {
+        const artisan = await Artisan.findById(artisanId).session(session);
+        
+        if (!artisan) {
+          results.failed.push({ id: artisanId, reason: 'Artisan not found' });
+          continue;
+        }
+
+        if (artisan.status === 'approved') {
+          results.alreadyApproved++;
+          continue;
+        }
+
+        // Update artisan
+        artisan.status = 'approved';
+        artisan.approvedAt = new Date();
+        artisan.approvedBy = req.user.id;
+        artisan.idProof.verified = true;
+        artisan.idProof.verifiedAt = new Date();
+        artisan.idProof.verifiedBy = req.user.id;
+        
+        await artisan.save({ session });
+
+        // Update user role
+        await User.findByIdAndUpdate(
+          artisan.userId,
+          {
+            role: 'artisan',
+            artisanId: artisan._id,
+            updatedAt: new Date()
+          },
+          { session }
+        );
+
+        results.approved++;
+      } catch (error) {
+        results.failed.push({ id: artisanId, reason: error.message });
+      }
+    }
+
+    await session.commitTransaction();
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk approve completed. Approved: ${results.approved}, Already approved: ${results.alreadyApproved}, Failed: ${results.failed.length}`,
+      data: results
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Bulk approve artisans error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during bulk approval'
+    });
+  } finally {
+    session.endSession();
+  }
+};
+
+// @desc    Bulk reject artisans
+// @route   POST /api/admin/artisans/bulk-reject
+// @access  Private (Admin only)
+exports.bulkRejectArtisans = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { artisanIds } = req.body;
+
+    if (!artisanIds || !Array.isArray(artisanIds) || artisanIds.length === 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of artisan IDs'
+      });
+    }
+
+    const results = {
+      rejected: 0,
+      failed: [],
+      alreadyRejected: 0
+    };
+
+    for (const artisanId of artisanIds) {
+      try {
+        const artisan = await Artisan.findById(artisanId).session(session);
+        
+        if (!artisan) {
+          results.failed.push({ id: artisanId, reason: 'Artisan not found' });
+          continue;
+        }
+
+        if (artisan.status === 'rejected') {
+          results.alreadyRejected++;
+          continue;
+        }
+
+        // Update artisan
+        artisan.status = 'rejected';
+        artisan.rejectionReason = 'Bulk rejected by admin';
+        artisan.rejectedAt = new Date();
+        artisan.rejectedBy = req.user.id;
+        
+        await artisan.save({ session });
+
+        // Update user role back to user
+        await User.findByIdAndUpdate(
+          artisan.userId,
+          {
+            role: 'user',
+            updatedAt: new Date()
+          },
+          { session }
+        );
+
+        results.rejected++;
+      } catch (error) {
+        results.failed.push({ id: artisanId, reason: error.message });
+      }
+    }
+
+    await session.commitTransaction();
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk reject completed. Rejected: ${results.rejected}, Already rejected: ${results.alreadyRejected}, Failed: ${results.failed.length}`,
+      data: results
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Bulk reject artisans error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during bulk rejection'
+    });
+  } finally {
+    session.endSession();
+  }
+};
