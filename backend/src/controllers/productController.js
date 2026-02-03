@@ -12,17 +12,16 @@ const getProducts = async (req, res) => {
             sort = 'createdAt', 
             order = 'desc',
             page = 1,
-            limit = 10
+            limit = 10,
+            search, // ADD THIS: Search query
+            searchType = 'product' // ADD THIS: Search type (product, artisan, description)
         } = req.query;
 
         // SIMPLE FILTER: Only approved, active products
-        let query = {status: 'active',
+        let query = {
+            status: 'active',
             approvalStatus: 'approved'
-        }
-        // let query = {
-        //     approvalStatus: 'approved', // ADD THIS
-        //     status: 'active' // ADD THIS
-        // };
+        };
 
         // Filter by category
         if (category && category !== 'all' && category !== 'All') {
@@ -34,6 +33,40 @@ const getProducts = async (req, res) => {
             query.price = {};
             if (minPrice) query.price.$gte = Number(minPrice);
             if (maxPrice) query.price.$lte = Number(maxPrice);
+        }
+
+        // ADD THIS SECTION: Search functionality
+        if (search && search.trim()) {
+            const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive
+            
+            // Create search conditions based on searchType
+            const searchConditions = [];
+            
+            if (searchType === 'product') {
+                // Search in product name
+                searchConditions.push({ name: searchRegex });
+                searchConditions.push({ title: searchRegex }); // If you have title field
+            } else if (searchType === 'artisan') {
+                // Search in artisan/creator information
+                // Assuming you have fields like artisanName, artisan, creator, etc.
+                searchConditions.push({ artisanName: searchRegex });
+                searchConditions.push({ creator: searchRegex });
+                searchConditions.push({ 'artisan.name': searchRegex }); // If nested object
+            } else if (searchType === 'description') {
+                // Search in description
+                searchConditions.push({ description: searchRegex });
+                searchConditions.push({ shortDescription: searchRegex }); // If you have shortDescription
+            } else {
+                // Default: search in all fields
+                searchConditions.push({ name: searchRegex });
+                searchConditions.push({ description: searchRegex });
+                searchConditions.push({ artisanName: searchRegex });
+            }
+            
+            // If searchConditions exist, add $or to query
+            if (searchConditions.length > 0) {
+                query.$or = searchConditions;
+            }
         }
 
         // Sorting
@@ -51,7 +84,6 @@ const getProducts = async (req, res) => {
             .lean();
 
         const total = await Product.countDocuments(query);
-
         res.json({
             success: true,
             count: products.length,
