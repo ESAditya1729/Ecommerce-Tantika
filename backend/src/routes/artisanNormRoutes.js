@@ -7,8 +7,16 @@ const {
   updateBankDetails,
   getPendingStatus,
   getProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
   getOrders,
-  getAnalytics
+  updateOrderStatus,
+  getAnalytics,
+  getNotifications,
+  markNotificationAsRead,
+  getEarnings,
+  requestPayout
 } = require('../controllers/artisanController');
 
 const { protect, authorize } = require('../middleware/authMiddleware');
@@ -27,11 +35,23 @@ router.put('/bank-details', authorize('artisan'), updateBankDetails);
 
 // Product management routes
 router.get('/products', authorize('artisan', 'pending_artisan'), getProducts);
+router.post('/products', authorize('artisan'), createProduct);
+router.put('/products/:id', authorize('artisan'), updateProduct);
+router.delete('/products/:id', authorize('artisan'), deleteProduct);
 
-// Order routes
+// Order management routes
 router.get('/orders', authorize('artisan'), getOrders);
+router.put('/orders/:id/status', authorize('artisan'), updateOrderStatus);
 
 // Analytics routes
 router.get('/analytics', authorize('artisan'), getAnalytics);
+
+// Notification routes
+router.get('/notifications', authorize('artisan'), getNotifications);
+router.put('/notifications/:id/read', authorize('artisan'), markNotificationAsRead);
+
+// Earnings & Payout routes
+router.get('/earnings', authorize('artisan'), getEarnings);
+router.post('/payouts/request', authorize('artisan'), requestPayout);
 
 module.exports = router;
