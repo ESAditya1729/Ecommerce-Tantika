@@ -519,10 +519,10 @@ exports.getProducts = async (req, res) => {
   }
 };
 
-// @desc    Create new product
+// @desc    Create new product (Artisan)
 // @route   POST /api/artisan/products
 // @access  Private (Artisan only)
-exports.createProduct = async (req, res) => {
+exports.createProductArtisan = async (req, res) => {
   try {
     // Check if user is artisan
     if (req.user.role !== 'artisan') {
@@ -556,9 +556,23 @@ exports.createProduct = async (req, res) => {
     const productData = {
       ...req.body,
       artisan: artisan._id,
-      artisanName: artisan.businessName,
-      approvalStatus: 'pending' // Products need admin approval
+      artisanName: artisan.businessName || artisan.fullName,
+      approvalStatus: 'pending', // Always pending for artisan submissions
+      submittedAt: new Date() // Set submission timestamp
     };
+
+    // Generate SKU if not provided
+    if (!productData.sku) {
+      const prefix = productData.category.substring(0, 3).toUpperCase();
+      const random = Math.floor(10000 + Math.random() * 90000);
+      productData.sku = `${prefix}-${random}`;
+    }
+
+    // Process arrays - ensure they exist
+    if (!productData.images) productData.images = [];
+    if (!productData.specifications) productData.specifications = [];
+    if (!productData.variants) productData.variants = [];
+    if (!productData.tags) productData.tags = [];
 
     // Create product
     const product = await Product.create(productData);
@@ -569,19 +583,25 @@ exports.createProduct = async (req, res) => {
     });
 
     // Create notification for admin
-    await Notification.create({
-      recipientId: artisan._id, // This will need to be admin's ID in production
-      recipientType: 'admin',
-      type: 'new_product_submitted',
-      title: 'New Product Submission',
-      message: `${artisan.businessName} has submitted a new product: ${product.name}`,
-      data: {
-        productId: product._id,
-        artisanId: artisan._id,
-        productName: product.name
-      },
-      priority: 'medium'
-    });
+    // Find admin users
+    const admins = await User.find({ role: 'admin' });
+    
+    for (const admin of admins) {
+      await Notification.create({
+        recipientId: admin._id,
+        recipientType: 'admin',
+        type: 'new_product_submitted',
+        title: 'New Product Submission',
+        message: `${artisan.businessName || artisan.fullName} has submitted a new product: ${product.name}`,
+        data: {
+          productId: product._id,
+          artisanId: artisan._id,
+          productName: product.name,
+          artisanName: artisan.businessName || artisan.fullName
+        },
+        priority: 'medium'
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -590,10 +610,11 @@ exports.createProduct = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create product error:', error);
+    console.error('Artisan create product error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error creating product'
+      message: 'Server error creating product',
+      error: error.message
     });
   }
 };
