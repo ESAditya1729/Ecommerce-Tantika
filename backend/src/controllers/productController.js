@@ -130,70 +130,117 @@ const getProductById = async (req, res) => {
     }
 };
 
-// @desc    Create new product
-// @route   POST /api/products
-// @access  Admin
-const createProduct = async (req, res) => {
-    try {
-        console.log('Creating product with data:', req.body);
-        
-        // Generate SKU if not provided
-        let sku = req.body.sku;
-        if (!sku) {
-            const prefix = (req.body.category || 'PRO').substring(0, 3).toUpperCase();
-            const random = Math.floor(10000 + Math.random() * 90000);
-            sku = `${prefix}-${random}`;
-        }
-        
-        // Create product data with SKU
-        const productData = {
-            ...req.body,
-            sku: sku
-        };
-        
-        const product = await Product.create(productData);
-        
-        console.log('Product created successfully:', product._id);
+// In productController.js - update the createProduct function
 
-        res.status(201).json({
-            success: true,
-            message: 'Product created successfully',
-            product
-        });
-    } catch (error) {
-        console.error('CREATE PRODUCT ERROR:');
-        console.error('Full error:', error);
-        
-        if (error.code === 11000) {
-            // Duplicate SKU error
-            if (error.keyPattern && error.keyPattern.sku) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'SKU already exists. Please try again or provide a different SKU.'
-                });
-            }
-            return res.status(400).json({
-                success: false,
-                message: 'Duplicate key error'
-            });
-        }
-        
-        // Check for validation errors
-        if (error.name === 'ValidationError') {
-            const messages = Object.values(error.errors).map(val => val.message);
-            return res.status(400).json({
-                success: false,
-                message: 'Validation error',
-                errors: messages
-            });
-        }
-        
-        res.status(500).json({
-            success: false,
-            message: 'Server error',
-            error: error.message
-        });
+// @desc    Create a new product
+// @route   POST /api/products
+// @access  Private/Admin
+exports.createProduct = async (req, res) => {
+  try {
+    console.log('CREATE PRODUCT REQUEST BODY:', req.body);
+    
+    // Check if user is admin
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role required.'
+      });
     }
+
+    // Validate required fields
+    const requiredFields = ['name', 'price', 'category', 'artisan'];
+    for (const field of requiredFields) {
+      if (!req.body[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `Please provide ${field}`
+        });
+      }
+    }
+
+    // Prepare product data
+    const productData = {
+      ...req.body,
+      createdBy: req.user.id,
+      lastModifiedBy: req.user.id,
+      approvalStatus: 'approved', // Admin-created products are auto-approved
+      status: 'active', // Admin-created products are auto-active
+      images: req.body.images || [],
+      galleryImages: req.body.galleryImages || [],
+      specifications: req.body.specifications || [],
+      variants: req.body.variants || [],
+      tags: req.body.tags || [],
+      materials: req.body.materials || [],
+      colors: req.body.colors || [],
+      sizes: req.body.sizes || [],
+      // Ensure images array has at least the main image
+      images: req.body.image ? [req.body.image, ...(req.body.images || [])] : req.body.images || []
+    };
+
+    // Handle single image field
+    if (req.body.image && !productData.images.includes(req.body.image)) {
+      productData.images.unshift(req.body.image);
+    }
+
+    // Generate SKU if not provided
+    if (!productData.sku) {
+      const prefix = productData.category.substring(0, 3).toUpperCase();
+      const random = Math.floor(10000 + Math.random() * 90000);
+      productData.sku = `${prefix}-${random}`;
+    }
+
+    console.log('Creating product with data:', productData);
+
+    // Create product
+    const product = await Product.create(productData);
+
+    // Update artisan's product count
+    await Artisan.findByIdAndUpdate(productData.artisan, {
+      $inc: { totalProducts: 1 }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Product created successfully',
+      data: product
+    });
+
+  } catch (error) {
+    console.error('CREATE PRODUCT ERROR:', error);
+    console.error('Full error:', error);
+    
+    // Handle specific errors
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'SKU already exists. Please use a different SKU.'
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: messages
+      });
+    }
+    
+    // Handle next() error specifically
+    if (error.message && error.message.includes('next is not a function')) {
+      console.error('Middleware error: next is not a function. Check Product model pre-save middleware.');
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error. Please contact support.'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Server error creating product',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 };
 
 // @desc    Update product

@@ -506,6 +506,7 @@ productSchema.methods.rejectProduct = function(adminId, reason) {
 };
 
 // ==================== PRE-SAVE MIDDLEWARE ====================
+// ==================== PRE-SAVE MIDDLEWARE ====================
 productSchema.pre('save', async function(next) {
   try {
     // Generate SKU if not provided
@@ -515,7 +516,9 @@ productSchema.pre('save', async function(next) {
     
     // Generate artisan SKU if not provided and artisan exists
     if (this.artisan && !this.artisanSku) {
-      this.artisanSku = this.constructor.generateArtisanSKU(this.artisan, this.category);
+      // Ensure artisan is an ObjectId or string
+      const artisanId = this.artisan.toString ? this.artisan.toString() : this.artisan;
+      this.artisanSku = this.constructor.generateArtisanSKU(artisanId, this.category);
     }
     
     // Set submittedAt for new artisan products
@@ -528,14 +531,23 @@ productSchema.pre('save', async function(next) {
       this.status = 'active';
     }
     
-    // For artisan submissions, default status should be draft
-    if (this.isNew && this.approvalStatus === 'pending') {
+    // For artisan submissions, default status should be draft if not set
+    if (this.isNew && this.approvalStatus === 'pending' && !this.status) {
       this.status = 'draft';
     }
     
-    next();
+    // Call next only if it's a function (for Mongoose middleware)
+    if (typeof next === 'function') {
+      next();
+    }
   } catch (error) {
-    next(error);
+    // If there's an error and next is a function, pass it to next
+    if (typeof next === 'function') {
+      next(error);
+    } else {
+      // Otherwise, re-throw the error
+      throw error;
+    }
   }
 });
 
