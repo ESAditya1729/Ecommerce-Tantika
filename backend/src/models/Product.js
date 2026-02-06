@@ -39,7 +39,6 @@ const variantSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  // NEW: Artisan variant approval
   approvalStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
@@ -225,11 +224,10 @@ const productSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['active', 'out_of_stock', 'low_stock', 'draft', 'archived', 'discontinued'],
-    default: 'active'
+    default: 'draft' // Changed to draft for artisan submissions
   },
   
   // ==================== ARTISAN APPROVAL SYSTEM ====================
-  // NEW: Main product approval status
   approvalStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected', 'draft'],
@@ -277,7 +275,6 @@ const productSchema = new mongoose.Schema({
   images: [{
     type: String
   }],
-  // NEW: For artisan to upload multiple images
   galleryImages: [{
     url: String,
     caption: String,
@@ -312,7 +309,6 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  // NEW: Artisan can add custom fields
   customFields: [{
     label: String,
     value: mongoose.Schema.Types.Mixed,
@@ -340,7 +336,6 @@ const productSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  // NEW: Artisan can request featuring
   featureRequest: {
     requested: { type: Boolean, default: false },
     requestedAt: Date,
@@ -353,9 +348,9 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true,
     uppercase: true,
-    unique: true
+    unique: true,
+    sparse: true // Changed to sparse to handle null values
   },
-  // NEW: Artisan's internal SKU
   artisanSku: {
     type: String,
     trim: true
@@ -378,7 +373,6 @@ const productSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-  // NEW: Artisan-specific analytics
   artisanViews: {
     type: Number,
     default: 0,
@@ -389,7 +383,6 @@ const productSchema = new mongoose.Schema({
   },
   
   // ==================== ARTISAN SYSTEM ====================
-  // NEW: Artisan Reference (REPLACES vendor field)
   artisan: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Artisan',
@@ -398,7 +391,6 @@ const productSchema = new mongoose.Schema({
   },
   
   // ==================== ADMIN TRACKING ====================
-  // Keep for existing products and admin-created products
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -409,7 +401,6 @@ const productSchema = new mongoose.Schema({
   },
   
   // ==================== PRODUCT LIFE CYCLE ====================
-  // NEW: Product lifecycle stages
   lifecycle: {
     stage: {
       type: String,
@@ -424,7 +415,6 @@ const productSchema = new mongoose.Schema({
   },
   
   // ==================== QUALITY CONTROL ====================
-  // NEW: For admin quality checks
   qualityCheck: {
     passed: { type: Boolean, default: false },
     checkedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -445,23 +435,20 @@ productSchema.index({ name: 'text', description: 'text', 'specifications.value':
 productSchema.index({ status: 1 });
 productSchema.index({ category: 1, status: 1 });
 productSchema.index({ price: 1 });
-productSchema.index({ sku: 1 }, { unique: true });
+productSchema.index({ sku: 1 }, { unique: true, sparse: true }); // Added sparse
 productSchema.index({ createdAt: -1 });
 productSchema.index({ sales: -1 });
 productSchema.index({ rating: -1 });
 productSchema.index({ isFeatured: 1 });
 productSchema.index({ isBestSeller: 1 });
 productSchema.index({ tags: 1 });
-
-// NEW: Artisan-specific indexes
 productSchema.index({ artisan: 1 });
 productSchema.index({ approvalStatus: 1 });
 productSchema.index({ artisan: 1, approvalStatus: 1 });
 productSchema.index({ artisan: 1, status: 1 });
 productSchema.index({ artisan: 1, category: 1 });
-productSchema.index({ 'artisanProfile.status': 1 }); // For filtering by artisan approval status
-productSchema.index({ submittedAt: -1 }); // For sorting recently submitted products
-productSchema.index({ approvedAt: -1 }); // For sorting recently approved products
+productSchema.index({ submittedAt: -1 });
+productSchema.index({ approvedAt: -1 });
 
 // ==================== VIRTUAL FIELDS ====================
 productSchema.virtual('artisanName').get(function() {
@@ -490,7 +477,6 @@ productSchema.statics.generateSKU = function(category = 'PRO') {
   return `${prefix}-${timestamp}-${random}`;
 };
 
-// Generate artisan-specific SKU
 productSchema.statics.generateArtisanSKU = function(artisanId, category) {
   const artisanPrefix = artisanId.toString().slice(-4).toUpperCase();
   const catPrefix = category.substring(0, 2).toUpperCase();
@@ -521,52 +507,36 @@ productSchema.methods.rejectProduct = function(adminId, reason) {
 
 // ==================== PRE-SAVE MIDDLEWARE ====================
 productSchema.pre('save', async function(next) {
-  // Generate SKU if not provided
-  if (!this.sku) {
-    this.sku = this.constructor.generateSKU(this.category);
+  try {
+    // Generate SKU if not provided
+    if (!this.sku) {
+      this.sku = this.constructor.generateSKU(this.category);
+    }
+    
+    // Generate artisan SKU if not provided and artisan exists
+    if (this.artisan && !this.artisanSku) {
+      this.artisanSku = this.constructor.generateArtisanSKU(this.artisan, this.category);
+    }
+    
+    // Set submittedAt for new artisan products
+    if (this.isNew && this.approvalStatus === 'pending') {
+      this.submittedAt = new Date();
+    }
+    
+    // Auto-set status based on approval
+    if (this.approvalStatus === 'approved' && this.status === 'draft') {
+      this.status = 'active';
+    }
+    
+    // For artisan submissions, default status should be draft
+    if (this.isNew && this.approvalStatus === 'pending') {
+      this.status = 'draft';
+    }
+    
+    next();
+  } catch (error) {
+    next(error);
   }
-  
-  // Generate artisan SKU if not provided and artisan exists
-  if (this.artisan && !this.artisanSku) {
-    this.artisanSku = this.constructor.generateArtisanSKU(this.artisan, this.category);
-  }
-  
-  // Set submittedAt for new artisan products
-  if (this.isNew && this.approvalStatus === 'pending') {
-    this.submittedAt = new Date();
-  }
-  
-  // Auto-set status based on approval
-  if (this.approvalStatus === 'approved' && this.status === 'draft') {
-    this.status = 'active';
-  }
-  
-  next();
 });
-
-// // ==================== QUERY MIDDLEWARE ====================
-// // Filter out non-approved products for non-artisans
-// productSchema.pre(/^find/, function(next) {
-//   try {
-//     // Check if next is available (it should be in middleware context)
-//     if (typeof next === 'function') {
-//       // For regular queries, only show approved products
-//       if (!this.getOptions().showAll) {
-//         this.find({ approvalStatus: 'approved', status: 'active' });
-//       }
-//       next();
-//     } else {
-//       // If no next function, just modify the query
-//       if (!this.getOptions().showAll) {
-//         this.find({ approvalStatus: 'approved', status: 'active' });
-//       }
-//     }
-//   } catch (error) {
-//     // If error occurs, continue without filter
-//     console.error('Query middleware error:', error);
-//     // Don't call next with error to avoid breaking queries
-//   }
-// });
-
 
 module.exports = mongoose.model('Product', productSchema);
