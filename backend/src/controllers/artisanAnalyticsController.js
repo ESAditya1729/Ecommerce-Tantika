@@ -37,34 +37,53 @@ exports.getDashboard = async (req, res) => {
       });
     }
 
-    // Get artisan's products using business name (since Product schema doesn't have artisan field)
-    const products = await Product.find({ 'artisan.businessName': artisan.businessName })
+    // FIXED: Get artisan's products by searching for their business name in the product data
+    // Since your products don't have an artisan field, we need to find them differently
+    // Option 1: If products have artisan info in description or other fields
+    // Option 2: We need to store artisan info in products
+    
+    // For now, let's search for products that might have artisan info
+    // This is a temporary fix - you need to update your product schema
+    const products = await Product.find({ 
+      $or: [
+        { 'artisan.businessName': artisan.businessName },
+        { artisanName: artisan.businessName },
+        { artisanBusinessName: artisan.businessName },
+        { description: { $regex: artisan.businessName, $options: 'i' } }
+      ]
+    })
       .select('name price stock status approvalStatus image images sales rating')
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // Get product counts
-    const productCounts = await Product.aggregate([
-      { $match: { 'artisan.businessName': artisan.businessName } },
-      { $group: {
-          _id: '$approvalStatus',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    console.log('Found products for artisan:', artisan.businessName, 'Count:', products.length);
+    
+    // FIXED: Get all products for this artisan (using same logic)
+    const allProducts = await Product.find({ 
+      $or: [
+        { 'artisan.businessName': artisan.businessName },
+        { artisanName: artisan.businessName },
+        { artisanBusinessName: artisan.businessName }
+      ]
+    });
 
-    // Calculate total sales and revenue from products
-    const salesData = await Product.aggregate([
-      { $match: { 'artisan.businessName': artisan.businessName } },
-      { $group: {
-          _id: null,
-          totalSales: { $sum: '$sales' },
-          totalRevenue: { $sum: { $multiply: ['$price', '$sales'] } }
-        }
-      }
-    ]);
+    // Get product counts from all products
+    const productCounts = {
+      approved: allProducts.filter(p => p.approvalStatus === 'approved').length,
+      pending: allProducts.filter(p => p.approvalStatus === 'pending').length,
+      rejected: allProducts.filter(p => p.approvalStatus === 'rejected').length
+    };
 
-    // Get recent orders using business name
+    // Calculate total sales and revenue
+    let totalSales = 0;
+    let totalRevenue = 0;
+    
+    allProducts.forEach(product => {
+      totalSales += product.sales || 0;
+      totalRevenue += (product.price || 0) * (product.sales || 0);
+    });
+
+    // Get recent orders using business name (as per your Order model)
     const recentOrders = await Order.find({ artisan: artisan.businessName })
       .select('orderNumber productName productPrice status createdAt customerDetails.name customerDetails.email paymentStatus')
       .sort({ createdAt: -1 })
@@ -129,14 +148,13 @@ exports.getDashboard = async (req, res) => {
       }
     ]);
 
-    // Calculate pending payout amount (from delivered orders with paid status)
+    // Calculate pending payout amount (from delivered orders)
     const pendingPayouts = await Order.aggregate([
       { 
         $match: { 
           artisan: artisan.businessName,
           status: 'delivered',
-          paymentStatus: 'paid',
-          payoutStatus: { $ne: 'processed' } // Assuming you have a payoutStatus field
+          paymentStatus: 'paid'
         }
       },
       {
@@ -147,18 +165,7 @@ exports.getDashboard = async (req, res) => {
       }
     ]);
 
-    // Update artisan stats from database
-    const productStats = await Product.aggregate([
-      { $match: { 'artisan.businessName': artisan.businessName } },
-      { $group: {
-          _id: null,
-          totalProducts: { $sum: 1 },
-          totalSales: { $sum: '$sales' },
-          totalRevenue: { $sum: { $multiply: ['$price', '$sales'] } }
-        }
-      }
-    ]);
-
+    // Get order stats
     const orderStats = await Order.aggregate([
       { $match: { artisan: artisan.businessName } },
       { $group: {
@@ -181,18 +188,18 @@ exports.getDashboard = async (req, res) => {
         businessName: artisan.businessName,
         fullName: artisan.fullName,
         rating: artisan.rating,
-        totalProducts: productStats[0]?.totalProducts || 0,
-        totalSales: productStats[0]?.totalSales || 0,
-        totalRevenue: productStats[0]?.totalRevenue || 0,
+        totalProducts: allProducts.length, // Use actual count
+        totalSales: totalSales,
+        totalRevenue: totalRevenue,
         status: artisan.status,
         approvedAt: artisan.approvedAt
       },
       stats: {
-        totalProducts: productStats[0]?.totalProducts || 0,
-        totalSales: productStats[0]?.totalSales || 0,
-        totalRevenue: productStats[0]?.totalRevenue || 0,
-        activeProducts: productCounts.find(p => p._id === 'approved')?.count || 0,
-        pendingProducts: productCounts.find(p => p._id === 'pending')?.count || 0,
+        totalProducts: allProducts.length,
+        totalSales: totalSales,
+        totalRevenue: totalRevenue,
+        activeProducts: allProducts.filter(p => p.status === 'active').length,
+        pendingProducts: productCounts.pending,
         totalOrders: orderStats[0]?.totalOrders || 0,
         pendingOrders: orderCounts.find(o => o._id === 'pending')?.count || 0,
         deliveredOrders: orderCounts.find(o => o._id === 'delivered')?.count || 0,
@@ -207,7 +214,10 @@ exports.getDashboard = async (req, res) => {
       },
       recentProducts: products,
       recentOrders: recentOrders,
-      salesData: salesData[0] || { totalSales: 0, totalRevenue: 0 }
+      salesData: {
+        totalSales: totalSales,
+        totalRevenue: totalRevenue
+      }
     };
 
     res.status(200).json({
@@ -258,16 +268,29 @@ exports.getProducts = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build filter using business name
-    const filter = { 'artisan.businessName': artisan.businessName };
+    // FIXED: Build filter to find artisan's products
+    // Since products don't have artisan field, we need alternative ways
+    const filter = {
+      $or: [
+        { 'artisan.businessName': artisan.businessName },
+        { artisanName: artisan.businessName },
+        { artisanBusinessName: artisan.businessName }
+      ]
+    };
+    
     if (status) filter.status = status;
     if (approvalStatus) filter.approvalStatus = approvalStatus;
     if (category) filter.category = category;
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { tags: { $regex: search, $options: 'i' } }
+      filter.$and = [
+        filter,
+        {
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } },
+            { tags: { $regex: search, $options: 'i' } }
+          ]
+        }
       ];
     }
 
@@ -281,38 +304,42 @@ exports.getProducts = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    console.log('Found products for artisan:', artisan.businessName, 'Count:', products.length);
+
     // Get total count and summary
     const totalProducts = await Product.countDocuments(filter);
     
-    const summary = await Product.aggregate([
-      { $match: filter },
-      { 
-        $group: {
-          _id: null,
-          totalValue: { $sum: { $multiply: ['$price', '$stock'] } },
-          lowStockCount: {
-            $sum: { $cond: [{ $lte: ['$stock', 5] }, 1, 0] }
-          },
-          outOfStockCount: {
-            $sum: { $cond: [{ $lte: ['$stock', 0] }, 1, 0] }
-          },
-          totalSales: { $sum: '$sales' },
-          totalRevenue: { $sum: { $multiply: ['$price', '$sales'] } }
-        }
+    // Calculate summary from products
+    const allProductsForSummary = await Product.find(filter);
+    
+    let summary = {
+      totalValue: 0,
+      lowStockCount: 0,
+      outOfStockCount: 0,
+      totalSales: 0,
+      totalRevenue: 0
+    };
+
+    allProductsForSummary.forEach(product => {
+      const productValue = (product.price || 0) * (product.stock || 0);
+      const productRevenue = (product.price || 0) * (product.sales || 0);
+      
+      summary.totalValue += productValue;
+      summary.totalSales += product.sales || 0;
+      summary.totalRevenue += productRevenue;
+      
+      if (product.stock <= 0) {
+        summary.outOfStockCount += 1;
+      } else if (product.stock <= 5) {
+        summary.lowStockCount += 1;
       }
-    ]);
+    });
 
     res.status(200).json({
       success: true,
       data: {
         products,
-        summary: summary[0] || {
-          totalValue: 0,
-          lowStockCount: 0,
-          outOfStockCount: 0,
-          totalSales: 0,
-          totalRevenue: 0
-        },
+        summary: summary,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
