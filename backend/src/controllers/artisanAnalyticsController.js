@@ -248,7 +248,7 @@ exports.getProducts = async (req, res) => {
 
     // Get products with pagination
     const products = await Product.find(filter)
-      .select('name price stock status approvalStatus images sales rating createdAt category tags')
+      .select('name price stock status approvalStatus image images sales rating createdAt category tags')
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .skip(skip)
       .limit(parseInt(limit));
