@@ -37,15 +37,15 @@ exports.getDashboard = async (req, res) => {
       });
     }
 
-    // Get artisan's products
-    const products = await Product.find({ artisan: artisan._id })
-      .select('name price stock status approvalStatus images sales rating')
+    // Get artisan's products using business name (since Product schema doesn't have artisan field)
+    const products = await Product.find({ 'artisan.businessName': artisan.businessName })
+      .select('name price stock status approvalStatus image images sales rating')
       .sort({ createdAt: -1 })
       .limit(10);
 
     // Get product counts
     const productCounts = await Product.aggregate([
-      { $match: { artisan: artisan._id } },
+      { $match: { 'artisan.businessName': artisan.businessName } },
       { $group: {
           _id: '$approvalStatus',
           count: { $sum: 1 }
@@ -53,9 +53,9 @@ exports.getDashboard = async (req, res) => {
       }
     ]);
 
-    // Calculate total sales and revenue
+    // Calculate total sales and revenue from products
     const salesData = await Product.aggregate([
-      { $match: { artisan: artisan._id } },
+      { $match: { 'artisan.businessName': artisan.businessName } },
       { $group: {
           _id: null,
           totalSales: { $sum: '$sales' },
@@ -64,7 +64,7 @@ exports.getDashboard = async (req, res) => {
       }
     ]);
 
-    // Get recent orders using business name (as per your Order model)
+    // Get recent orders using business name
     const recentOrders = await Order.find({ artisan: artisan.businessName })
       .select('orderNumber productName productPrice status createdAt customerDetails.name customerDetails.email paymentStatus')
       .sort({ createdAt: -1 })
@@ -129,13 +129,14 @@ exports.getDashboard = async (req, res) => {
       }
     ]);
 
-    // Calculate pending payout amount (from delivered orders)
+    // Calculate pending payout amount (from delivered orders with paid status)
     const pendingPayouts = await Order.aggregate([
       { 
         $match: { 
           artisan: artisan.businessName,
           status: 'delivered',
-          paymentStatus: 'paid'
+          paymentStatus: 'paid',
+          payoutStatus: { $ne: 'processed' } // Assuming you have a payoutStatus field
         }
       },
       {
@@ -146,6 +147,33 @@ exports.getDashboard = async (req, res) => {
       }
     ]);
 
+    // Update artisan stats from database
+    const productStats = await Product.aggregate([
+      { $match: { 'artisan.businessName': artisan.businessName } },
+      { $group: {
+          _id: null,
+          totalProducts: { $sum: 1 },
+          totalSales: { $sum: '$sales' },
+          totalRevenue: { $sum: { $multiply: ['$price', '$sales'] } }
+        }
+      }
+    ]);
+
+    const orderStats = await Order.aggregate([
+      { $match: { artisan: artisan.businessName } },
+      { $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          completedOrders: {
+            $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    const completionRate = orderStats[0] ? 
+      (orderStats[0].completedOrders / orderStats[0].totalOrders * 100) || 0 : 0;
+
     // Prepare dashboard data
     const dashboardData = {
       artisan: {
@@ -153,22 +181,22 @@ exports.getDashboard = async (req, res) => {
         businessName: artisan.businessName,
         fullName: artisan.fullName,
         rating: artisan.rating,
-        totalProducts: artisan.totalProducts,
-        totalSales: artisan.totalSales,
-        totalRevenue: artisan.totalRevenue,
+        totalProducts: productStats[0]?.totalProducts || 0,
+        totalSales: productStats[0]?.totalSales || 0,
+        totalRevenue: productStats[0]?.totalRevenue || 0,
         status: artisan.status,
         approvedAt: artisan.approvedAt
       },
       stats: {
-        totalProducts: artisan.totalProducts,
-        totalSales: artisan.totalSales,
-        totalRevenue: artisan.totalRevenue || 0,
+        totalProducts: productStats[0]?.totalProducts || 0,
+        totalSales: productStats[0]?.totalSales || 0,
+        totalRevenue: productStats[0]?.totalRevenue || 0,
         activeProducts: productCounts.find(p => p._id === 'approved')?.count || 0,
         pendingProducts: productCounts.find(p => p._id === 'pending')?.count || 0,
-        totalOrders: artisan.totalOrders || 0,
+        totalOrders: orderStats[0]?.totalOrders || 0,
         pendingOrders: orderCounts.find(o => o._id === 'pending')?.count || 0,
         deliveredOrders: orderCounts.find(o => o._id === 'delivered')?.count || 0,
-        completionRate: artisan.completionRate || 0,
+        completionRate: completionRate,
         pendingPayouts: pendingPayouts[0]?.amount || 0
       },
       metrics: {
@@ -230,8 +258,8 @@ exports.getProducts = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build filter
-    const filter = { artisan: artisan._id };
+    // Build filter using business name
+    const filter = { 'artisan.businessName': artisan.businessName };
     if (status) filter.status = status;
     if (approvalStatus) filter.approvalStatus = approvalStatus;
     if (category) filter.category = category;
@@ -248,7 +276,7 @@ exports.getProducts = async (req, res) => {
 
     // Get products with pagination
     const products = await Product.find(filter)
-      .select('name price stock status approvalStatus image images sales rating createdAt category tags')
+      .select('name price stock status approvalStatus image images sales rating createdAt category tags artisan')
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -337,7 +365,7 @@ exports.getOrders = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build filter using business name (as per your Order model)
+    // Build filter using business name
     const filter = { artisan: artisan.businessName };
     if (status) filter.status = status;
     if (dateFrom || dateTo) {
@@ -500,7 +528,7 @@ exports.getAnalytics = async (req, res) => {
 
     // Get category performance from products
     const categoryPerformance = await Product.aggregate([
-      { $match: { artisan: artisan._id } },
+      { $match: { 'artisan.businessName': artisan.businessName } },
       {
         $group: {
           _id: '$category',
@@ -561,7 +589,7 @@ exports.getAnalytics = async (req, res) => {
 
     // Get product performance metrics
     const productMetrics = await Product.aggregate([
-      { $match: { artisan: artisan._id } },
+      { $match: { 'artisan.businessName': artisan.businessName } },
       {
         $group: {
           _id: null,
@@ -570,6 +598,45 @@ exports.getAnalytics = async (req, res) => {
           totalStockValue: { $sum: { $multiply: ['$price', '$stock'] } },
           lowStockProducts: {
             $sum: { $cond: [{ $lte: ['$stock', 5] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    // Calculate completion rate
+    const orderStats = await Order.aggregate([
+      { $match: { artisan: artisan.businessName } },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          completedOrders: {
+            $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    const completionRate = orderStats[0] ? 
+      (orderStats[0].completedOrders / orderStats[0].totalOrders * 100) || 0 : 0;
+
+    // Get product counts
+    const productCounts = await Product.aggregate([
+      { $match: { 'artisan.businessName': artisan.businessName } },
+      { $group: {
+          _id: null,
+          totalProducts: { $sum: 1 },
+          activeProducts: {
+            $sum: { 
+              $cond: [
+                { $and: [
+                  { $eq: ['$status', 'active'] },
+                  { $eq: ['$approvalStatus', 'approved'] }
+                ]}, 
+                1, 
+                0 
+              ]
+            }
           }
         }
       }
@@ -597,19 +664,15 @@ exports.getAnalytics = async (req, res) => {
           lowStockProducts: 0
         },
         summary: {
-          totalProducts: artisan.totalProducts,
-          totalSales: artisan.totalSales,
+          totalProducts: productCounts[0]?.totalProducts || 0,
+          totalSales: artisan.totalSales || 0,
           totalRevenue: artisan.totalRevenue || 0,
-          completionRate: artisan.completionRate || 0,
+          completionRate: completionRate,
           pendingOrders: await Order.countDocuments({
             artisan: artisan.businessName,
             status: { $in: ['pending', 'contacted', 'confirmed', 'processing'] }
           }),
-          activeProducts: await Product.countDocuments({
-            artisan: artisan._id,
-            status: 'active',
-            approvalStatus: 'approved'
-          })
+          activeProducts: productCounts[0]?.activeProducts || 0
         }
       }
     });
@@ -650,8 +713,12 @@ exports.getEarnings = async (req, res) => {
       endDate.setDate(0);
     } else if (period === 'last_3_months') {
       startDate.setMonth(startDate.getMonth() - 3);
+      startDate.setDate(1);
     } else if (period === 'current_year') {
       startDate = new Date(new Date().getFullYear(), 0, 1);
+    } else {
+      // current_month
+      startDate.setDate(1);
     }
 
     // Calculate earnings from delivered orders
@@ -660,36 +727,33 @@ exports.getEarnings = async (req, res) => {
         $match: { 
           artisan: artisan.businessName,
           status: 'delivered',
-          createdAt: { $gte: startDate, $lte: endDate },
-          paymentStatus: { $in: ['paid', 'pending'] }
+          createdAt: { $gte: startDate, $lte: endDate }
         }
       },
       { 
         $group: {
           _id: null,
           totalEarnings: { $sum: '$productPrice' },
-          pendingPayouts: {
-            $sum: {
-              $cond: [
-                { $eq: ['$paymentStatus', 'paid'] },
-                '$productPrice',
-                0
-              ]
-            }
-          },
-          pendingOrders: {
-            $sum: {
-              $cond: [
-                { $eq: ['$paymentStatus', 'pending'] },
-                '$productPrice',
-                0
-              ]
-            }
-          },
-          orderCount: { $sum: 1 },
-          deliveredCount: {
-            $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
-          }
+          orderCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Calculate pending payouts (delivered orders with paid status but not processed)
+    const pendingPayoutData = await Order.aggregate([
+      { 
+        $match: { 
+          artisan: artisan.businessName,
+          status: 'delivered',
+          paymentStatus: 'paid',
+          payoutStatus: { $ne: 'processed' } // Assuming you have payoutStatus field
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          pendingPayouts: { $sum: '$productPrice' },
+          pendingOrders: { $sum: 1 }
         }
       }
     ]);
@@ -699,15 +763,17 @@ exports.getEarnings = async (req, res) => {
       .sort({ requestedAt: -1 })
       .limit(10);
 
-    // Get monthly earnings trend
+    // Get monthly earnings trend (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    sixMonthsAgo.setDate(1);
+
     const monthlyEarnings = await Order.aggregate([
       { 
         $match: { 
           artisan: artisan.businessName,
           status: 'delivered',
-          createdAt: { 
-            $gte: new Date(new Date().setMonth(new Date().getMonth() - 6))
-          }
+          createdAt: { $gte: sixMonthsAgo }
         }
       },
       { 
@@ -758,12 +824,12 @@ exports.getEarnings = async (req, res) => {
       success: true,
       data: {
         period,
-        earnings: earningsData[0] || {
-          totalEarnings: 0,
-          pendingPayouts: 0,
-          pendingOrders: 0,
-          orderCount: 0,
-          deliveredCount: 0
+        earnings: {
+          totalEarnings: earningsData[0]?.totalEarnings || 0,
+          pendingPayouts: pendingPayoutData[0]?.pendingPayouts || 0,
+          pendingOrders: pendingPayoutData[0]?.pendingOrders || 0,
+          orderCount: earningsData[0]?.orderCount || 0,
+          deliveredCount: earningsData[0]?.orderCount || 0 // Same as orderCount for delivered orders
         },
         payouts,
         monthlyEarnings,
