@@ -7,7 +7,8 @@ const ProductCard = ({
   onView, 
   onEdit, 
   onDelete, 
-  onManageStock 
+  onManageStock,
+  currentUser 
 }) => {
   
   const getStatusBadge = (status) => {
@@ -20,8 +21,16 @@ const ProductCard = ({
 
     const config = statusConfig[status] || statusConfig.draft;
     
+    // FIXED: Dynamic color classes need to be fully written out
+    const colorClasses = {
+      green: 'bg-green-100 text-green-800',
+      red: 'bg-red-100 text-red-800',
+      yellow: 'bg-yellow-100 text-yellow-800',
+      gray: 'bg-gray-100 text-gray-800'
+    };
+    
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full bg-${config.color}-100 text-${config.color}-800`}>
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colorClasses[config.color] || colorClasses.gray}`}>
         {config.label}
       </span>
     );
@@ -31,6 +40,22 @@ const ProductCard = ({
     if (stock === 0) return <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">Out of Stock</span>;
     if (stock < 5) return <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">Low Stock</span>;
     return <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">In Stock</span>;
+  };
+
+  // FIX: Handle manage stock click safely
+  const handleManageStockClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (onManageStock && typeof onManageStock === 'function') {
+      onManageStock(product);
+    } else {
+      console.warn('onManageStock is not a function');
+      // Optionally, show a message or open edit modal
+      if (onEdit && typeof onEdit === 'function') {
+        onEdit(product);
+      }
+    }
   };
 
   return (
@@ -44,14 +69,18 @@ const ProductCard = ({
                   src={product.image} 
                   alt={product.name}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.parentElement.innerHTML = '<Package className="w-6 h-6 text-blue-600" />';
+                  }}
                 />
               ) : (
                 <Package className="w-6 h-6 text-blue-600" />
               )}
             </div>
             <div>
-              <h3 className="font-bold text-gray-900">{product.name}</h3>
-              <p className="text-sm text-gray-500">{product.category}</p>
+              <h3 className="font-bold text-gray-900 truncate max-w-[180px]">{product.name}</h3>
+              <p className="text-sm text-gray-500 truncate max-w-[180px]">{product.category}</p>
             </div>
           </div>
           <div className="flex items-center space-x-1">
@@ -79,6 +108,19 @@ const ProductCard = ({
             {getStatusBadge(product.status)}
           </div>
           
+          {product.approvalStatus && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Approval</span>
+              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                product.approvalStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                product.approvalStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {product.approvalStatus.charAt(0).toUpperCase() + product.approvalStatus.slice(1)}
+              </span>
+            </div>
+          )}
+          
           <div className="flex justify-between items-center">
             <span className="text-gray-600">Total Sales</span>
             <div className="flex items-center">
@@ -91,33 +133,49 @@ const ProductCard = ({
         <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
           <div className="flex space-x-2">
             <button 
-              onClick={() => onView(product)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onView && typeof onView === 'function') onView(product);
+              }}
               className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
               title="View Details"
             >
               <Eye className="w-4 h-4" />
             </button>
             <button 
-              onClick={() => onEdit(product)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onEdit && typeof onEdit === 'function') onEdit(product);
+              }}
               className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
               title="Edit Product"
             >
               <Edit className="w-4 h-4" />
             </button>
             <button 
-              onClick={() => onDelete(product)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onDelete && typeof onDelete === 'function') onDelete(product);
+              }}
               className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
               title="Delete Product"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-          <button 
-            onClick={() => onManageStock(product)}
-            className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
-          >
-            Manage Stock
-          </button>
+          
+          {/* Only show Manage Stock button for admin/artisan users
+          {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.role === 'artisan') && (
+            <button 
+              onClick={handleManageStockClick}
+              className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+            >
+              Manage Stock
+            </button>
+          )} */}
         </div>
       </div>
     </div>

@@ -30,23 +30,34 @@ export const AuthProvider = ({ children }) => {
       
       // Check if token exists and is valid
       const isAuthenticated = authServices.isAuthenticated();
-      const storedUser = authServices.getStoredUser();
       
-      if (isAuthenticated && storedUser) {
-        // Optionally verify with backend
+      // ALWAYS ensure user has role before proceeding
+      const userWithRole = authServices.ensureUserHasRole();
+      
+      if (isAuthenticated && userWithRole) {
+        // Store the user with role in state
+        setUser(userWithRole);
+        
+        // Optionally verify with backend (but don't overwrite role)
         try {
           const result = await authServices.getCurrentUser();
-          setUser(result.user);
+          
+          // Merge fresh data with existing role
+          const mergedUser = {
+            ...result.user,
+            role: result.user.role || userWithRole.role // Preserve role
+          };
+          
+          setUser(mergedUser);
+          authServices.updateStoredUser(mergedUser);
         } catch (err) {
-          // Token might be expired, clear storage
-          await authServices.logout();
-          setUser(null);
+          // Use stored user with role
+          setUser(userWithRole);
         }
       } else {
         setUser(null);
       }
     } catch (err) {
-      console.error('Auth check error:', err);
       setError(err.message);
       setUser(null);
     } finally {
@@ -60,8 +71,14 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       
       const result = await authServices.login(credentials);
-      setUser(result.user);
-      return { success: true, user: result.user };
+      
+      // Ensure the user has a role
+      const userWithRole = authServices.ensureUserHasRole();
+      
+      // Set user with role
+      setUser(userWithRole || result.user);
+      
+      return { success: true, user: userWithRole || result.user };
     } catch (err) {
       setError(err.message);
       throw err;
@@ -76,8 +93,12 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       
       const result = await authServices.register(userData);
-      setUser(result.user);
-      return { success: true, user: result.user };
+      
+      // Ensure the user has a role
+      const userWithRole = authServices.ensureUserHasRole();
+      setUser(userWithRole || result.user);
+      
+      return { success: true, user: userWithRole || result.user };
     } catch (err) {
       setError(err.message);
       throw err;
@@ -100,8 +121,22 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (updatedUser) => {
-    setUser(updatedUser);
-    authServices.updateStoredUser(updatedUser);
+    // Ensure role is preserved
+    const userToUpdate = {
+      ...updatedUser,
+      role: updatedUser.role || user?.role
+    };
+    
+    setUser(userToUpdate);
+    authServices.updateStoredUser(userToUpdate);
+  };
+
+  // Helper to get user role safely
+  const getUserRole = () => {
+    if (!user) return null;
+    
+    // Try different possible role properties
+    return user.role || user.userRole || 'user';
   };
 
   const value = {
@@ -113,6 +148,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateUser,
     checkAuth,
+    getUserRole,
     isAuthenticated: !!user
   };
 

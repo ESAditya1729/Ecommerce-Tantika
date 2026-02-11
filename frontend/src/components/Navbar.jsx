@@ -9,6 +9,63 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { user, logout, isAuthenticated } = useAuth();
 
+  // Helper function to get correct dashboard path based on user role
+// In Navbar.jsx, update getDashboardPath function:
+const getDashboardPath = () => {
+  // First try to get from AuthContext
+  if (user?.role) {
+    switch(user.role) {
+      case 'artisan':
+      case 'pending_artisan':
+        return "/artisan/dashboard";
+      case 'admin':
+      case 'superadmin':
+        return "/admin/Addashboard";
+      default:
+        return "/dashboard";
+    }
+  }
+  
+  // If no role in context, check localStorage directly
+  try {
+    const userStr = localStorage.getItem('tantika_user');
+    if (userStr) {
+      const storedUser = JSON.parse(userStr);
+      
+      // Determine role from stored user
+      let userRole = storedUser.role;
+      
+      // If no role, check for artisan indicators
+      if (!userRole) {
+        const username = storedUser.username || '';
+        const email = storedUser.email || '';
+        
+        if (username.toLowerCase().includes('artisan') || email.toLowerCase().includes('artisan')) {
+          userRole = 'artisan';
+        } else {
+          userRole = 'user';
+        }
+      }
+      
+      switch(userRole) {
+        case 'artisan':
+        case 'pending_artisan':
+          return "/artisan/dashboard";
+        case 'admin':
+        case 'superadmin':
+          return "/admin/Addashboard";
+        default:
+          return "/dashboard";
+      }
+    }
+  } catch (error) {
+    console.error('Error determining dashboard path:', error);
+  }
+  
+  // Default fallback
+  return "/dashboard";
+};
+
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
@@ -38,9 +95,9 @@ const Navbar = () => {
     closeMobileMenu();
     
     if (isAuthenticated) {
-      navigate("/dashboard");
+      navigate(getDashboardPath());
     } else {
-      navigate("/login", { state: { from: "/dashboard" } });
+      navigate("/login", { state: { from: getDashboardPath() } });
     }
   };
 
@@ -50,7 +107,7 @@ const Navbar = () => {
     closeMobileMenu();
     
     if (isAuthenticated) {
-      navigate("/dashboard");
+      navigate(getDashboardPath());
     } else {
       navigate("/register");
     }
@@ -144,7 +201,7 @@ const Navbar = () => {
                 <>
                   {/* User Profile/Dashboard */}
                   <Link
-                    to="/dashboard"
+                    to={getDashboardPath()}
                     className="flex items-center text-gray-700 hover:text-blue-600 font-medium px-4 py-2"
                     onClick={closeMobileMenu}
                   >
@@ -282,7 +339,7 @@ const Navbar = () => {
                     <>
                       {/* Dashboard Link */}
                       <Link
-                        to="/dashboard"
+                        to={getDashboardPath()}
                         className="flex items-center justify-center bg-blue-50 text-blue-600 px-4 py-3 rounded-lg font-semibold"
                         onClick={closeMobileMenu}
                       >

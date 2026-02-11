@@ -1,80 +1,202 @@
-// src/components/Modals/AddProductModal.jsx
+// AddProductModal.jsx - Updated with better error handling and default artisan
 import React, { useState, useEffect } from "react";
-import { X, Upload, AlertCircle, Check, Info, Plus, Trash2 } from "lucide-react";
+import { X, Upload, AlertCircle, Check, Info, Plus, Trash2, User, Camera, Loader2 } from "lucide-react";
 import ImageUpload from "../Common/ImageUpload";
 
 const AddProductModal = ({
   showAddModal,
   setShowAddModal,
-  newProduct,
-  setNewProduct,
+  newProduct: externalNewProduct,
+  setNewProduct: externalSetNewProduct,
   categories,
   actionLoading,
   handleAddProduct,
+  currentUser,
+  artisans = [],
+  loadingArtisans = false,
 }) => {
+  // Default artisan data
+  const DEFAULT_ARTISAN = {
+    _id: "6980ec0e019484c9645856c4",
+    businessName: "Default Artisan",
+    fullName: "Default Artisan",
+    name: "Default Artisan",
+    status: "approved"
+  };
+
+  // Initialize internal state with safe defaults
+  const [internalNewProduct, setInternalNewProduct] = useState({
+    name: "",
+    description: "",
+    category: "",
+    price: "",
+    stock: "",
+    image: "",
+    status: currentUser?.role === 'artisan' ? "draft" : "active",
+    approvalStatus: currentUser?.role === 'artisan' ? "pending" : "approved",
+    artisan: "",
+    artisanName: "",
+    shortDescription: "",
+    subcategory: "",
+    costPrice: "",
+    materials: [],
+    tags: [],
+    colors: [],
+    sizes: [],
+    weight: "",
+    features: [],
+    specifications: [],
+    variants: [],
+  });
+
+  // Use either external prop or internal state
+  const newProduct = externalNewProduct || internalNewProduct;
+  const setNewProduct = externalSetNewProduct || setInternalNewProduct;
+
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
-  const [featuredImages, setFeaturedImages] = useState([]);
   const [specifications, setSpecifications] = useState([{ key: "", value: "" }]);
   const [variants, setVariants] = useState([{ name: "", price: "", stock: "" }]);
+  const [isArtisan, setIsArtisan] = useState(false);
+  const [selectedArtisan, setSelectedArtisan] = useState("");
 
   // Define available status options
-  const approvedStatusOptions = [
-    { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-800" },
-    { value: "approved", label: "Approved", color: "bg-green-100 text-green-800" },
-    { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-800" },
-    { value: "under_review", label: "Under Review", color: "bg-blue-100 text-blue-800" },
-    { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-800" },
-  ];
+  const getApprovalStatusOptions = (isArtisanUser) => {
+    if (isArtisanUser) {
+      return [
+        { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-800" },
+        { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-800" },
+      ];
+    }
+    return [
+      { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-800" },
+      { value: "approved", label: "Approved", color: "bg-green-100 text-green-800" },
+      { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-800" },
+      { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-800" },
+    ];
+  };
+
+  // Get filtered artisans (with default fallback)
+  const getFilteredArtisans = () => {
+    if (!artisans || !Array.isArray(artisans) || artisans.length === 0) {
+      console.log("Using default artisan");
+      return [DEFAULT_ARTISAN];
+    }
+    
+    // Filter only approved artisans for admin selection
+    const filtered = artisans.filter(artisan => 
+      artisan && 
+      typeof artisan === 'object' && 
+      artisan._id && 
+      (artisan.status === 'approved' || !artisan.status || artisan.status === 'active')
+    );
+    
+    return filtered.length > 0 ? filtered : [DEFAULT_ARTISAN];
+  };
 
   useEffect(() => {
     if (showAddModal) {
-      // Initialize with existing data or defaults
-      setFeaturedImages(newProduct.images || []);
-      setSpecifications(newProduct.specifications || [{ key: "", value: "" }]);
-      setVariants(newProduct.variants || [{ name: "", price: "", stock: "" }]);
+      console.log("Modal opened with artisans data:", {
+        rawArtisans: artisans,
+        filteredArtisans: getFilteredArtisans(),
+        artisanCount: artisans?.length || 0,
+        loadingArtisans
+      });
       
-      // Initialize approvedStatus if not set
-      if (!newProduct.approvedStatus) {
+      // Check if current user is artisan
+      const userIsArtisan = currentUser?.role === 'artisan' || currentUser?.role === 'pending_artisan';
+      setIsArtisan(userIsArtisan);
+      
+      // Reset form when modal opens
+      const resetFormData = {
+        name: "",
+        description: "",
+        category: "",
+        price: "",
+        stock: "",
+        image: "",
+        status: userIsArtisan ? "draft" : "active",
+        approvalStatus: userIsArtisan ? "pending" : "approved",
+        artisan: "",
+        artisanName: "",
+        shortDescription: "",
+        subcategory: "",
+        costPrice: "",
+        materials: [],
+        tags: [],
+        colors: [],
+        sizes: [],
+        weight: "",
+        features: [],
+        specifications: [],
+        variants: [],
+      };
+
+      setNewProduct(resetFormData);
+      setSpecifications([{ key: "", value: "" }]);
+      setVariants([{ name: "", price: "", stock: "" }]);
+      setErrors({});
+      setTouched({});
+      
+      // Set artisan ID automatically for artisans
+      if (userIsArtisan && currentUser?.artisanProfile?._id) {
+        setSelectedArtisan(currentUser.artisanProfile._id);
         setNewProduct(prev => ({
           ...prev,
-          approvedStatus: "pending" // Default to pending
+          artisan: currentUser.artisanProfile._id,
+          artisanName: currentUser.artisanProfile.businessName || currentUser.name || 'Artisan'
         }));
       }
+      
+      // For admin, use first available artisan
+      if (!userIsArtisan) {
+        const filteredArtisans = getFilteredArtisans();
+        if (filteredArtisans.length > 0) {
+          const defaultArtisan = filteredArtisans[0];
+          console.log("Default artisan selected:", defaultArtisan);
+          setSelectedArtisan(defaultArtisan._id);
+          setNewProduct(prev => ({
+            ...prev,
+            artisan: defaultArtisan._id,
+            artisanName: defaultArtisan.businessName || defaultArtisan.fullName || defaultArtisan.name || 'Artisan'
+          }));
+        }
+      }
     }
-  }, [showAddModal, newProduct]);
+  }, [showAddModal, currentUser, artisans, loadingArtisans]);
 
   const validateForm = () => {
     const newErrors = {};
 
-    // Required fields
-    if (!newProduct.name?.trim()) newErrors.name = "Product name is required";
-    if (!newProduct.category) newErrors.category = "Category is required";
-    if (!newProduct.price || Number(newProduct.price) <= 0) {
+    // Use optional chaining to safely access properties
+    if (!newProduct?.name?.trim()) newErrors.name = "Product name is required";
+    if (!newProduct?.category) newErrors.category = "Category is required";
+    if (!newProduct?.price || Number(newProduct?.price) <= 0) {
       newErrors.price = "Valid price is required";
     }
-    if (!newProduct.image) newErrors.image = "Main image is required";
+    if (!newProduct?.image) newErrors.image = "Main image is required";
     
-    // Validate approvedStatus
-    if (!newProduct.approvedStatus) {
-      newErrors.approvedStatus = "Approval status is required";
+    // Validate approvalStatus
+    if (!newProduct?.approvalStatus) {
+      newErrors.approvalStatus = "Approval status is required";
     }
 
-    // Validation rules
-    if (newProduct.name && newProduct.name.length > 100) {
+    // Validate artisan field (required for all)
+    if (!newProduct?.artisan) {
+      newErrors.artisan = "Artisan is required";
+    }
+
+    // Validation rules with safe property access
+    if (newProduct?.name && newProduct.name.length > 100) {
       newErrors.name = "Name must be less than 100 characters";
     }
 
-    if (newProduct.price && Number(newProduct.price) > 1000000) {
+    if (newProduct?.price && Number(newProduct.price) > 1000000) {
       newErrors.price = "Price is too high";
     }
 
-    if (newProduct.stock && Number(newProduct.stock) < 0) {
+    if (newProduct?.stock && Number(newProduct.stock) < 0) {
       newErrors.stock = "Stock cannot be negative";
-    }
-
-    if (newProduct.rating && (Number(newProduct.rating) < 0 || Number(newProduct.rating) > 5)) {
-      newErrors.rating = "Rating must be between 0 and 5";
     }
 
     return newErrors;
@@ -89,7 +211,7 @@ const AddProductModal = ({
     e.preventDefault();
     
     // Mark all fields as touched
-    const allFields = ['name', 'category', 'price', 'image', 'description', 'approvedStatus'];
+    const allFields = ['name', 'category', 'price', 'image', 'approvalStatus', 'artisan'];
     const touchedObj = {};
     allFields.forEach(field => touchedObj[field] = true);
     setTouched(touchedObj);
@@ -100,30 +222,62 @@ const AddProductModal = ({
       return;
     }
 
-    // Prepare product data with additional fields
+    // Get selected artisan name
+    const filteredArtisans = getFilteredArtisans();
+    const selectedArtisanData = filteredArtisans.find(a => a._id === newProduct.artisan);
+    const artisanName = selectedArtisanData?.businessName || 
+                       selectedArtisanData?.fullName || 
+                       selectedArtisanData?.name || 
+                       'Artisan';
+
+    // Prepare product data
     const productData = {
-      ...newProduct,
-      approvedStatus: newProduct.approvedStatus || "pending", // Ensure approvedStatus is set
-      images: featuredImages,
+      name: newProduct?.name || "",
+      description: newProduct?.description || "",
+      category: newProduct?.category || "",
+      price: parseFloat(newProduct?.price || 0),
+      stock: newProduct?.stock ? parseInt(newProduct.stock) : 0,
+      image: newProduct?.image || "",
+      approvalStatus: isArtisan ? "pending" : (newProduct?.approvalStatus || "approved"),
+      status: isArtisan ? "draft" : (newProduct?.status || "active"),
+      artisan: newProduct?.artisan || DEFAULT_ARTISAN._id, // Use default if empty
+      shortDescription: newProduct?.shortDescription || "",
+      subcategory: newProduct?.subcategory || "",
+      costPrice: newProduct?.costPrice || null,
+      materials: newProduct?.materials || [],
+      tags: newProduct?.tags || [],
+      colors: newProduct?.colors || [],
+      sizes: newProduct?.sizes || [],
+      weight: newProduct?.weight || null,
+      features: newProduct?.features || [],
       specifications: specifications.filter(spec => spec.key && spec.value),
       variants: variants.filter(variant => variant.name),
       sku: generateSKU(),
-      tags: [] // Add tags if you have them
+      submittedAt: isArtisan ? new Date().toISOString() : null
     };
 
-    console.log('Product data prepared:', productData); // Debug log
+    // Remove empty fields
+    Object.keys(productData).forEach(key => {
+      if (productData[key] === null || productData[key] === undefined || productData[key] === "") {
+        delete productData[key];
+      }
+    });
+
+    console.log('Product data prepared:', productData);
     
     // Call the handleAddProduct function WITH the prepared data
     await handleAddProduct(productData);
   };
 
   const generateSKU = () => {
-    const prefix = newProduct.category?.substring(0, 3).toUpperCase() || 'PRO';
+    const prefix = newProduct?.category?.substring(0, 3).toUpperCase() || 'PRO';
     const random = Math.floor(10000 + Math.random() * 90000);
     return `${prefix}-${random}`;
   };
 
   const resetForm = () => {
+    const userIsArtisan = currentUser?.role === 'artisan' || currentUser?.role === 'pending_artisan';
+    
     setNewProduct({
       name: "",
       description: "",
@@ -131,16 +285,22 @@ const AddProductModal = ({
       price: "",
       stock: "",
       image: "",
-      status: "active",
-      approvedStatus: "pending", // Default to pending
-      rating: "",
-      sales: "",
-      images: [],
+      status: userIsArtisan ? "draft" : "active",
+      approvalStatus: userIsArtisan ? "pending" : "approved",
+      artisan: userIsArtisan ? (currentUser?.artisanProfile?._id || "") : "",
+      artisanName: "",
+      shortDescription: "",
+      subcategory: "",
+      costPrice: "",
+      materials: [],
+      tags: [],
+      colors: [],
+      sizes: [],
+      weight: "",
+      features: [],
       specifications: [],
       variants: [],
-      tags: [],
     });
-    setFeaturedImages([]);
     setSpecifications([{ key: "", value: "" }]);
     setVariants([{ name: "", price: "", stock: "" }]);
     setErrors({});
@@ -166,6 +326,24 @@ const AddProductModal = ({
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors({ ...errors, [field]: undefined });
+    }
+  };
+
+  const handleArtisanChange = (artisanId) => {
+    console.log("Artisan selected:", artisanId);
+    const filteredArtisans = getFilteredArtisans();
+    const selected = filteredArtisans.find(a => a._id === artisanId);
+    console.log("Selected artisan data:", selected);
+    setSelectedArtisan(artisanId);
+    setNewProduct(prev => ({
+      ...prev,
+      artisan: artisanId,
+      artisanName: selected?.businessName || selected?.fullName || selected?.name || 'Artisan'
+    }));
+    
+    // Clear error when user selects artisan
+    if (errors.artisan) {
+      setErrors({ ...errors, artisan: undefined });
     }
   };
 
@@ -208,24 +386,32 @@ const AddProductModal = ({
       ...prev,
       image: url,
     }));
-    if (url && !featuredImages.includes(url)) {
-      setFeaturedImages([url, ...featuredImages.slice(0, 4)]);
+    // Clear error when image is uploaded
+    if (errors.image) {
+      setErrors({ ...errors, image: undefined });
     }
-  };
-
-  const removeFeaturedImage = (index) => {
-    const updated = featuredImages.filter((_, i) => i !== index);
-    setFeaturedImages(updated);
   };
 
   if (!showAddModal) return null;
 
   const isButtonDisabled = actionLoading || !isFormValid();
+  const approvalStatusOptions = getApprovalStatusOptions(isArtisan);
+  const filteredArtisans = getFilteredArtisans();
 
   // Function to get status badge color
   const getStatusBadge = (status) => {
-    const option = approvedStatusOptions.find(opt => opt.value === status);
+    const option = approvalStatusOptions.find(opt => opt.value === status);
     return option ? option.color : "bg-gray-100 text-gray-800";
+  };
+
+  // Get current artisan name for display
+  const getCurrentArtisanName = () => {
+    if (isArtisan) {
+      return currentUser?.artisanProfile?.businessName || currentUser?.name || 'You (Artisan)';
+    }
+    
+    const selected = filteredArtisans.find(a => a._id === selectedArtisan);
+    return selected?.businessName || selected?.fullName || selected?.name || 'Select Artisan';
   };
 
   return (
@@ -235,8 +421,14 @@ const AddProductModal = ({
         <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-2xl font-bold text-gray-900">Add New Product</h3>
-              <p className="text-sm text-gray-600 mt-1">Fill in the product details below</p>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {isArtisan ? 'Add New Artisan Product' : 'Add New Product'}
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {isArtisan 
+                  ? 'Add your product. It will be reviewed by admin before going live.' 
+                  : 'Add product for artisan'}
+              </p>
             </div>
             <button
               onClick={resetForm}
@@ -252,6 +444,130 @@ const AddProductModal = ({
         {/* Form Content */}
         <div className="flex-1 overflow-y-auto">
           <form onSubmit={handleSubmit} className="p-8">
+            {/* Artisan Information Section */}
+            <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <div className="flex items-center gap-2 mb-4">
+                <User className="w-5 h-5 text-blue-600" />
+                <h4 className="text-lg font-semibold text-gray-900">Artisan Information</h4>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Artisan Selection/Display */}
+                {isArtisan ? (
+                  // For artisans: Show their info (non-editable)
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 flex items-center justify-center">
+                        <span className="text-white font-semibold text-sm">
+                          {currentUser?.name?.charAt(0) || 'A'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {currentUser?.artisanProfile?.businessName || currentUser?.name || 'Artisan'}
+                        </p>
+                        <p className="text-sm text-gray-500">You are adding this product</p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
+                      Artisan
+                    </span>
+                  </div>
+                ) : (
+                  // For admins: Show dropdown to select artisan
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                      Select Artisan <span className="text-red-500">*</span>
+                      {touched.artisan && errors.artisan && (
+                        <Info className="w-4 h-4 text-red-500" />
+                      )}
+                    </label>
+                    
+                    {loadingArtisans ? (
+                      <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 flex items-center justify-center">
+                        <Loader2 className="w-5 h-5 text-gray-400 animate-spin mr-2" />
+                        <span className="text-gray-500">Loading artisans...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <select
+                            value={selectedArtisan}
+                            onChange={(e) => handleArtisanChange(e.target.value)}
+                            onBlur={() => handleBlur('artisan')}
+                            className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none ${
+                              touched.artisan && errors.artisan
+                                ? "border-red-300 bg-red-50"
+                                : "border-gray-300 hover:border-gray-400"
+                            }`}
+                            disabled={actionLoading}
+                          >
+                            {filteredArtisans.length === 0 ? (
+                              <option value="" disabled>No artisans available</option>
+                            ) : (
+                              filteredArtisans.map((artisan) => (
+                                <option key={artisan._id} value={artisan._id}>
+                                  {artisan.businessName || artisan.fullName || artisan.name || 'Artisan'} 
+                                  {artisan.status && artisan.status !== 'approved' && ` (${artisan.status})`}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                        {touched.artisan && errors.artisan && (
+                          <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                            <AlertCircle className="w-4 h-4" /> {errors.artisan}
+                          </p>
+                        )}
+                        
+                        {/* Selected Artisan Preview */}
+                        {selectedArtisan && filteredArtisans.length > 0 && (
+                          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 flex items-center justify-center">
+                                <span className="text-white font-semibold text-xs">
+                                  {getCurrentArtisanName().charAt(0)}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{getCurrentArtisanName()}</p>
+                                <p className="text-xs text-gray-600">
+                                  This artisan will own and manage this product
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Debug info (remove in production) */}
+                        <div className="mt-2 text-xs text-gray-500">
+                          <p>Available artisans: {filteredArtisans.length}</p>
+                          <p>Selected artisan ID: {selectedArtisan}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                
+                {/* Information Note */}
+                <div className={`p-3 rounded-lg ${isArtisan ? 'bg-yellow-50 border border-yellow-200' : 'bg-blue-50 border border-blue-200'}`}>
+                  <p className={`text-sm ${isArtisan ? 'text-yellow-700' : 'text-blue-700'}`}>
+                    {isArtisan ? (
+                      <>This product will be submitted for admin approval. It will only be visible to customers once approved.</>
+                    ) : (
+                      <>The selected artisan will be able to manage this product from their artisan dashboard.</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Rest of the form remains the same... */}
             {/* Basic Information Section */}
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-6">
@@ -272,7 +588,7 @@ const AddProductModal = ({
                     </label>
                     <input
                       type="text"
-                      value={newProduct.name || ""}
+                      value={newProduct?.name || ""}
                       onChange={(e) => {
                         setNewProduct({ ...newProduct, name: e.target.value });
                         if (errors.name) setErrors({ ...errors, name: undefined });
@@ -299,7 +615,7 @@ const AddProductModal = ({
                       Category <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={newProduct.category || ""}
+                      value={newProduct?.category || ""}
                       onChange={(e) =>
                         setNewProduct({ ...newProduct, category: e.target.value })
                       }
@@ -313,7 +629,7 @@ const AddProductModal = ({
                     >
                       <option value="">Select Category</option>
                       {categories
-                        .filter((cat) => cat !== "all")
+                        ?.filter((cat) => cat !== "all")
                         .map((category) => (
                           <option key={category} value={category}>
                             {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -333,7 +649,7 @@ const AddProductModal = ({
                       </span>
                       <input
                         type="number"
-                        value={newProduct.price || ""}
+                        value={newProduct?.price || ""}
                         onChange={(e) => handleNumberChange("price", e.target.value)}
                         onBlur={() => handleBlur('price')}
                         className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
@@ -359,7 +675,7 @@ const AddProductModal = ({
                     </label>
                     <input
                       type="number"
-                      value={newProduct.stock || ""}
+                      value={newProduct?.stock || ""}
                       onChange={(e) => handleNumberChange("stock", e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all hover:border-gray-400"
                       placeholder="Enter stock quantity"
@@ -369,55 +685,56 @@ const AddProductModal = ({
                   </div>
                 </div>
 
-                {/* Right Column - Image Upload */}
+                {/* Right Column - Single Image Upload */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Main Product Image <span className="text-red-500">*</span>
+                    Product Image <span className="text-red-500">*</span>
                   </label>
-                  <ImageUpload
-                    onImageUpload={handleImageUpload}
-                    existingImage={newProduct.image || ""}
-                    disabled={actionLoading}
-                    className="h-64"
-                  />
-                  {touched.image && errors.image && (
-                    <p className="text-red-500 text-sm mt-2">{errors.image}</p>
-                  )}
-
-                  {/* Featured Images */}
-                  <div className="mt-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Additional Images (Max 5)
-                    </label>
-                    <div className="grid grid-cols-4 gap-3">
-                      {featuredImages.map((img, index) => (
-                        <div key={index} className="relative group">
+                  <div className="space-y-4">
+                    {/* Main Image Upload */}
+                    <div className={`border-2 ${newProduct?.image ? 'border-green-500' : 'border-dashed border-gray-300'} rounded-xl p-4 transition-all duration-200`}>
+                      {newProduct?.image ? (
+                        <div className="relative group">
                           <img
-                            src={img}
-                            alt={`Featured ${index + 1}`}
-                            className="w-full h-20 object-cover rounded-lg"
+                            src={newProduct.image}
+                            alt="Product"
+                            className="w-full h-48 object-cover rounded-lg"
                           />
                           <button
                             type="button"
-                            onClick={() => removeFeaturedImage(index)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => setNewProduct({ ...newProduct, image: "" })}
+                            className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
+                          <div className="absolute bottom-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">
+                            Main Image
+                          </div>
                         </div>
-                      ))}
-                      {featuredImages.length < 5 && (
-                        <button
-                          type="button"
-                          onClick={() => document.getElementById('additional-upload')?.click()}
-                          className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center h-20 hover:border-blue-500 transition-colors"
-                        >
-                          <Plus className="w-6 h-6 text-gray-400" />
-                          <span className="text-xs text-gray-500 mt-1">Add</span>
-                        </button>
+                      ) : (
+                        <ImageUpload
+                          onImageUpload={handleImageUpload}
+                          existingImage=""
+                          disabled={actionLoading}
+                          className="h-48"
+                        />
                       )}
                     </div>
+                    
+                    {/* Image Requirements Note */}
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <p className="flex items-center gap-1">
+                        <Camera className="w-3 h-3" />
+                        Only one image is required for artisan products
+                      </p>
+                      <p>• Image will be displayed in your shop</p>
+                      <p>• Recommended size: 800x800px</p>
+                      <p>• Max file size: 5MB</p>
+                    </div>
                   </div>
+                  {touched.image && errors.image && (
+                    <p className="text-red-500 text-sm mt-2">{errors.image}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -428,7 +745,7 @@ const AddProductModal = ({
                 Description
               </label>
               <textarea
-                value={newProduct.description || ""}
+                value={newProduct?.description || ""}
                 onChange={(e) =>
                   setNewProduct({ ...newProduct, description: e.target.value })
                 }
@@ -482,180 +799,112 @@ const AddProductModal = ({
               </div>
             </div>
 
-            {/* Variants */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-lg font-semibold text-gray-900">Product Variants</h4>
-                <button
-                  type="button"
-                  onClick={addVariant}
-                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                >
-                  <Plus className="w-4 h-4" /> Add Variant
-                </button>
-              </div>
-              <div className="space-y-4">
-                {variants.map((variant, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-                    <input
-                      type="text"
-                      value={variant.name}
-                      onChange={(e) => updateVariant(index, 'name', e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
-                      placeholder="Variant name (e.g., Size, Color)"
-                    />
-                    <input
-                      type="number"
-                      value={variant.price}
-                      onChange={(e) => updateVariant(index, 'price', e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
-                      placeholder="Price"
-                      min="0"
-                    />
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        value={variant.stock}
-                        onChange={(e) => updateVariant(index, 'stock', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500"
-                        placeholder="Stock"
-                        min="0"
-                      />
-                      {variants.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeVariant(index)}
-                          className="px-3 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Additional Settings */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              {/* Status (Product Status) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              {/* Approval Status */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Status
-                </label>
-                <select
-                  value={newProduct.status || "active"}
-                  onChange={(e) =>
-                    setNewProduct({ ...newProduct, status: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all hover:border-gray-400"
-                  disabled={actionLoading}
-                >
-                  <option value="active">Active</option>
-                  <option value="draft">Draft</option>
-                  <option value="out_of_stock">Out of Stock</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </div>
-
-              {/* Approval Status - NEW FIELD */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-                  Approval Status <span className="text-red-500">*</span>
-                  {touched.approvedStatus && errors.approvedStatus && (
-                    <Info className="w-4 h-4 text-red-500" />
-                  )}
+                  Approval Status
                 </label>
                 <div className="relative">
-                  <select
-                    value={newProduct.approvedStatus || "pending"}
-                    onChange={(e) => {
-                      setNewProduct({ ...newProduct, approvedStatus: e.target.value });
-                      if (errors.approvedStatus) {
-                        setErrors({ ...errors, approvedStatus: undefined });
-                      }
-                    }}
-                    onBlur={() => handleBlur('approvedStatus')}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none ${
-                      touched.approvedStatus && errors.approvedStatus
-                        ? "border-red-300 bg-red-50"
-                        : "border-gray-300 hover:border-gray-400"
-                    }`}
-                    disabled={actionLoading}
-                  >
-                    {approvedStatusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                  {isArtisan ? (
+                    <div className={`w-full px-4 py-3 border rounded-xl ${getStatusBadge(newProduct?.approvalStatus || 'pending')} border-transparent`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">
+                          {approvalStatusOptions.find(opt => opt.value === (newProduct?.approvalStatus || 'pending'))?.label || 'Pending'}
+                        </span>
+                        <Info className="w-4 h-4" />
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      value={newProduct?.approvalStatus || "approved"}
+                      onChange={(e) => {
+                        setNewProduct({ ...newProduct, approvalStatus: e.target.value });
+                        if (errors.approvalStatus) {
+                          setErrors({ ...errors, approvalStatus: undefined });
+                        }
+                      }}
+                      onBlur={() => handleBlur('approvalStatus')}
+                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none ${
+                        touched.approvalStatus && errors.approvalStatus
+                          ? "border-red-300 bg-red-50"
+                          : "border-gray-300 hover:border-gray-400"
+                      }`}
+                      disabled={actionLoading}
+                    >
+                      {approvalStatusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {!isArtisan && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
-                {touched.approvedStatus && errors.approvedStatus && (
-                  <p className="text-red-500 text-sm mt-2">{errors.approvedStatus}</p>
+                {touched.approvalStatus && errors.approvalStatus && (
+                  <p className="text-red-500 text-sm mt-2">{errors.approvalStatus}</p>
                 )}
                 
-                {/* Status Badge Preview */}
-                {newProduct.approvedStatus && (
-                  <div className="mt-2">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(newProduct.approvedStatus)}`}>
-                      {approvedStatusOptions.find(opt => opt.value === newProduct.approvedStatus)?.label}
-                    </span>
-                    <p className="text-xs text-gray-500 mt-1">
-                      This determines product visibility
-                    </p>
-                  </div>
-                )}
+                {/* Status Info */}
+                <div className="mt-2">
+                  <p className="text-xs text-gray-500">
+                    {isArtisan 
+                      ? 'Your product will be reviewed by admin before going live.' 
+                      : 'Set the approval status for this product.'}
+                  </p>
+                </div>
               </div>
 
-              {/* Initial Rating */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Initial Rating
-                </label>
-                <input
-                  type="number"
-                  value={newProduct.rating || ""}
-                  onChange={(e) => handleNumberChange("rating", e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all hover:border-gray-400"
-                  placeholder="0.0"
-                  step="0.1"
-                  min="0"
-                  max="5"
-                  disabled={actionLoading}
-                />
-              </div>
-
-              {/* Initial Sales */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Initial Sales
-                </label>
-                <input
-                  type="number"
-                  value={newProduct.sales || ""}
-                  onChange={(e) => handleNumberChange("sales", e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all hover:border-gray-400"
-                  placeholder="0"
-                  min="0"
-                  disabled={actionLoading}
-                />
-              </div>
+              {/* Product Status (hidden for artisans) */}
+              {!isArtisan && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Product Status
+                  </label>
+                  <select
+                    value={newProduct?.status || "active"}
+                    onChange={(e) =>
+                      setNewProduct({ ...newProduct, status: e.target.value })
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all hover:border-gray-400"
+                    disabled={actionLoading}
+                  >
+                    <option value="active">Active</option>
+                    <option value="draft">Draft</option>
+                    <option value="out_of_stock">Out of Stock</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Help Text for Statuses */}
-            <div className="mb-8 p-4 bg-blue-50 rounded-xl border border-blue-200">
-              <h4 className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-1">
-                <Info className="w-4 h-4" /> Status Information
+            <div className={`mb-8 p-4 rounded-xl border ${isArtisan ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200'}`}>
+              <h4 className={`text-sm font-semibold ${isArtisan ? 'text-yellow-800' : 'text-blue-800'} mb-2 flex items-center gap-1`}>
+                <Info className="w-4 h-4" /> Important Information
               </h4>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li><span className="font-medium">Product Status:</span> Controls product availability and visibility to customers</li>
-                <li><span className="font-medium">Approval Status:</span> Internal workflow status for admin review process</li>
-                <li><span className="font-medium">Only "Approved" products</span> will be visible to customers on the frontend</li>
+              <ul className={`text-sm ${isArtisan ? 'text-yellow-700' : 'text-blue-700'} space-y-1`}>
+                {isArtisan ? (
+                  <>
+                    <li>• Your product will be submitted for <strong>admin approval</strong></li>
+                    <li>• It will appear in your artisan dashboard as <strong>"Pending"</strong></li>
+                    <li>• You'll be notified when it's approved or rejected</li>
+                    <li>• Only approved products will be visible to customers</li>
+                  </>
+                ) : (
+                  <>
+                    <li><span className="font-medium">Product Status:</span> Controls product availability and visibility to customers</li>
+                    <li><span className="font-medium">Approval Status:</span> Internal workflow status for admin review process</li>
+                    <li><span className="font-medium">Only "Approved" products</span> will be visible to customers on the frontend</li>
+                  </>
+                )}
               </ul>
             </div>
 
@@ -675,18 +924,20 @@ const AddProductModal = ({
                 className={`px-8 py-3 font-medium rounded-xl transition-all duration-200 flex items-center justify-center min-w-[140px] ${
                   isButtonDisabled
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                    : `${isArtisan 
+                        ? 'bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800' 
+                        : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'} text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5`
                 }`}
               >
                 {actionLoading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-3" />
-                    Adding Product...
+                    {isArtisan ? 'Submitting...' : 'Adding Product...'}
                   </>
                 ) : (
                   <>
                     <Check className="w-5 h-5 mr-2" />
-                    Add Product
+                    {isArtisan ? 'Submit for Approval' : 'Add Product'}
                   </>
                 )}
               </button>

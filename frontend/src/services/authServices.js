@@ -59,23 +59,87 @@ API.interceptors.request.use(
 );
 
 // ========================
-// Response Interceptor
+// Response Interceptor - FIXED VERSION
 // ========================
 API.interceptors.response.use(
   (response) => {
     // Log response in development
     if (process.env.NODE_ENV === 'development') {
       console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+      console.log('Response data structure:', response.data);
     }
     
     // If the response contains a token, store it
     if (response.data?.token) {
       localStorage.setItem('tantika_token', response.data.token);
+      
+      // DECODE TOKEN TO GET ROLE (if not in user object)
+      try {
+        const tokenParts = response.data.token.split('.');
+        if (tokenParts.length === 3) {
+          const tokenPayload = JSON.parse(atob(tokenParts[1]));
+          console.log('Token payload:', tokenPayload);
+          
+          // If user object exists but has no role, add role from token
+          if (response.data.user && !response.data.user.role && tokenPayload.role) {
+            response.data.user.role = tokenPayload.role;
+            console.log('Added role from token to user:', tokenPayload.role);
+          }
+        }
+      } catch (e) {
+        console.error('Error decoding token:', e);
+      }
     }
     
-    // If the response contains user data, store it
+    // If the response contains user data, store it - FIXED VERSION
     if (response.data?.user) {
-      localStorage.setItem('tantika_user', JSON.stringify(response.data.user));
+      console.log('Storing user from response:', response.data.user);
+      
+      // Handle different user object structures
+      const userToStore = response.data.user.user || response.data.user;
+      
+      // DEBUG: Check if role exists
+      console.log('User to store has role?', userToStore.role);
+      
+      // If user doesn't have a role, determine it
+      if (!userToStore.role) {
+        console.warn('User object missing role, attempting to determine...');
+        
+        // Check various ways to determine role
+        if (userToStore.artisanProfile) {
+          // User has artisanProfile - check status
+          userToStore.role = userToStore.artisanProfile.status === 'approved' 
+            ? 'artisan' 
+            : 'pending_artisan';
+          console.log('Determined role from artisanProfile:', userToStore.role);
+        } 
+        else if (response.config.url?.includes('/artisan/')) {
+          userToStore.role = 'artisan';
+          console.log('Determined role from URL (artisan route):', userToStore.role);
+        }
+        else if (response.config.url?.includes('/admin/')) {
+          userToStore.role = 'admin';
+          console.log('Determined role from URL (admin route):', userToStore.role);
+        }
+        else if (userToStore.username && userToStore.username.toLowerCase().includes('artisan')) {
+          userToStore.role = 'artisan';
+          console.log('Determined role from username:', userToStore.role);
+        }
+        else if (userToStore.email && userToStore.email.toLowerCase().includes('artisan')) {
+          userToStore.role = 'artisan';
+          console.log('Determined role from email:', userToStore.role);
+        }
+        else {
+          userToStore.role = 'user';
+          console.log('Defaulting to user role');
+        }
+      }
+      
+      // Ensure role is saved
+      console.log('Final user to store:', userToStore);
+      console.log('User role to store:', userToStore.role);
+      
+      localStorage.setItem('tantika_user', JSON.stringify(userToStore));
     }
     
     return response;
@@ -219,43 +283,40 @@ const authServices = {
   },
 
   // Register as artisan (convenience function)
-registerArtisan: async (userData) => {
-  try {
-    console.log('Registering artisan:', userData);
-    const response = await API.post('/auth/register/artisan', userData);
-    return {
-      success: true,
-      token: response.data.token,
-      user: response.data.user,
-      artisan: response.data.artisan,
-      message: response.data.message
-    };
-  } catch (error) {
-    console.error('Artisan registration error:', error);
-    throw error.response?.data || error;
-  }
-},
-
-  // Login user (updated for role-based redirection)
-  login: async (credentials) => {
+  registerArtisan: async (userData) => {
     try {
-      const response = await API.post('/auth/login', credentials);
-      
-      // Store user role for redirection logic
-      if (response.data.user) {
-        response.data.user.role = response.data.user.role || 'user';
-      }
-      
+      console.log('Registering artisan:', userData);
+      const response = await API.post('/auth/register/artisan', userData);
       return {
         success: true,
         token: response.data.token,
         user: response.data.user,
-        message: response.data.message || 
-          (response.data.user?.role === 'pending_artisan' 
-            ? 'Artisan application under review' 
-            : 'Login successful!')
+        artisan: response.data.artisan,
+        message: response.data.message
       };
     } catch (error) {
+      console.error('Artisan registration error:', error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Login user (updated for role-based redirection) - FIXED VERSION
+  login: async (credentials) => {
+    try {
+      console.log('Login attempt with:', credentials.email);
+      const response = await API.post('/auth/login', credentials);
+      
+      console.log('Login response:', response.data);
+      
+      // The interceptor will handle storing user with role
+      return {
+        success: true,
+        token: response.data.token,
+        user: response.data.user,
+        message: response.data.message || 'Login successful!'
+      };
+    } catch (error) {
+      console.error('Login error details:', error);
       throw error.response?.data || error;
     }
   },
@@ -424,6 +485,42 @@ registerArtisan: async (userData) => {
     }
   },
 
+  // NEW: Ensure user has role in localStorage
+  ensureUserHasRole: () => {
+    const userStr = localStorage.getItem('tantika_user');
+    if (!userStr) return null;
+    
+    try {
+      const user = JSON.parse(userStr);
+      
+      // If user already has role, return
+      if (user.role) return user;
+      
+      console.log('User missing role, attempting to determine...');
+      
+      // Try to get role from various sources
+      if (user.artisanProfile) {
+        user.role = user.artisanProfile.status === 'approved' ? 'artisan' : 'pending_artisan';
+      }
+      else if (user.username && user.username.toLowerCase().includes('artisan')) {
+        user.role = 'artisan';
+      }
+      else if (user.email && user.email.toLowerCase().includes('artisan')) {
+        user.role = 'artisan';
+      }
+      else {
+        user.role = 'user';
+      }
+      
+      console.log('Determined role:', user.role);
+      localStorage.setItem('tantika_user', JSON.stringify(user));
+      return user;
+    } catch (error) {
+      console.error('Error ensuring user has role:', error);
+      return null;
+    }
+  },
+
   // Check if user is approved artisan
   isApprovedArtisan: () => {
     const user = authServices.getStoredUser();
@@ -443,15 +540,23 @@ registerArtisan: async (userData) => {
     return user && user.role === 'admin';
   },
 
-  // Get stored user data
+  // Get stored user data - FIXED VERSION
   getStoredUser: () => {
     const userStr = localStorage.getItem('tantika_user');
     if (!userStr) return null;
     
     try {
       const user = JSON.parse(userStr);
-      // Ensure role is set for backward compatibility
-      user.role = user.role || 'user';
+      
+      // DEBUG
+      console.log('Getting stored user:', user);
+      console.log('Stored user role:', user.role);
+      
+      // If no role, try to ensure it
+      if (!user.role) {
+        return authServices.ensureUserHasRole();
+      }
+      
       return user;
     } catch (error) {
       console.error('Error parsing stored user:', error);
@@ -479,11 +584,14 @@ registerArtisan: async (userData) => {
     
     if (!user) return '/login';
     
-    switch (user.role) {
+    // Ensure user has role
+    const userWithRole = user.role ? user : authServices.ensureUserHasRole();
+    
+    switch (userWithRole.role) {
       case 'admin':
         return '/admin/dashboard';
       case 'artisan':
-        if (user.artisanProfile?.status === 'approved') {
+        if (userWithRole.artisanProfile?.status === 'approved') {
           return '/artisan/dashboard';
         } else {
           return '/artisan/pending-approval';
@@ -519,102 +627,144 @@ registerArtisan: async (userData) => {
   },
 
   // Get artisan dashboard data
-getArtisanDashboard: async () => {
-  try {
-    const response = await API.get('/artisan/dashboard');
-    return {
-      success: true,
-      data: response.data.data,
-      message: response.data.message
-    };
-  } catch (error) {
-    throw error.response?.data || error;
-  }
-},
+  getArtisanDashboard: async () => {
+    try {
+      const response = await API.get('/artisan/dashboard');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
 
-// Get pending artisan status
-getPendingArtisanStatus: async () => {
-  try {
-    const response = await API.get('/artisan/pending-status');
-    return {
-      success: true,
-      data: response.data.data,
-      message: response.data.message
-    };
-  } catch (error) {
-    throw error.response?.data || error;
-  }
-},
+  // Get pending artisan status
+  getPendingArtisanStatus: async () => {
+    try {
+      const response = await API.get('/artisan/pending-status');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
 
-// Get artisan profile
-getArtisanProfile: async () => {
-  try {
-    const response = await API.get('/artisan/profile');
-    return {
-      success: true,
-      data: response.data.data,
-      message: response.data.message
-    };
-  } catch (error) {
-    throw error.response?.data || error;
-  }
-},
+  // Get artisan profile
+  getArtisanProfile: async () => {
+    try {
+      const response = await API.get('/artisan/profile');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
 
-// Update artisan profile
-updateArtisanProfile: async (profileData) => {
-  try {
-    const response = await API.put('/artisan/profile', profileData);
-    return {
-      success: true,
-      data: response.data.data,
-      message: response.data.message
-    };
-  } catch (error) {
-    throw error.response?.data || error;
-  }
-},
+  // Update artisan profile
+  updateArtisanProfile: async (profileData) => {
+    try {
+      const response = await API.put('/artisan/profile', profileData);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
 
-// Admin: Get pending artisans
-getPendingArtisans: async (page = 1, limit = 10, search = '') => {
-  try {
-    const response = await API.get(`/admin/artisans/pending?page=${page}&limit=${limit}&search=${search}`);
-    return {
-      success: true,
-      data: response.data.data,
-      message: response.data.message
-    };
-  } catch (error) {
-    throw error.response?.data || error;
-  }
-},
+  // Admin: Get pending artisans
+  getPendingArtisans: async (page = 1, limit = 10, search = '') => {
+    try {
+      const response = await API.get(`/admin/artisans/pending?page=${page}&limit=${limit}&search=${search}`);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
 
-// Admin: Approve artisan
-approveArtisan: async (artisanId, adminNotes = '') => {
-  try {
-    const response = await API.put(`/admin/artisans/${artisanId}/approve`, { adminNotes });
-    return {
-      success: true,
-      data: response.data.data,
-      message: response.data.message
-    };
-  } catch (error) {
-    throw error.response?.data || error;
-  }
-},
+  // Admin: Approve artisan
+  approveArtisan: async (artisanId, adminNotes = '') => {
+    try {
+      const response = await API.put(`/admin/artisans/${artisanId}/approve`, { adminNotes });
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
 
-// Admin: Reject artisan
-rejectArtisan: async (artisanId, rejectionReason) => {
-  try {
-    const response = await API.put(`/admin/artisans/${artisanId}/reject`, { rejectionReason });
-    return {
-      success: true,
-      data: response.data.data,
-      message: response.data.message
-    };
-  } catch (error) {
-    throw error.response?.data || error;
-  }
-},
+  // Admin: Reject artisan
+  rejectArtisan: async (artisanId, rejectionReason) => {
+    try {
+      const response = await API.put(`/admin/artisans/${artisanId}/reject`, { rejectionReason });
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // ========================
+  // DEBUG FUNCTIONS
+  // ========================
+  
+  // Debug stored user
+  debugStoredUser: () => {
+    const userStr = localStorage.getItem('tantika_user');
+    const token = localStorage.getItem('tantika_token');
+    
+    console.log('=== DEBUG STORED USER ===');
+    console.log('Token exists:', !!token);
+    console.log('User string:', userStr);
+    
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        console.log('Parsed user:', user);
+        console.log('User role:', user.role);
+        console.log('User keys:', Object.keys(user));
+        
+        // Decode token to check payload
+        if (token) {
+          try {
+            const tokenParts = token.split('.');
+            if (tokenParts.length === 3) {
+              const payload = JSON.parse(atob(tokenParts[1]));
+              console.log('Token payload:', payload);
+              console.log('Token role:', payload.role);
+            }
+          } catch (e) {
+            console.error('Error decoding token:', e);
+          }
+        }
+        
+        return user;
+      } catch (e) {
+        console.error('Error parsing user:', e);
+      }
+    }
+    return null;
+  },
 
   // ========================
   // Role-Based Access Control

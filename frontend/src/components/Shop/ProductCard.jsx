@@ -1,31 +1,95 @@
 // src/components/Product/ProductCard.jsx
-import { ShoppingBag, Star, MapPin, Eye, Heart, Share2, Info, Loader2 } from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import OrderModal from '../Modals/OrderModal'; // Adjust path as needed
+import {
+  ShoppingBag,
+  Star,
+  MapPin,
+  Eye,
+  Heart,
+  Share2,
+  Info,
+  Tag,
+  Sparkles,
+  Zap,
+  Loader2
+} from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import OrderModal from "../Modals/OrderModal";
 
 const ProductCard = ({ product, onOrderClick, onShare }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
-  // Get API base URL from environment
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+  // Get user info on mount
+  useEffect(() => {
+    const userInfo = getUserInfo();
+    setUser(userInfo);
+  }, []);
 
-  // REMOVED: The useEffect that was making initial wishlist API call
-
-  // Get product image
-  const getProductImage = () => {
-    if (product.images && product.images.length > 0) {
-      return product.images[currentImageIndex] || product.images[0];
+  // Get user info from localStorage
+  const getUserInfo = () => {
+    try {
+      const userStr = localStorage.getItem("tantika_user");
+      return userStr ? JSON.parse(userStr) : null;
+    } catch (err) {
+      return null;
     }
-    return product.image || null;
   };
 
-  // Handle share button click
-  const handleShare = (e) => {
+  // Handle express interest - FIXED VERSION
+  const handleExpressInterest = (e) => {
+    // CRITICAL: Prevent ALL default and stop ALL propagation
+    e.preventDefault();
     e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+    
+    console.log("Express Interest clicked for:", product.name);
+    
+    const userInfo = getUserInfo();
+
+    if (userInfo) {
+      console.log("Showing modal...");
+      setShowOrderModal(true);
+    } else {
+      navigate("/login", {
+        state: {
+          from: "express-interest",
+          productId: product._id,
+          productName: product.name,
+        },
+      });
+    }
+  };
+
+  // Handle wishlist - FIXED
+  const handleWishlist = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+
+    const token = localStorage.getItem("tantika_token");
+    if (!token) {
+      navigate("/login", {
+        state: { from: "wishlist", productId: product._id },
+      });
+      return;
+    }
+
+    setWishlistLoading(true);
+    setTimeout(() => setWishlistLoading(false), 1000);
+    alert("Wishlist functionality coming soon!");
+  };
+
+  // Handle share - FIXED
+  const handleShare = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+    
     if (onShare) {
       onShare(product);
     } else {
@@ -36,347 +100,299 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
           url: `${window.location.origin}/product/${product._id}`,
         });
       } else {
-        navigator.clipboard.writeText(`${window.location.origin}/product/${product._id}`);
-        showNotification('Product link copied to clipboard!', 'info');
+        navigator.clipboard.writeText(
+          `${window.location.origin}/product/${product._id}`,
+        );
+        alert("Product link copied to clipboard!");
       }
     }
   };
 
-  // Handle wishlist button click - SIMPLIFIED: No pre-check, direct toggle
-  const handleWishlist = async (e) => {
+  // Quick view - FIXED
+  const handleQuickView = (e) => {
+    e.preventDefault();
     e.stopPropagation();
-    
-    // Check if user is logged in
-    const token = localStorage.getItem('tantika_token');
-    if (!token) {
-      // Redirect to login or show login modal
-      navigate('/login', { 
-        state: { from: 'wishlist', productId: product._id } 
-      });
-      return;
-    }
-
-    setWishlistLoading(true);
-    
-    try {
-      // First check current status (one API call instead of pre-check on mount)
-      const checkResponse = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/check/${product._id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      let isCurrentlyWishlisted = false;
-      
-      if (checkResponse.ok) {
-        const checkData = await checkResponse.json();
-        isCurrentlyWishlisted = checkData.data.isInWishlist;
-      }
-
-      // Then toggle based on current status
-      if (isCurrentlyWishlisted) {
-        // Remove from wishlist
-        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist/${product._id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          showNotification('Removed from wishlist', 'info');
-        }
-      } else {
-        // Add to wishlist
-        const wishlistData = {
-          productId: product._id,
-          productName: product.name,
-          productImage: product.images?.[0] || product.image || '',
-          productPrice: product.price,
-          artisan: product.artisan || 'Unknown Artisan',
-          category: product.category || ''
-        };
-
-        const response = await fetch(`${API_BASE_URL}/api/usernorms/wishlist`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(wishlistData)
-        });
-
-        if (response.ok) {
-          showNotification('Added to wishlist', 'success');
-        } else if (response.status === 400) {
-          const data = await response.json();
-          if (data.message === 'Product already in wishlist') {
-            showNotification('Already in wishlist', 'info');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error updating wishlist:', error);
-      showNotification('Failed to update wishlist', 'error');
-    } finally {
-      setWishlistLoading(false);
-    }
+    e.nativeEvent.stopImmediatePropagation();
+    navigate(`/product/${product._id}`);
   };
 
-  // Show notification (you can replace with your toast system)
-  const showNotification = (message, type = 'info') => {
-    // Using alert for simplicity - replace with your toast/notification system
-    if (type === 'success') {
-      alert(`✅ ${message}`);
-    } else if (type === 'error') {
-      alert(`❌ ${message}`);
-    } else {
-      alert(`ℹ️ ${message}`);
-    }
-  };
-
-  // Handle express interest
-  const handleExpressInterest = (e) => {
+  // Image dot click - FIXED
+  const handleImageDotClick = (e, index) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (onOrderClick) {
-      onOrderClick(product);
-    } else {
-      // Default: Open OrderModal
-      setShowOrderModal(true);
-    }
+    e.nativeEvent.stopImmediatePropagation();
+    setCurrentImageIndex(index);
   };
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
     }).format(price);
   };
 
   const getStockStatus = (stock) => {
-    if (stock === 0) return { text: 'Out of Stock', color: 'bg-red-100 text-red-800' };
-    if (stock < 5) return { text: 'Low Stock', color: 'bg-amber-100 text-amber-800' };
-    return { text: 'In Stock', color: 'bg-green-100 text-green-800' };
+    if (stock === 0)
+      return {
+        text: "Out of Stock",
+        color: "bg-red-50 text-red-700 border-red-200",
+        icon: "❌",
+      };
+    if (stock < 5)
+      return {
+        text: "Low Stock",
+        color: "bg-amber-50 text-amber-700 border-amber-200",
+        icon: "⚡",
+      };
+    return {
+      text: "In Stock",
+      color: "bg-green-50 text-green-700 border-green-200",
+      icon: "✅",
+    };
   };
 
-  const productImage = getProductImage();
+  const productImage = product.images?.[currentImageIndex] || product.image || null;
   const stockStatus = getStockStatus(product.stock || 0);
+
+  // Product rating stars
+  const renderStars = (rating) => {
+    const stars = [];
+    for (let i = 0; i < 5; i++) {
+      if (i < Math.floor(rating || 0)) {
+        stars.push(
+          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />,
+        );
+      } else {
+        stars.push(
+          <Star key={i} className="w-3 h-3 fill-gray-300 text-gray-300" />,
+        );
+      }
+    }
+    return stars;
+  };
 
   // Prepare product data for OrderModal
   const productForModal = {
     id: product._id,
     name: product.name,
     price: product.price,
-    images: product.images && product.images.length > 0 ? product.images : [product.image],
-    artisan: product.artisan || 'Handcrafted by Artisans',
-    location: product.location || 'Across India',
+    images:
+      product.images && product.images.length > 0
+        ? product.images
+        : [product.image],
+    artisan: product.artisan || "Handcrafted by Artisans",
+    location: product.location || "Across India",
     category: product.category,
-    description: product.description
+    description: product.description,
+    stock: product.stock || 0
   };
 
-  // Handle quick view (eye button)
-  const handleQuickView = (e) => {
-    e.stopPropagation();
+  // Navigate to product details - DON'T attach this to the entire card
+  const handleProductClick = () => {
     navigate(`/product/${product._id}`);
   };
 
   return (
     <>
-      <div className="group bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-        {/* Product Images */}
+      {/* MAIN CARD CONTAINER - Remove onClick from here */}
+      <div
+        className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        // REMOVED: onClick={handleProductClick}
+      >
+        {/* Image Container - Make clickable for product details */}
         <div 
-          className="relative h-64 bg-gray-100 overflow-hidden cursor-pointer"
-          onClick={() => navigate(`/product/${product._id}`)}
+          className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden cursor-pointer"
+          onClick={handleProductClick}
         >
           {productImage ? (
             <img
               src={productImage}
               alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              className={`w-full h-full object-cover transition-transform duration-700 ${
+                isHovered ? "scale-110" : "scale-100"
+              }`}
               onError={(e) => {
                 e.target.onerror = null;
-                e.target.src = 'https://via.placeholder.com/300x300?text=No+Image';
+                e.target.src =
+                  "https://via.placeholder.com/400x400/f3f4f6/9ca3af?text=No+Image";
               }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <ShoppingBag className="w-12 h-12 text-gray-400" />
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer">
+              <div className="text-center">
+                <ShoppingBag className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No image</p>
+              </div>
             </div>
           )}
-          
-          {/* Image Navigation */}
+
+          {/* Top Badges */}
+          <div className="absolute top-4 left-4 flex flex-col gap-2">
+            {product.isFeatured && (
+              <div className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-md">
+                <Sparkles className="w-3 h-3" />
+                <span>Featured</span>
+              </div>
+            )}
+
+            {product.isNewArrival && (
+              <div className="flex items-center gap-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-md">
+                <Zap className="w-3 h-3" />
+                <span>New</span>
+              </div>
+            )}
+          </div>
+
+          {/* Stock Status Badge */}
+          <div
+            className={`absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-semibold border ${stockStatus.color} shadow-sm`}
+          >
+            <span className="mr-1">{stockStatus.icon}</span>
+            {stockStatus.text}
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div
+            className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-3 transition-all duration-300 ${
+              isHovered
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-4"
+            }`}
+          >
+            <button
+              onClick={handleQuickView}
+              className="bg-white p-3 rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200"
+              aria-label="View details"
+            >
+              <Eye className="w-5 h-5 text-gray-700" />
+            </button>
+
+            <button
+              onClick={handleWishlist}
+              disabled={wishlistLoading}
+              className="bg-white p-3 rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 disabled:opacity-50"
+              aria-label="Add to wishlist"
+            >
+              {wishlistLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              ) : (
+                <Heart className="w-5 h-5 text-gray-700" />
+              )}
+            </button>
+
+            <button
+              onClick={handleShare}
+              className="bg-white p-3 rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200"
+              aria-label="Share product"
+            >
+              <Share2 className="w-5 h-5 text-gray-700" />
+            </button>
+          </div>
+
+          {/* Image Dots */}
           {product.images && product.images.length > 1 && (
-            <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 hidden group-hover:flex space-x-2">
               {product.images.map((_, index) => (
                 <button
                   key={index}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentImageIndex(index);
-                  }}
-                  className={`w-2 h-2 rounded-full transition-colors ${
-                    currentImageIndex === index ? 'bg-white' : 'bg-white/50'
+                  onClick={(e) => handleImageDotClick(e, index)}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    currentImageIndex === index
+                      ? "bg-white scale-125"
+                      : "bg-white/50 hover:bg-white/80"
                   }`}
                   aria-label={`View image ${index + 1}`}
                 />
               ))}
             </div>
           )}
-          
-          {/* Quick Action Buttons */}
-          <div className="absolute top-3 right-3 flex flex-col gap-2">
-            {/* Eye Button - Navigate to Product Details */}
-            <button
-              onClick={handleQuickView}
-              className="bg-white/90 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all duration-200 hover:scale-110"
-              aria-label="Quick view"
-              title="Quick View"
-            >
-              <Eye className="w-5 h-5 text-gray-600" />
-            </button>
-            
-            {/* Wishlist Button - SIMPLIFIED: Always shows gray heart */}
-            <button
-              onClick={handleWishlist}
-              disabled={wishlistLoading}
-              className="bg-white/90 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Add to wishlist"
-              title="Add to Wishlist"
-            >
-              {wishlistLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin text-gray-600" />
-              ) : (
-                <Heart className="w-5 h-5 text-gray-600" />
-              )}
-            </button>
-            
-            {/* Share Button */}
-            <button
-              onClick={handleShare}
-              className="bg-white/90 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all duration-200 hover:scale-110"
-              aria-label="Share product"
-              title="Share"
-            >
-              <Share2 className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
-          
-          {/* Top Left Badges */}
-          <div className="absolute top-3 left-3 flex flex-col gap-2">
-            {/* Featured Badge */}
-            {product.isFeatured && (
-              <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
-                Featured
-              </div>
-            )}
-            
-            {/* New Arrival Badge */}
-            {product.isNewArrival && (
-              <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
-                New Arrival
-              </div>
-            )}
-            
-            {/* Best Seller Badge */}
-            {product.isBestSeller && (
-              <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
-                Best Seller
-              </div>
-            )}
-          </div>
-
-          {/* Stock Status Badge */}
-          <div className="absolute bottom-3 left-3">
-            <div className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-sm ${stockStatus.color}`}>
-              {stockStatus.text}
-            </div>
-          </div>
         </div>
 
-        {/* Product Info */}
-        <div className="p-6">
+        {/* Product Info - Make product name and category clickable */}
+        <div className="p-5">
           {/* Category and Location */}
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
-              {product.category}
-            </span>
+          <div className="flex items-center justify-between mb-3">
+            <div 
+              className="flex items-center gap-2 cursor-pointer hover:text-blue-700"
+              onClick={handleProductClick}
+            >
+              <Tag className="w-4 h-4 text-blue-500" />
+              <span className="text-sm font-medium text-blue-600 hover:underline">
+                {product.category}
+              </span>
+            </div>
+
             {product.location && (
-              <div className="flex items-center text-xs text-gray-500">
+              <div className="flex items-center text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
                 <MapPin className="w-3 h-3 mr-1" />
-                {product.location.split(',')[0]}
+                {product.location.split(",")[0]}
               </div>
             )}
           </div>
 
           {/* Product Name - Clickable */}
           <h3 
-            className="font-bold text-lg mb-2 line-clamp-1 hover:text-blue-600 transition-colors cursor-pointer"
-            onClick={() => navigate(`/product/${product._id}`)}
+            className="font-bold text-lg text-gray-900 mb-2 line-clamp-1 hover:text-blue-600 transition-colors cursor-pointer"
+            onClick={handleProductClick}
           >
             {product.name}
           </h3>
-          
-          {/* Rating */}
-          <div className="flex items-center mb-3">
-            <div className="flex mr-2">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={`w-4 h-4 ${
-                    i < Math.floor(product.rating || 0)
-                      ? 'text-amber-400 fill-amber-400'
-                      : 'text-gray-300'
-                  }`}
-                />
-              ))}
-            </div>
-            <span className="text-sm text-gray-600">
-              {product.rating?.toFixed(1) || '0.0'} 
-              {product.reviewCount > 0 && ` (${product.reviewCount})`}
-            </span>
-          </div>
 
           {/* Description Preview */}
           <p className="text-sm text-gray-600 mb-4 line-clamp-2 min-h-[40px]">
-            {product.description || 'No description available'}
+            {product.description ||
+              "A beautiful handcrafted piece made with care and tradition."}
           </p>
 
+          {/* Rating and Reviews */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="flex">{renderStars(product.rating || 0)}</div>
+              <span className="text-sm text-gray-700 font-medium">
+                {product.rating?.toFixed(1) || "0.0"}
+              </span>
+            </div>
+            {product.reviewCount > 0 && (
+              <span className="text-xs text-gray-500">
+                {product.reviewCount} review
+                {product.reviewCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+
           {/* Price */}
-          <div className="mb-6">
-            <div className="text-2xl font-bold text-gray-900">
+          <div className="mb-5">
+            <div className="text-2xl font-bold text-gray-900 mb-1">
               {formatPrice(product.price)}
             </div>
             <div className="text-sm text-gray-500">
-              + Taxes & Shipping
+              Free shipping • 14-day returns
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col gap-3">
-            {/* Express Interest Button */}
+          <div className="flex gap-3">
             <button
               onClick={handleExpressInterest}
               disabled={product.stock === 0}
-              className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center transition-all ${
+              className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center transition-all ${
                 product.stock === 0
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 hover:shadow-lg active:scale-95'
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg hover:shadow-blue-200 active:scale-[0.98]"
               }`}
             >
               <ShoppingBag className="w-5 h-5 mr-2" />
-              {product.stock === 0 ? 'Out of Stock' : 'Express Interest'}
+              {product.stock === 0 ? "Out of Stock" : "Express Interest"}
             </button>
 
-            {/* View Details Button */}
             <button
-              onClick={() => navigate(`/product/${product._id}`)}
-              className="w-full py-3 rounded-lg font-semibold flex items-center justify-center border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all active:scale-95"
+              onClick={handleProductClick}
+              className="px-5 py-3 rounded-xl font-semibold flex items-center justify-center border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 active:scale-[0.98] transition-all"
             >
-              <Info className="w-5 h-5 mr-2" />
-              View Details
+              <Info className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -387,6 +403,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
         isOpen={showOrderModal}
         onClose={() => setShowOrderModal(false)}
         product={productForModal}
+        userId={user?._id}
       />
     </>
   );

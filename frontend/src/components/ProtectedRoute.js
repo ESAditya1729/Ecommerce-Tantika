@@ -1,60 +1,108 @@
 import { Navigate, useLocation } from "react-router-dom";
 
-const ProtectedRoute = ({ children, requireAdmin = false, allowedRoles = [] }) => {
+const ProtectedRoute = ({ children, requireAdmin = false, allowedRoles = [], requireArtisanApproval = false }) => {
   const location = useLocation();
   
-  // Synchronous check - no useEffect, no loading state
   const token = localStorage.getItem("tantika_token");
   const userStr = localStorage.getItem("tantika_user");
 
-  // If no token or user data, redirect to login with return URL
+  // Check if user is authenticated
   if (!token || !userStr) {
-    console.log("❌ No auth data, redirecting to /login");
-    // Pass the current location to redirect back after login
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
   try {
     const user = JSON.parse(userStr);
-    const userRole = user.role;
-    const isAdmin = userRole === "admin" || userRole === "superadmin";
-
-    // ⚠️ CRITICAL FIX: Check for pending_artisan role first!
-    if (userRole === "pending_artisan") {
-      // Only allow access to pending approval page
-      if (location.pathname !== "/artisan/pending-approval") {
-        console.log("❌ Pending artisan accessing restricted route, redirecting to pending-approval");
-        return <Navigate to="/artisan/pending-approval" replace />;
+    
+    // SIMPLE ROLE DETERMINATION
+    let userRole = user.role;
+    
+    // If no role property, determine it
+    if (!userRole) {
+      // Artisan users typically have artisan in username/email
+      const username = user.username || '';
+      const email = user.email || '';
+      
+      if (username.toLowerCase().includes('artisan') || email.toLowerCase().includes('artisan')) {
+        userRole = 'artisan';
+      } else {
+        userRole = 'user';
       }
+      
+      // Update localStorage with determined role
+      user.role = userRole;
+      localStorage.setItem('tantika_user', JSON.stringify(user));
     }
-
-    // If admin access is required but user is not admin
-    if (requireAdmin && !isAdmin) {
-      console.log("❌ Not admin, redirecting to /dashboard");
+    
+    // ==============================================
+    // RESTRICT ARTISANS FROM SHOP/STORE PAGES
+    // ==============================================
+    const shopRoutes = ['/shop', '/products', '/store', '/catalog'];
+    const isShopRoute = shopRoutes.some(route => location.pathname.startsWith(route));
+    
+    if ((userRole === 'artisan' || userRole === 'pending_artisan') && isShopRoute) {
+      // Artisans should not access the main shop - redirect to artisan dashboard
+      console.log('Artisan attempting to access shop, redirecting to artisan dashboard');
+      return <Navigate to="/artisan/dashboard" replace />;
+    }
+    
+    // ==============================================
+    // SPECIAL CASE: ARTISAN ACCESSING /dashboard
+    // ==============================================
+    if ((userRole === 'artisan' || userRole === 'pending_artisan') && location.pathname === '/dashboard') {
+      return <Navigate to="/artisan/dashboard" replace />;
+    }
+    
+    // ==============================================
+    // SPECIAL CASE: REGULAR USER ACCESSING ARTISAN ROUTES
+    // ==============================================
+    const artisanRoutes = ['/artisan/', '/inventory', '/my-products', '/seller'];
+    const isArtisanRoute = artisanRoutes.some(route => location.pathname.startsWith(route));
+    
+    if (userRole === 'user' && isArtisanRoute) {
       return <Navigate to="/dashboard" replace />;
     }
-
-    // ✅ Optional: Role-based access control with allowedRoles
-    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
-      console.log(`❌ Role ${userRole} not in allowed roles: ${allowedRoles}`);
-      
-      // Redirect based on role
-      if (userRole === "pending_artisan") {
-        return <Navigate to="/artisan/pending-approval" replace />;
-      } else if (isAdmin) {
-        return <Navigate to="/admin/Addashboard" replace />;
+    
+    // ==============================================
+    // ROLE-BASED ACCESS FOR /artisan/dashboard
+    // ==============================================
+    if (location.pathname === '/artisan/dashboard' || isArtisanRoute) {
+      // Allow only artisans and pending_artisans
+      if (userRole === 'artisan' || userRole === 'pending_artisan') {
+        return children;
       } else {
         return <Navigate to="/dashboard" replace />;
       }
     }
-
-    // If everything is good, render the children
-    console.log("✅ Access granted for role:", userRole);
+    
+    // ==============================================
+    // ALLOWED ROLES CHECK
+    // ==============================================
+    if (allowedRoles.length > 0) {
+      if (!allowedRoles.includes(userRole)) {
+        // Redirect based on role
+        if (userRole === 'artisan' || userRole === 'pending_artisan') {
+          return <Navigate to="/artisan/dashboard" replace />;
+        } else {
+          return <Navigate to="/dashboard" replace />;
+        }
+      }
+    }
+    
+    // ==============================================
+    // REQUIRE ADMIN CHECK
+    // ==============================================
+    if (requireAdmin && userRole !== 'admin' && userRole !== 'superadmin') {
+      return <Navigate to="/dashboard" replace />;
+    }
+    
+    // ==============================================
+    // ALLOW ACCESS
+    // ==============================================
     return children;
 
   } catch (error) {
-    console.error("❌ Error parsing user data:", error);
-    // Clear invalid data
+    console.error('ProtectedRoute error:', error);
     localStorage.removeItem("tantika_token");
     localStorage.removeItem("tantika_user");
     return <Navigate to="/login" replace />;
