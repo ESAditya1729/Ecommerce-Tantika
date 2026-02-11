@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate,useLocation  } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Mail,
   Lock,
@@ -9,11 +9,11 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
-import authServices from '../services/authServices';
-
+import authServices from "../services/authServices";
+import Ad from "../components/AdScript";
 const Login = () => {
   const navigate = useNavigate();
-   const location = useLocation();
+  const location = useLocation();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -30,11 +30,11 @@ const Login = () => {
   useEffect(() => {
     const remembered = localStorage.getItem("rememberMe");
     const rememberedEmail = localStorage.getItem("rememberedEmail");
-    
+
     if (remembered === "true" && rememberedEmail) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        email: rememberedEmail
+        email: rememberedEmail,
       }));
       setRememberMe(true);
     }
@@ -78,90 +78,93 @@ const Login = () => {
     }
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  if (!validateForm()) {
-    return;
-  }
-
-  setIsSubmitting(true);
-  setLoginMessage("");
-  setErrors({});
-
-  try {
-    const credentials = {
-      email: formData.email.toLowerCase().trim(),
-      password: formData.password,
-    };
-
-    // Use authServices for login
-    const result = await authServices.login(credentials);
-
-    if (result.success) {
-      setLoginMessage("✅ Login successful! Redirecting...");
-
-      // Store remember me preference
-      if (rememberMe) {
-        localStorage.setItem("rememberMe", "true");
-        localStorage.setItem("rememberedEmail", formData.email);
-      } else {
-        localStorage.removeItem("rememberMe");
-        localStorage.removeItem("rememberedEmail");
-      }
-
-      // ✅ CRITICAL: Store token and user data synchronously
-      localStorage.setItem('tantika_token', result.token);
-      localStorage.setItem('tantika_user', JSON.stringify(result.user));
-      
-      // ✅ CHECK FOR SAVED REDIRECT PATH FROM PROTECTED ROUTE
-      const savedRedirectPath = sessionStorage.getItem('redirectAfterLogin');
-      
-      // Clear it immediately to prevent reuse
-      sessionStorage.removeItem('redirectAfterLogin');
-      
-      // ✅ Determine redirect path - PRIORITIZE saved path first
-      let redirectPath = savedRedirectPath; // Check if there's a saved path
-      
-      // If no saved path, determine based on user role
-      if (!redirectPath) {
-        redirectPath = "/dashboard"; // Default for regular users
-        
-        // Check if user has admin role
-        if (result.user.role === "admin" || result.user.role === "superadmin") {
-          redirectPath = "/admin/Addashboard"; // Admin dashboard
-        }
-        if (result.user.role === "pending_artisan") {
-          redirectPath = "/artisan/pending-approval"; // Pending approval page
-        }
-        if (result.user.role === "artisan") {
-          redirectPath = "/artisan/dashboard"; // Artisan dashboard
-        }
-      }
-      
-      console.log('Redirecting to saved/role-based path:', redirectPath); // Debug log
-      
-      // ✅ Use window.location.href for hard navigation
-      setTimeout(() => {
-        window.location.href = redirectPath;
-      }, 100);
-      
-    } else {
-      throw new Error(result.message || "Login failed");
+    if (!validateForm()) {
+      return;
     }
-  } catch (error) {
-    // Handle different error formats
-    const errorMessage = error.response?.data?.message || 
-                        error.message || 
-                        "Login failed. Please check your credentials.";
-    
-    setErrors({ 
-      submit: errorMessage 
-    });
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+
+    setIsSubmitting(true);
+    setLoginMessage("");
+    setErrors({});
+
+    try {
+      const credentials = {
+        email: formData.email.toLowerCase().trim(),
+        password: formData.password,
+      };
+
+      // Use authServices for login
+      const result = await authServices.login(credentials);
+
+      if (result.success) {
+        setLoginMessage("✅ Login successful! Redirecting...");
+
+        // Store remember me preference
+        if (rememberMe) {
+          localStorage.setItem("rememberMe", "true");
+          localStorage.setItem("rememberedEmail", formData.email);
+        } else {
+          localStorage.removeItem("rememberMe");
+          localStorage.removeItem("rememberedEmail");
+        }
+
+        // ✅ CRITICAL: Store token and user data synchronously
+        localStorage.setItem("tantika_token", result.token);
+        localStorage.setItem("tantika_user", JSON.stringify(result.user));
+
+        // ✅ CHECK FOR SAVED REDIRECT PATH FROM PROTECTED ROUTE
+        const savedRedirectPath = sessionStorage.getItem("redirectAfterLogin");
+
+        // Clear it immediately to prevent reuse
+        sessionStorage.removeItem("redirectAfterLogin");
+
+        // ✅ Determine redirect path - PRIORITIZE saved path first
+        let redirectPath = savedRedirectPath; // Check if there's a saved path
+
+        // If no saved path, determine based on user role
+        if (!redirectPath) {
+          redirectPath = "/dashboard"; // Default for regular users
+
+          // Check if user has admin role
+          if (
+            result.user.role === "admin" ||
+            result.user.role === "superadmin"
+          ) {
+            redirectPath = "/admin/Addashboard"; // Admin dashboard
+          }
+          if (result.user.role === "pending_artisan") {
+            redirectPath = "/artisan/pending-approval"; // Pending approval page
+          }
+          if (result.user.role === "artisan") {
+            redirectPath = "/artisan/dashboard"; // Artisan dashboard
+          }
+        }
+
+        console.log("Redirecting to saved/role-based path:", redirectPath); // Debug log
+
+        // ✅ Use window.location.href for hard navigation
+        setTimeout(() => {
+          window.location.href = redirectPath;
+        }, 100);
+      } else {
+        throw new Error(result.message || "Login failed");
+      }
+    } catch (error) {
+      // Handle different error formats
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Login failed. Please check your credentials.";
+
+      setErrors({
+        submit: errorMessage,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleForgotPassword = () => {
     // You can implement this later
@@ -203,7 +206,9 @@ const handleSubmit = async (e) => {
                   <h3 className="font-bold text-green-800 text-lg">
                     {loginMessage}
                   </h3>
-                  <p className="text-green-600 mt-1">Taking you to your dashboard...</p>
+                  <p className="text-green-600 mt-1">
+                    Taking you to your dashboard...
+                  </p>
                 </div>
               </div>
             </div>
@@ -216,10 +221,20 @@ const handleSubmit = async (e) => {
               {errors.submit && (
                 <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
                   <div className="flex items-center">
-                    <svg className="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg
+                      className="w-5 h-5 text-red-600 mr-2"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
                     </svg>
-                    <p className="text-red-600 text-sm font-medium">{errors.submit}</p>
+                    <p className="text-red-600 text-sm font-medium">
+                      {errors.submit}
+                    </p>
                   </div>
                 </div>
               )}
@@ -246,8 +261,16 @@ const handleSubmit = async (e) => {
                 />
                 {errors.email && (
                   <p className="mt-2 text-sm text-red-600 flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                     {errors.email}
                   </p>
@@ -289,7 +312,9 @@ const handleSubmit = async (e) => {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-purple-600 transition-colors disabled:opacity-50"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                     disabled={isSubmitting}
                   >
                     {showPassword ? (
@@ -301,8 +326,16 @@ const handleSubmit = async (e) => {
                 </div>
                 {errors.password && (
                   <p className="mt-2 text-sm text-red-600 flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                     {errors.password}
                   </p>
@@ -335,9 +368,23 @@ const handleSubmit = async (e) => {
 
                 {isSubmitting ? (
                   <span className="relative flex items-center">
-                    <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    <svg
+                      className="animate-spin h-5 w-5 mr-3"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                     Signing In...
                   </span>
@@ -396,6 +443,11 @@ const handleSubmit = async (e) => {
               </li>
             </ul>
           </div>
+
+          <Ad
+            src="https://pl28697561.effectivegatecpm.com/31/79/d5/3179d54042b94f476e298e21a72fa531.js"
+            className="mt-8"
+          />
 
           {/* Footer Note */}
           <div className="mt-8 text-center">
