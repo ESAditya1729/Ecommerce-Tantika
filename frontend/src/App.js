@@ -91,11 +91,11 @@ function App() {
         <Route 
           path="/dashboard" 
           element={
-            <DashboardLayout>
+            <MainLayout >
               <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
-            </DashboardLayout>
+            </MainLayout>
           } 
         />
         
