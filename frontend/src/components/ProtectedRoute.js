@@ -1,13 +1,34 @@
 import { Navigate, useLocation } from "react-router-dom";
 
-const ProtectedRoute = ({ children, requireAdmin = false, allowedRoles = [], requireArtisanApproval = false }) => {
+const ProtectedRoute = ({ 
+  children, 
+  requireAdmin = false, 
+  allowedRoles = [], 
+  requireArtisanApproval = false 
+}) => {
   const location = useLocation();
   
   const token = localStorage.getItem("tantika_token");
   const userStr = localStorage.getItem("tantika_user");
 
+  // ==============================================
+  // CHECK FOR REDIRECT AFTER LOGIN
+  // ==============================================
+  // Check if there's a saved redirect path in sessionStorage (for shared links)
+  const savedRedirectPath = sessionStorage.getItem("redirectAfterLogin");
+  
+  // If we're on the login page and there's a saved redirect, we don't want to process it here
+  // This check is for protected routes
+
   // Check if user is authenticated
   if (!token || !userStr) {
+    // Store the current path they tried to access
+    // Use sessionStorage so it persists through the login/register flow
+    // but gets cleared when the tab is closed
+    sessionStorage.setItem("redirectAfterLogin", location.pathname + location.search);
+    
+    console.log('Protected route accessed, saving redirect path:', location.pathname + location.search);
+    
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
@@ -32,6 +53,22 @@ const ProtectedRoute = ({ children, requireAdmin = false, allowedRoles = [], req
       // Update localStorage with determined role
       user.role = userRole;
       localStorage.setItem('tantika_user', JSON.stringify(user));
+    }
+    
+    // ==============================================
+    // CHECK FOR PENDING REDIRECT AFTER LOGIN/REGISTER
+    // ==============================================
+    // After successful authentication, check if there's a saved redirect path
+    const redirectPath = sessionStorage.getItem("redirectAfterLogin");
+    
+    // Clear it immediately to prevent infinite loops
+    sessionStorage.removeItem("redirectAfterLogin");
+    
+    // If there's a saved redirect path and we're not already on that path,
+    // redirect the user to their intended destination
+    if (redirectPath && redirectPath !== location.pathname) {
+      console.log('Redirecting to saved path:', redirectPath);
+      return <Navigate to={redirectPath} replace />;
     }
     
     // ==============================================

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate,useLocation } from "react-router-dom";
 import {
   Mail,
   Lock,
@@ -30,6 +30,7 @@ const api = axios.create({
 
 const Register = () => {
   const navigate = useNavigate();
+   const location = useLocation();
 
   // State for registration type
   const [registrationType, setRegistrationType] = useState("user"); // 'user' or 'artisan'
@@ -289,7 +290,7 @@ const handleSubmit = async (e) => {
       };
       payload.specialization = artisanData.specialization || [];
       
-      // ✅ FIXED: Parse years of experience
+      // Parse years of experience
       let yearsExp = 0;
       if (artisanData.yearsOfExperience) {
         if (artisanData.yearsOfExperience.includes('-')) {
@@ -308,7 +309,7 @@ const handleSubmit = async (e) => {
       payload.website = artisanData.website || "";
       payload.socialLinks = {}; // Optional
       
-      // ✅ FIXED: Add bankDetails with empty defaults (optional)
+      // Add bankDetails with empty defaults (optional)
       payload.bankDetails = {
         accountName: "",
         accountNumber: "",
@@ -323,7 +324,7 @@ const handleSubmit = async (e) => {
 
     console.log("Sending to:", endpoint, "with payload:", payload);
 
-    // ✅ Use the axios instance with correct base URL
+    // Use the axios instance with correct base URL
     const response = await api.post(endpoint, payload);
 
     if (response.data.success) {
@@ -334,12 +335,36 @@ const handleSubmit = async (e) => {
 
       setSuccessMessage(message);
 
+      // ✅ STORE TOKEN AND USER DATA IF API RETURNS THEM
+      if (response.data.token) {
+        localStorage.setItem('tantika_token', response.data.token);
+      }
+      if (response.data.user) {
+        localStorage.setItem('tantika_user', JSON.stringify(response.data.user));
+      }
+
+      // ✅ CHECK FOR SAVED REDIRECT PATH FROM PROTECTED ROUTE
+      const savedRedirectPath = sessionStorage.getItem('redirectAfterLogin');
+      
+      // Clear it immediately to prevent reuse
+      sessionStorage.removeItem('redirectAfterLogin');
+      
+      console.log('Saved redirect path:', savedRedirectPath); // Debug log
+
       setTimeout(() => {
-        navigate(
-          registrationType === "artisan"
-            ? "/artisan/pending-approval"
-            : "/dashboard",
-        );
+        if (savedRedirectPath) {
+          // If there's a saved path, redirect there
+          console.log('Redirecting to saved path:', savedRedirectPath);
+          window.location.href = savedRedirectPath;
+        } else {
+          // Otherwise, go to role-specific page
+          console.log('Redirecting to default role page');
+          if (registrationType === "artisan") {
+            window.location.href = "/artisan/pending-approval";
+          } else {
+            window.location.href = "/dashboard";
+          }
+        }
       }, 2000);
     }
   } catch (error) {

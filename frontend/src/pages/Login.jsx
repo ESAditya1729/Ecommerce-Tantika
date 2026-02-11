@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate,useLocation  } from "react-router-dom";
 import {
   Mail,
   Lock,
@@ -13,6 +13,7 @@ import authServices from '../services/authServices';
 
 const Login = () => {
   const navigate = useNavigate();
+   const location = useLocation();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -113,22 +114,34 @@ const handleSubmit = async (e) => {
       localStorage.setItem('tantika_token', result.token);
       localStorage.setItem('tantika_user', JSON.stringify(result.user));
       
-      // ✅ Determine redirect path based on user role
-      let redirectPath = "/dashboard"; // Default for regular users
+      // ✅ CHECK FOR SAVED REDIRECT PATH FROM PROTECTED ROUTE
+      const savedRedirectPath = sessionStorage.getItem('redirectAfterLogin');
       
-      // Check if user has admin role
-      if (result.user.role === "admin" || result.user.role === "superadmin") {
-        redirectPath = "/admin/Addashboard"; // Admin dashboard
-      }
-      if (result.user.role === "pending_artisan") {
-        redirectPath = "/artisan/pending-approval"; // Pending approval page
-      }
-      if (result.user.role === "artisan") {
-        redirectPath = "/artisan/dashboard"; // Artisan dashboard
+      // Clear it immediately to prevent reuse
+      sessionStorage.removeItem('redirectAfterLogin');
+      
+      // ✅ Determine redirect path - PRIORITIZE saved path first
+      let redirectPath = savedRedirectPath; // Check if there's a saved path
+      
+      // If no saved path, determine based on user role
+      if (!redirectPath) {
+        redirectPath = "/dashboard"; // Default for regular users
+        
+        // Check if user has admin role
+        if (result.user.role === "admin" || result.user.role === "superadmin") {
+          redirectPath = "/admin/Addashboard"; // Admin dashboard
+        }
+        if (result.user.role === "pending_artisan") {
+          redirectPath = "/artisan/pending-approval"; // Pending approval page
+        }
+        if (result.user.role === "artisan") {
+          redirectPath = "/artisan/dashboard"; // Artisan dashboard
+        }
       }
       
-      // ✅ CRITICAL FIX: Use window.location.href for hard navigation
-      // This ensures the app fully reloads and ProtectedRoute reads fresh localStorage
+      console.log('Redirecting to saved/role-based path:', redirectPath); // Debug log
+      
+      // ✅ Use window.location.href for hard navigation
       setTimeout(() => {
         window.location.href = redirectPath;
       }, 100);
