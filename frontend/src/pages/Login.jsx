@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import authServices from "../services/authServices";
-import Ad from "../components/AdScript";
+import BannerAd from "../components/AdScript";
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -444,10 +444,14 @@ const Login = () => {
             </ul>
           </div>
 
-          <Ad
-            src="https://pl28697561.effectivegatecpm.com/31/79/d5/3179d54042b94f476e298e21a72fa531.js"
-            className="mt-8"
+          <div className="mt-8 flex justify-center">
+          <BannerAd 
+            key="708f1310e8b739077a59073d869d1360"
+            height={90}
+            width={728}
+            className="rounded-lg shadow-md"
           />
+        </div>
 
           {/* Footer Note */}
           <div className="mt-8 text-center">
