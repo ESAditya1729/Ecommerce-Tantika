@@ -435,7 +435,7 @@ const Products = () => {
           </motion.div>
         )}
 
-        {/* Tags Filter */}
+        {/* Tags Filter
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-3">
             <Tag className="w-5 h-5 text-gray-500" />
@@ -461,7 +461,7 @@ const Products = () => {
               </motion.button>
             ))}
           </div>
-        </div>
+        </div> */}
 
         {/* Error Display */}
         <AnimatePresence>

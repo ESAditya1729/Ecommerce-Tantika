@@ -4,13 +4,11 @@ import {
   Star,
   MapPin,
   Eye,
-  Heart,
   Share2,
   Info,
   Tag,
   Sparkles,
   Zap,
-  Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,7 +16,6 @@ import OrderModal from "../Modals/OrderModal";
 
 const ProductCard = ({ product, onOrderClick, onShare }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [wishlistLoading, setWishlistLoading] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [user, setUser] = useState(null);
@@ -40,9 +37,8 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     }
   };
 
-  // Handle express interest - FIXED VERSION
+  // Handle express interest
   const handleExpressInterest = (e) => {
-    // CRITICAL: Prevent ALL default and stop ALL propagation
     e.preventDefault();
     e.stopPropagation();
     e.nativeEvent.stopImmediatePropagation();
@@ -65,26 +61,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     }
   };
 
-  // Handle wishlist - FIXED
-  const handleWishlist = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.nativeEvent.stopImmediatePropagation();
-
-    const token = localStorage.getItem("tantika_token");
-    if (!token) {
-      navigate("/login", {
-        state: { from: "wishlist", productId: product._id },
-      });
-      return;
-    }
-
-    setWishlistLoading(true);
-    setTimeout(() => setWishlistLoading(false), 1000);
-    alert("Wishlist functionality coming soon!");
-  };
-
-  // Handle share - FIXED
+  // Handle share
   const handleShare = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -108,7 +85,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     }
   };
 
-  // Quick view - FIXED
+  // Quick view
   const handleQuickView = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -116,7 +93,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     navigate(`/product/${product._id}`);
   };
 
-  // Image dot click - FIXED
+  // Image dot click
   const handleImageDotClick = (e, index) => {
     e.preventDefault();
     e.stopPropagation();
@@ -188,19 +165,18 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     stock: product.stock || 0
   };
 
-  // Navigate to product details - DON'T attach this to the entire card
+  // Navigate to product details
   const handleProductClick = () => {
     navigate(`/product/${product._id}`);
   };
 
   return (
     <>
-      {/* MAIN CARD CONTAINER - Remove onClick from here */}
+      {/* MAIN CARD CONTAINER */}
       <div
         className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        // REMOVED: onClick={handleProductClick}
       >
         {/* Image Container - Make clickable for product details */}
         <div 
@@ -254,7 +230,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             {stockStatus.text}
           </div>
 
-          {/* Quick Action Buttons */}
+          {/* Quick Action Buttons - Wishlist REMOVED */}
           <div
             className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-3 transition-all duration-300 ${
               isHovered
@@ -270,18 +246,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
               <Eye className="w-5 h-5 text-gray-700" />
             </button>
 
-            <button
-              onClick={handleWishlist}
-              disabled={wishlistLoading}
-              className="bg-white p-3 rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 disabled:opacity-50"
-              aria-label="Add to wishlist"
-            >
-              {wishlistLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-              ) : (
-                <Heart className="w-5 h-5 text-gray-700" />
-              )}
-            </button>
+            {/* WISHLIST BUTTON REMOVED */}
 
             <button
               onClick={handleShare}
@@ -311,7 +276,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
           )}
         </div>
 
-        {/* Product Info - Make product name and category clickable */}
+        {/* Product Info */}
         <div className="p-5">
           {/* Category and Location */}
           <div className="flex items-center justify-between mb-3">
