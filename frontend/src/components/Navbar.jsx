@@ -185,7 +185,7 @@ const getDashboardPath = () => {
 
           {/* Right Side - Authentication Buttons */}
           <div className="flex items-center space-x-6">
-            {/* Cart Icon - Only show if authenticated */}
+            {/* Cart Icon - Only show if authenticated
             {isAuthenticated && (
               <Link to="/cart" className="relative hidden md:block">
                 <ShoppingBag className="w-7 h-7 text-gray-700 hover:text-blue-600" />
@@ -193,7 +193,7 @@ const getDashboardPath = () => {
                   0
                 </span>
               </Link>
-            )}
+            )} */}
 
             {/* Desktop Authentication Buttons - Conditional */}
             <div className="hidden md:flex items-center space-x-4">
