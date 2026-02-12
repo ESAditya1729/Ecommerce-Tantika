@@ -1,6 +1,7 @@
 import { Sparkles, Heart, Shield, Palette, Brush, Award } from "lucide-react";
 import { motion } from "framer-motion";
 import TantikaLogo from "../../Assets/TantikaLogo.png";
+import BannerAd from '../../components/AdScript';
 
 const ShopHero = () => {
   return (
@@ -195,6 +196,14 @@ const ShopHero = () => {
             transition={{ delay: 0.4 }}
             className="text-center mt-10 pt-8 border-t border-gray-100"
           >
+            <div className="mt-4 flex justify-center">
+          <BannerAd 
+            key="708f1310e8b739077a59073d869d1360"
+            height={90}
+            width={728}
+            className="rounded-lg shadow-md"
+          />
+        </div>
             <p className="text-gray-600 mb-4">Discover the beauty of handcrafted excellence</p>
             <motion.div
               animate={{ y: [0, 5, 0] }}

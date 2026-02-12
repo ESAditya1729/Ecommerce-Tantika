@@ -1,4 +1,5 @@
 import { Truck, Shield, RefreshCw, Heart } from 'lucide-react';
+import BannerAd from '../../components/AdScript';
 
 const FeaturesSection = () => {
   const features = [
@@ -27,6 +28,15 @@ const FeaturesSection = () => {
   return (
     <section className="py-16 bg-white">
       <div className="container mx-auto px-4">
+        <div className="mt-4 flex justify-center">
+          <BannerAd 
+            key="708f1310e8b739077a59073d869d1360"
+            height={90}
+            width={728}
+            className="rounded-lg shadow-md"
+          />
+        </div>
+        <br></br>
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold mb-4">Why Choose তন্তিকা?</h2>
           <p className="text-gray-600 max-w-2xl mx-auto">

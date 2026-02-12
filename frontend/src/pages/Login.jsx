@@ -214,6 +214,16 @@ const Login = () => {
             </div>
           )}
 
+          <div className="mt-8 flex justify-center">
+          <BannerAd 
+            key="708f1310e8b739077a59073d869d1360"
+            height={90}
+            width={728}
+            className="rounded-lg shadow-md"
+          />
+        </div>
+        <br></br>
+
           {/* Form Card */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8 md:p-10 border border-white/50">
             <form onSubmit={handleSubmit} noValidate>
@@ -443,15 +453,6 @@ const Login = () => {
               </li>
             </ul>
           </div>
-
-          <div className="mt-8 flex justify-center">
-          <BannerAd 
-            key="708f1310e8b739077a59073d869d1360"
-            height={90}
-            width={728}
-            className="rounded-lg shadow-md"
-          />
-        </div>
 
           {/* Footer Note */}
           <div className="mt-8 text-center">

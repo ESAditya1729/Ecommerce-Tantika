@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import ShopHero from "../components/Shop/ShopHero";
 import ProductFilters from "../components/Shop/ProductFilters";
 import ProductGrid from "../components/Shop/ProductGrid";
@@ -30,26 +31,42 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 const Products = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  
   // State management
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState(["All"]);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [sortBy, setSortBy] = useState("featured");
-  const [priceRange, setPriceRange] = useState({ min: 0, max: 5000 });
-  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState(
+    searchParams.get("sort") || "featured"
+  );
+  const [priceRange, setPriceRange] = useState({ 
+    min: parseInt(searchParams.get("minPrice")) || 0, 
+    max: parseInt(searchParams.get("maxPrice")) || 5000 
+  });
+  const [currentPage, setCurrentPage] = useState(
+    parseInt(searchParams.get("page")) || 1
+  );
   const [totalProducts, setTotalProducts] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchType, setSearchType] = useState("product");
+  const [searchQuery, setSearchQuery] = useState(
+    searchParams.get("search") || ""
+  );
+  const [searchType, setSearchType] = useState(
+    searchParams.get("searchType") || "product"
+  );
   const [viewMode, setViewMode] = useState("grid");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [selectedTags, setSelectedTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState(
+    searchParams.get("tags")?.split(",") || []
+  );
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [stats, setStats] = useState(null);
   const [userRole, setUserRole] = useState("user");
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
   const PRODUCTS_PER_PAGE = 12;
@@ -87,6 +104,120 @@ const Products = () => {
     { icon: Sparkles, text: "Handcrafted" },
   ];
 
+  // Function to match URL category with actual category names
+  const matchCategoryFromURL = useCallback((urlCategory, availableCategories) => {
+    if (!urlCategory || availableCategories.length <= 1) return "All";
+    
+    // Special case mappings for common categories
+    const specialMappings = {
+      'textiles-clothing': 'Textiles & Clothing',
+      'textiles-and-clothing': 'Textiles & Clothing',
+      'textiles': 'Textiles & Clothing',
+      'clothing': 'Textiles & Clothing',
+      'home-decor': 'Home Decor',
+      'home-and-decor': 'Home Decor',
+      'home': 'Home Decor',
+      'decor': 'Home Decor',
+      'art-craft': 'Art & Craft',
+      'art-and-craft': 'Art & Craft',
+      'art': 'Art & Craft',
+      'craft': 'Art & Craft',
+      'food-sweets': 'Food & Sweets',
+      'food-and-sweets': 'Food & Sweets',
+      'food': 'Food & Sweets',
+      'sweets': 'Food & Sweets',
+      'jewelry': 'Jewelry',
+      'jewellery': 'Jewelry'
+    };
+    
+    // Check special mappings first
+    if (specialMappings[urlCategory]) {
+      const match = availableCategories.find(cat => cat === specialMappings[urlCategory]);
+      if (match) return match;
+    }
+    
+    // Try multiple formats
+    const searchFormats = [
+      urlCategory, // as-is
+      urlCategory.replace(/-/g, ' '), // spaces instead of hyphens
+      urlCategory.replace(/-and-/g, ' & ').replace(/-/g, ' '), // Handle 'and' vs '&'
+      urlCategory.split('-').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' '), // Capitalized with spaces
+    ];
+    
+    // Try to find a match in available categories
+    for (const format of searchFormats) {
+      const match = availableCategories.find(
+        cat => cat.toLowerCase() === format.toLowerCase()
+      );
+      if (match) return match;
+    }
+    
+    // Try partial matches
+    for (const cat of availableCategories) {
+      const catSlug = cat.toLowerCase().replace(/ & /g, '-and-').replace(/ /g, '-');
+      if (catSlug.includes(urlCategory) || urlCategory.includes(catSlug)) {
+        return cat;
+      }
+    }
+    
+    return "All";
+  }, []);
+
+  // Format category name for URL
+  const formatCategoryForUrl = useCallback((categoryName) => {
+    if (categoryName === "All") return null;
+    return categoryName
+      .toLowerCase()
+      .replace(/ & /g, '-and-')
+      .replace(/ /g, '-');
+  }, []);
+
+  // Update URL when filters change
+  const updateURLParams = useCallback(() => {
+    const params = new URLSearchParams();
+    
+    const formattedCategory = formatCategoryForUrl(selectedCategory);
+    if (formattedCategory) {
+      params.set("category", formattedCategory);
+    }
+    
+    if (sortBy !== "featured") {
+      params.set("sort", sortBy);
+    }
+    
+    if (priceRange.min > 0) {
+      params.set("minPrice", priceRange.min.toString());
+    }
+    
+    if (priceRange.max < 5000) {
+      params.set("maxPrice", priceRange.max.toString());
+    }
+    
+    if (currentPage > 1) {
+      params.set("page", currentPage.toString());
+    }
+    
+    if (searchQuery.trim()) {
+      params.set("search", searchQuery.trim());
+      params.set("searchType", searchType);
+    }
+    
+    if (selectedTags.length > 0) {
+      params.set("tags", selectedTags.join(","));
+    }
+    
+    setSearchParams(params, { replace: true });
+  }, [selectedCategory, sortBy, priceRange, currentPage, searchQuery, searchType, selectedTags, setSearchParams, formatCategoryForUrl]);
+
+  // Update URL whenever filters change (but not on initial load)
+  useEffect(() => {
+    if (!isInitialLoad && categoriesLoaded) {
+      updateURLParams();
+    }
+  }, [selectedCategory, sortBy, priceRange.min, priceRange.max, currentPage, searchQuery, searchType, selectedTags, updateURLParams, isInitialLoad, categoriesLoaded]);
+
   // Get user role from localStorage
   useEffect(() => {
     const userStr = localStorage.getItem("tantika_user");
@@ -118,10 +249,6 @@ const Products = () => {
       if (searchQuery.trim()) {
         params.append("search", searchQuery.trim());
         params.append("searchType", searchType);
-        console.log("🔍 Sending search:", {
-          search: searchQuery.trim(),
-          searchType: searchType,
-        });
       }
 
       if (selectedCategory !== "All") {
@@ -135,18 +262,17 @@ const Products = () => {
         params.append("maxPrice", priceRange.max.toString());
       }
 
-      // Add tags to query
       if (selectedTags.length > 0) {
         params.append("tags", selectedTags.join(","));
       }
 
-      // Sorting logic - Map frontend sort options to backend fields
+      // Sorting logic
       const sortMap = {
         featured: { sort: "createdAt", order: "desc" },
         "price-low": { sort: "price", order: "asc" },
         "price-high": { sort: "price", order: "desc" },
         newest: { sort: "createdAt", order: "desc" },
-        popular: { sort: "sales", order: "desc" }, // Using 'sales' as shown in response
+        popular: { sort: "sales", order: "desc" },
         rating: { sort: "rating", order: "desc" },
       };
 
@@ -154,9 +280,8 @@ const Products = () => {
       params.append("sort", sortConfig.sort);
       params.append("order", sortConfig.order);
 
-      // Fetch products
       const url = `${API_URL}/products?${params.toString()}`;
-      console.log("📡 API Call URL:", url);
+      console.log("📡 Fetching products with URL:", url);
 
       const res = await fetch(url);
 
@@ -166,27 +291,16 @@ const Products = () => {
 
       const data = await res.json();
 
-      console.log("📊 API Response:", {
-        success: data.success,
-        count: data.count,
-        total: data.total,
-        productsFound: data.data?.length,
-        dataStructure: Object.keys(data),
-      });
-
       if (data.success) {
-        // FIXED: Using data.data instead of data.products
         setProducts(data.data || []);
         setTotalProducts(data.total || 0);
         setTotalPages(data.totalPages || 1);
-        // Only set stats if user is admin
+        
         if (isAdminUser) {
           setStats(data.stats || null);
         }
 
-        // Reset to page 1 if no products found on current page
         if (data.data?.length === 0 && currentPage > 1 && data.total > 0) {
-          console.log("No data on current page, redirecting to page 1...");
           setCurrentPage(1);
         }
       } else {
@@ -207,7 +321,8 @@ const Products = () => {
     currentPage,
     selectedCategory,
     sortBy,
-    priceRange,
+    priceRange.min,
+    priceRange.max,
     searchQuery,
     searchType,
     selectedTags,
@@ -267,6 +382,7 @@ const Products = () => {
     setSelectedTags([]);
     setCurrentPage(1);
     setIsFiltersOpen(false);
+    setSearchParams({});
   };
 
   // Handle page change
@@ -276,11 +392,61 @@ const Products = () => {
     }
   };
 
-  // Initial load and when dependencies change
+  // Fetch categories on initial load
   useEffect(() => {
-    if (isInitialLoad) {
-      fetchData();
-    } else {
+    const fetchCategories = async () => {
+      try {
+        const catRes = await fetch(`${API_URL}/products/categories`);
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          if (catData.success) {
+            const categoryNames = catData.data
+              .filter(cat => cat.name !== "All")
+              .map((cat) => cat.name);
+            
+            const allCategories = ["All", ...categoryNames];
+            setCategories(allCategories);
+            
+            // Now that categories are loaded, match and set the URL category
+            const urlCategory = searchParams.get("category");
+            if (urlCategory) {
+              const matchedCategory = matchCategoryFromURL(urlCategory, allCategories);
+              if (matchedCategory !== "All") {
+                console.log(`🎯 Setting category from URL: ${urlCategory} -> ${matchedCategory}`);
+                setSelectedCategory(matchedCategory);
+              }
+            }
+            
+            setCategoriesLoaded(true);
+          }
+        }
+      } catch (catErr) {
+        console.warn("Failed to fetch categories", catErr);
+        // Fallback to hardcoded categories
+        const fallbackCategories = ["All", "Textiles & Clothing", "Home Decor", "Art & Craft", "Food & Sweets", "Jewelry"];
+        setCategories(fallbackCategories);
+        
+        const urlCategory = searchParams.get("category");
+        if (urlCategory) {
+          const matchedCategory = matchCategoryFromURL(urlCategory, fallbackCategories);
+          if (matchedCategory !== "All") {
+            console.log(`🎯 Setting category from URL (fallback): ${urlCategory} -> ${matchedCategory}`);
+            setSelectedCategory(matchedCategory);
+          }
+        }
+        
+        setCategoriesLoaded(true);
+      }
+    };
+
+    if (!categoriesLoaded) {
+      fetchCategories();
+    }
+  }, [API_URL, searchParams, matchCategoryFromURL, categoriesLoaded]);
+
+  // Fetch products when dependencies change
+  useEffect(() => {
+    if (categoriesLoaded) {
       const timeoutId = setTimeout(() => {
         fetchData();
       }, 300);
@@ -289,7 +455,7 @@ const Products = () => {
     }
   }, [
     fetchData,
-    isInitialLoad,
+    categoriesLoaded,
     currentPage,
     selectedCategory,
     sortBy,
@@ -299,28 +465,6 @@ const Products = () => {
     searchType,
     selectedTags,
   ]);
-
-  // Fetch categories on initial load
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const catRes = await fetch(`${API_URL}/products/categories`);
-        if (catRes.ok) {
-          const catData = await catRes.json();
-          if (catData.success) {
-            const categoryNames = catData.data.map((cat) => cat.name);
-            setCategories(["All", ...categoryNames]);
-          }
-        }
-      } catch (catErr) {
-        console.warn("Failed to fetch categories", catErr);
-      }
-    };
-
-    if (categories.length <= 1) {
-      fetchCategories();
-    }
-  }, [API_URL, categories.length]);
 
   return (
     <motion.div
@@ -387,9 +531,7 @@ const Products = () => {
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign className="w-4 h-4 text-blue-600" />
-                  <p className="text-sm text-blue-600 font-medium">
-                    Avg. Price
-                  </p>
+                  <p className="text-sm text-blue-600 font-medium">Avg. Price</p>
                 </div>
                 <p className="text-2xl font-bold text-blue-800">
                   ₹{Math.round(stats.avgPrice || 0)}
@@ -398,9 +540,7 @@ const Products = () => {
               <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-xl border border-green-200 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <Package2 className="w-4 h-4 text-green-600" />
-                  <p className="text-sm text-green-600 font-medium">
-                    Total Stock
-                  </p>
+                  <p className="text-sm text-green-600 font-medium">Total Stock</p>
                 </div>
                 <p className="text-2xl font-bold text-green-800">
                   {stats.totalStock || 0}
@@ -409,9 +549,7 @@ const Products = () => {
               <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-200 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <Tag className="w-4 h-4 text-purple-600" />
-                  <p className="text-sm text-purple-600 font-medium">
-                    Price Range
-                  </p>
+                  <p className="text-sm text-purple-600 font-medium">Price Range</p>
                 </div>
                 <p className="text-2xl font-bold text-purple-800">
                   ₹{stats.minPrice || 0} - ₹{stats.maxPrice || 0}
@@ -420,9 +558,7 @@ const Products = () => {
               <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-200 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart3 className="w-4 h-4 text-amber-600" />
-                  <p className="text-sm text-amber-600 font-medium">
-                    Total Value
-                  </p>
+                  <p className="text-sm text-amber-600 font-medium">Total Value</p>
                 </div>
                 <p className="text-2xl font-bold text-amber-800">
                   ₹{stats.totalValue || 0}
@@ -434,34 +570,6 @@ const Products = () => {
             </p>
           </motion.div>
         )}
-
-        {/* Tags Filter
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-3">
-            <Tag className="w-5 h-5 text-gray-500" />
-            <h3 className="text-sm font-semibold text-gray-700">
-              Filter by Tags:
-            </h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {productTags.map((tag) => (
-              <motion.button
-                key={tag}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleTagToggle(tag)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
-                  selectedTags.includes(tag)
-                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg"
-                    : "bg-white text-gray-700 border border-gray-200 hover:border-blue-300 hover:shadow-md"
-                }`}
-              >
-                {selectedTags.includes(tag) && <Check className="w-3 h-3" />}
-                {tag}
-              </motion.button>
-            ))}
-          </div>
-        </div> */}
 
         {/* Error Display */}
         <AnimatePresence>
@@ -526,9 +634,7 @@ const Products = () => {
                 >
                   <div className="p-6 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-2xl font-bold text-gray-800">
-                        Filters
-                      </h3>
+                      <h3 className="text-2xl font-bold text-gray-800">Filters</h3>
                       <motion.button
                         whileHover={{ rotate: 90 }}
                         onClick={() => setIsFiltersOpen(false)}
@@ -646,13 +752,7 @@ const Products = () => {
                         </span>
                         "
                         <span className="text-sm font-normal text-gray-500 ml-2">
-                          (by{" "}
-                          {searchType === "product"
-                            ? "Product"
-                            : searchType === "artisan"
-                              ? "Artisan"
-                              : "Description"}
-                          )
+                          (by {searchType === "product" ? "Product" : searchType === "artisan" ? "Artisan" : "Description"})
                         </span>
                       </>
                     ) : selectedCategory === "All" ? (
@@ -665,18 +765,12 @@ const Products = () => {
                     {isLoading ? (
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        {searchQuery.trim()
-                          ? "Searching..."
-                          : "Loading beautiful creations..."}
+                        {searchQuery.trim() ? "Searching..." : "Loading beautiful creations..."}
                       </span>
                     ) : (
                       <>
-                        <span className="font-bold text-blue-600">
-                          {products.length}
-                        </span>{" "}
-                        amazing items
-                        {selectedCategory !== "All" &&
-                          ` in ${selectedCategory}`}
+                        <span className="font-bold text-blue-600">{products.length}</span> amazing items
+                        {selectedCategory !== "All" && ` in ${selectedCategory}`}
                         {searchQuery.trim() && ` matching "${searchQuery}"`}
                         {totalPages > 1 && (
                           <span className="ml-4 text-sm text-gray-500">
@@ -720,12 +814,9 @@ const Products = () => {
                       className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-xl hover:border-blue-400 hover:shadow-md transition-all"
                     >
                       <span className="font-medium text-gray-700">
-                        {sortOptions.find((opt) => opt.value === sortBy)
-                          ?.label || "Sort"}
+                        {sortOptions.find((opt) => opt.value === sortBy)?.label || "Sort"}
                       </span>
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`}
-                      />
+                      <ChevronDown className={`w-4 h-4 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`} />
                     </motion.button>
 
                     <AnimatePresence>
@@ -741,9 +832,7 @@ const Products = () => {
                             return (
                               <motion.button
                                 key={option.value}
-                                whileHover={{
-                                  backgroundColor: "rgba(59, 130, 246, 0.1)",
-                                }}
+                                whileHover={{ backgroundColor: "rgba(59, 130, 246, 0.1)" }}
                                 onClick={() => {
                                   setSortBy(option.value);
                                   setSortDropdownOpen(false);
@@ -755,9 +844,7 @@ const Products = () => {
                                 }`}
                               >
                                 <Icon className="w-4 h-4" />
-                                <span className="font-medium">
-                                  {option.label}
-                                </span>
+                                <span className="font-medium">{option.label}</span>
                                 {sortBy === option.value && (
                                   <Check className="w-4 h-4 ml-auto text-blue-600" />
                                 )}
@@ -788,11 +875,7 @@ const Products = () => {
               <div className="text-center py-20">
                 <motion.div
                   animate={{ rotate: 360, scale: [1, 1.1, 1] }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                   className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full mb-6"
                 >
                   <Loader2 className="w-12 h-12 text-blue-600" />
@@ -801,8 +884,7 @@ const Products = () => {
                   Discovering Beautiful Handcrafts
                 </p>
                 <p className="text-gray-600 max-w-md mx-auto">
-                  We're gathering the finest handmade products from talented
-                  artisans around the world
+                  We're gathering the finest handmade products from talented artisans around the world
                 </p>
                 <div className="mt-8 flex justify-center gap-4">
                   <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
@@ -854,9 +936,7 @@ const Products = () => {
                     <Search className="w-16 h-16 text-gray-400" />
                   </div>
                   <h3 className="text-3xl font-bold text-gray-800 mb-4">
-                    {searchQuery.trim()
-                      ? "No matching creations found"
-                      : "No products available"}
+                    {searchQuery.trim() ? "No matching creations found" : "No products available"}
                   </h3>
                   <p className="text-gray-600 mb-8 text-lg">
                     {searchQuery.trim()
@@ -884,9 +964,7 @@ const Products = () => {
                     )}
                   </div>
                   <div className="mt-12 pt-8 border-t border-gray-200">
-                    <p className="text-gray-500 mb-4">
-                      Need help finding something?
-                    </p>
+                    <p className="text-gray-500 mb-4">Need help finding something?</p>
                     <button className="text-blue-600 hover:text-blue-800 font-medium">
                       Contact our artisan support team →
                     </button>
@@ -909,8 +987,7 @@ const Products = () => {
               </h3>
               <p className="text-gray-600 mb-8 text-lg">
                 Are you an artisan creating beautiful handmade products? Join
-                our platform and showcase your work to thousands of appreciative
-                customers.
+                our platform and showcase your work to thousands of appreciative customers.
               </p>
               <div className="flex gap-4 justify-center">
                 <motion.button
