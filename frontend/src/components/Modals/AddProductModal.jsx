@@ -1,6 +1,6 @@
-// AddProductModal.jsx - Updated with better error handling and default artisan
+// AddProductModal.jsx - Updated with rating field
 import React, { useState, useEffect } from "react";
-import { X, Upload, AlertCircle, Check, Info, Plus, Trash2, User, Camera, Loader2 } from "lucide-react";
+import { X, Upload, AlertCircle, Check, Info, Plus, Trash2, User, Camera, Loader2, Star } from "lucide-react";
 import ImageUpload from "../Common/ImageUpload";
 
 const AddProductModal = ({
@@ -24,7 +24,7 @@ const AddProductModal = ({
     status: "approved"
   };
 
-  // Initialize internal state with safe defaults
+  // Initialize internal state with safe defaults including rating
   const [internalNewProduct, setInternalNewProduct] = useState({
     name: "",
     description: "",
@@ -32,6 +32,7 @@ const AddProductModal = ({
     price: "",
     stock: "",
     image: "",
+    rating: 4, // Default rating of 4
     status: currentUser?.role === 'artisan' ? "draft" : "active",
     approvalStatus: currentUser?.role === 'artisan' ? "pending" : "approved",
     artisan: "",
@@ -59,6 +60,7 @@ const AddProductModal = ({
   const [variants, setVariants] = useState([{ name: "", price: "", stock: "" }]);
   const [isArtisan, setIsArtisan] = useState(false);
   const [selectedArtisan, setSelectedArtisan] = useState("");
+  const [hoveredRating, setHoveredRating] = useState(0); // For rating hover effect
 
   // Define available status options
   const getApprovalStatusOptions = (isArtisanUser) => {
@@ -115,6 +117,7 @@ const AddProductModal = ({
         price: "",
         stock: "",
         image: "",
+        rating: 4, // Default rating of 4
         status: userIsArtisan ? "draft" : "active",
         approvalStatus: userIsArtisan ? "pending" : "approved",
         artisan: "",
@@ -176,6 +179,11 @@ const AddProductModal = ({
     }
     if (!newProduct?.image) newErrors.image = "Main image is required";
     
+    // Validate rating
+    if (!newProduct?.rating || newProduct.rating < 0 || newProduct.rating > 5) {
+      newErrors.rating = "Rating must be between 0 and 5";
+    }
+    
     // Validate approvalStatus
     if (!newProduct?.approvalStatus) {
       newErrors.approvalStatus = "Approval status is required";
@@ -211,7 +219,7 @@ const AddProductModal = ({
     e.preventDefault();
     
     // Mark all fields as touched
-    const allFields = ['name', 'category', 'price', 'image', 'approvalStatus', 'artisan'];
+    const allFields = ['name', 'category', 'price', 'image', 'rating', 'approvalStatus', 'artisan'];
     const touchedObj = {};
     allFields.forEach(field => touchedObj[field] = true);
     setTouched(touchedObj);
@@ -238,6 +246,7 @@ const AddProductModal = ({
       price: parseFloat(newProduct?.price || 0),
       stock: newProduct?.stock ? parseInt(newProduct.stock) : 0,
       image: newProduct?.image || "",
+      rating: parseFloat(newProduct?.rating || 4), // Include rating in product data
       approvalStatus: isArtisan ? "pending" : (newProduct?.approvalStatus || "approved"),
       status: isArtisan ? "draft" : (newProduct?.status || "active"),
       artisan: newProduct?.artisan || DEFAULT_ARTISAN._id, // Use default if empty
@@ -285,6 +294,7 @@ const AddProductModal = ({
       price: "",
       stock: "",
       image: "",
+      rating: 4, // Default rating of 4
       status: userIsArtisan ? "draft" : "active",
       approvalStatus: userIsArtisan ? "pending" : "approved",
       artisan: userIsArtisan ? (currentUser?.artisanProfile?._id || "") : "",
@@ -326,6 +336,18 @@ const AddProductModal = ({
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors({ ...errors, [field]: undefined });
+    }
+  };
+
+  const handleRatingChange = (rating) => {
+    setNewProduct({ ...newProduct, rating });
+    // Clear error when rating is selected
+    if (errors.rating) {
+      setErrors({ ...errors, rating: undefined });
+    }
+    // Clear touched error
+    if (touched.rating) {
+      setTouched({ ...touched, rating: false });
     }
   };
 
@@ -412,6 +434,38 @@ const AddProductModal = ({
     
     const selected = filteredArtisans.find(a => a._id === selectedArtisan);
     return selected?.businessName || selected?.fullName || selected?.name || 'Select Artisan';
+  };
+
+  // Render star rating component
+  const renderRatingStars = () => {
+    const currentRating = hoveredRating || newProduct?.rating || 0;
+    
+    return (
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => handleRatingChange(star)}
+            onMouseEnter={() => setHoveredRating(star)}
+            onMouseLeave={() => setHoveredRating(0)}
+            className="focus:outline-none transition-transform hover:scale-110"
+            disabled={actionLoading}
+          >
+            <Star
+              className={`w-6 h-6 ${
+                star <= currentRating
+                  ? "fill-yellow-400 text-yellow-400"
+                  : "text-gray-300"
+              } transition-colors`}
+            />
+          </button>
+        ))}
+        <span className="ml-2 text-sm text-gray-600">
+          ({newProduct?.rating || 0}/5)
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -567,7 +621,6 @@ const AddProductModal = ({
               </div>
             </div>
 
-            {/* Rest of the form remains the same... */}
             {/* Basic Information Section */}
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-6">
@@ -685,56 +738,101 @@ const AddProductModal = ({
                   </div>
                 </div>
 
-                {/* Right Column - Single Image Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Image <span className="text-red-500">*</span>
-                  </label>
-                  <div className="space-y-4">
-                    {/* Main Image Upload */}
-                    <div className={`border-2 ${newProduct?.image ? 'border-green-500' : 'border-dashed border-gray-300'} rounded-xl p-4 transition-all duration-200`}>
-                      {newProduct?.image ? (
-                        <div className="relative group">
-                          <img
-                            src={newProduct.image}
-                            alt="Product"
-                            className="w-full h-48 object-cover rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setNewProduct({ ...newProduct, image: "" })}
-                            className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                          <div className="absolute bottom-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">
-                            Main Image
+                {/* Right Column - Image Upload and Rating */}
+                <div className="space-y-6">
+                  {/* Product Image */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Product Image <span className="text-red-500">*</span>
+                    </label>
+                    <div className="space-y-4">
+                      {/* Main Image Upload */}
+                      <div className={`border-2 ${newProduct?.image ? 'border-green-500' : 'border-dashed border-gray-300'} rounded-xl p-4 transition-all duration-200`}>
+                        {newProduct?.image ? (
+                          <div className="relative group">
+                            <img
+                              src={newProduct.image}
+                              alt="Product"
+                              className="w-full h-48 object-cover rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setNewProduct({ ...newProduct, image: "" })}
+                              className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <div className="absolute bottom-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">
+                              Main Image
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <ImageUpload
-                          onImageUpload={handleImageUpload}
-                          existingImage=""
-                          disabled={actionLoading}
-                          className="h-48"
-                        />
-                      )}
+                        ) : (
+                          <ImageUpload
+                            onImageUpload={handleImageUpload}
+                            existingImage=""
+                            disabled={actionLoading}
+                            className="h-48"
+                          />
+                        )}
+                      </div>
+                      
+                      {/* Image Requirements Note */}
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <p className="flex items-center gap-1">
+                          <Camera className="w-3 h-3" />
+                          Only one image is required for artisan products
+                        </p>
+                        <p>• Image will be displayed in your shop</p>
+                        <p>• Recommended size: 800x800px</p>
+                        <p>• Max file size: 5MB</p>
+                      </div>
                     </div>
-                    
-                    {/* Image Requirements Note */}
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <p className="flex items-center gap-1">
-                        <Camera className="w-3 h-3" />
-                        Only one image is required for artisan products
+                    {touched.image && errors.image && (
+                      <p className="text-red-500 text-sm mt-2">{errors.image}</p>
+                    )}
+                  </div>
+
+                  {/* Product Rating - NEW FIELD */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                      Product Rating <span className="text-red-500">*</span>
+                      {touched.rating && errors.rating && (
+                        <Info className="w-4 h-4 text-red-500" />
+                      )}
+                    </label>
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                      <div className="flex items-center justify-between">
+                        {renderRatingStars()}
+                      </div>
+                      <div className="mt-3 flex items-center gap-4">
+                        <input
+                          type="number"
+                          value={newProduct?.rating || ""}
+                          onChange={(e) => handleRatingChange(parseFloat(e.target.value))}
+                          onBlur={() => handleBlur('rating')}
+                          className={`w-24 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                            touched.rating && errors.rating
+                              ? "border-red-300 bg-red-50"
+                              : "border-gray-300"
+                          }`}
+                          placeholder="4.0"
+                          step="0.1"
+                          min="0"
+                          max="5"
+                          disabled={actionLoading}
+                        />
+                        <span className="text-sm text-gray-500">
+                          Enter rating from 0 to 5
+                        </span>
+                      </div>
+                      {touched.rating && errors.rating && (
+                        <p className="text-red-500 text-sm mt-2">{errors.rating}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        Default rating is 4.0 for new products.
                       </p>
-                      <p>• Image will be displayed in your shop</p>
-                      <p>• Recommended size: 800x800px</p>
-                      <p>• Max file size: 5MB</p>
                     </div>
                   </div>
-                  {touched.image && errors.image && (
-                    <p className="text-red-500 text-sm mt-2">{errors.image}</p>
-                  )}
                 </div>
               </div>
             </div>

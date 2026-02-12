@@ -1,6 +1,6 @@
 // src/components/Modals/EditProductModal.jsx
 import React, { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Star } from "lucide-react";
 import ImageUpload from "../Common/ImageUpload";
 
 const EditProductModal = ({
@@ -13,13 +13,24 @@ const EditProductModal = ({
   handleUpdateProduct,
 }) => {
   const [productImages, setProductImages] = useState([]);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const [ratingError, setRatingError] = useState("");
 
-  // Initialize images when product loads
+  // Initialize images and ensure rating has proper value when product loads
   useEffect(() => {
     if (editingProduct) {
       setProductImages(editingProduct.images || []);
+      
+      // Ensure rating is properly set and is a number
+      const currentRating = parseFloat(editingProduct.rating);
+      if (isNaN(currentRating)) {
+        setEditingProduct(prev => ({
+          ...prev,
+          rating: 0
+        }));
+      }
     }
-  }, [editingProduct]);
+  }, [editingProduct, setEditingProduct]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -36,8 +47,35 @@ const EditProductModal = ({
       return;
     }
 
-    // Call the update function
-    handleUpdateProduct();
+    // Validate rating is within range
+    const rating = parseFloat(editingProduct.rating);
+    if (isNaN(rating) || rating < 0 || rating > 5) {
+      setRatingError("Rating must be between 0 and 5");
+      return;
+    }
+    setRatingError("");
+
+    // Prepare product data with explicit rating
+    const productData = {
+      ...editingProduct,
+      // Explicitly set rating as a number
+      rating: parseFloat(editingProduct.rating) || 0,
+      // Ensure price is number
+      price: parseFloat(editingProduct.price) || 0,
+      // Ensure stock is number
+      stock: parseInt(editingProduct.stock) || 0,
+      // Ensure sales is number
+      sales: parseInt(editingProduct.sales) || 0
+    };
+
+    console.log('Submitting product with rating:', {
+      originalRating: editingProduct.rating,
+      parsedRating: productData.rating,
+      productData
+    });
+
+    // Call the update function with prepared data
+    handleUpdateProduct(productData);
   };
 
   const isFormValid = () => {
@@ -46,25 +84,85 @@ const EditProductModal = ({
     const hasValidPrice = editingProduct.price !== "" && 
                          Number(editingProduct.price) > 0;
     const hasImage = editingProduct.image?.trim() !== "";
+    
+    // Validate rating is a number between 0 and 5
+    const rating = parseFloat(editingProduct.rating);
+    const hasValidRating = !isNaN(rating) && rating >= 0 && rating <= 5;
 
-    return hasName && hasCategory && hasValidPrice && hasImage;
+    return hasName && hasCategory && hasValidPrice && hasImage && hasValidRating;
   };
 
   const resetForm = () => {
     setEditingProduct(null);
     setProductImages([]);
+    setHoveredRating(0);
+    setRatingError("");
     setShowEditModal(false);
   };
 
   const handleNumberChange = (field, value) => {
-    if (value === "") {
+    if (value === "" || value === null || value === undefined) {
       setEditingProduct({ ...editingProduct, [field]: "" });
     } else {
-      const numValue = parseFloat(value);
+      let numValue;
+      
+      if (field === 'rating') {
+        // For rating, parse as float and clamp between 0 and 5
+        numValue = parseFloat(value);
+        if (!isNaN(numValue)) {
+          numValue = Math.min(Math.max(numValue, 0), 5);
+          // Round to 1 decimal place for cleaner display
+          numValue = Math.round(numValue * 10) / 10;
+        }
+        // Clear rating error when user makes a change
+        setRatingError("");
+      } else if (field === 'price') {
+        numValue = parseFloat(value);
+      } else {
+        numValue = parseInt(value, 10);
+      }
+      
       if (!isNaN(numValue)) {
         setEditingProduct({ ...editingProduct, [field]: numValue });
       }
     }
+  };
+
+  const handleRatingChange = (rating) => {
+    setEditingProduct({ ...editingProduct, rating });
+    setRatingError("");
+  };
+
+  // Render star rating component for better UX
+  const renderRatingStars = () => {
+    const currentRating = hoveredRating || parseFloat(editingProduct?.rating) || 0;
+    
+    return (
+      <div className="flex items-center gap-1 mt-2">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => handleRatingChange(star)}
+            onMouseEnter={() => setHoveredRating(star)}
+            onMouseLeave={() => setHoveredRating(0)}
+            className="focus:outline-none transition-transform hover:scale-110"
+            disabled={actionLoading}
+          >
+            <Star
+              className={`w-5 h-5 ${
+                star <= currentRating
+                  ? "fill-yellow-400 text-yellow-400"
+                  : "text-gray-300"
+              } transition-colors`}
+            />
+          </button>
+        ))}
+        <span className="ml-2 text-sm text-gray-600">
+          ({currentRating.toFixed(1)}/5)
+        </span>
+      </div>
+    );
   };
 
   // Handle adding new image
@@ -113,6 +211,7 @@ const EditProductModal = ({
   if (!showEditModal || !editingProduct) return null;
 
   const isButtonDisabled = actionLoading || !isFormValid();
+  const currentRating = parseFloat(editingProduct.rating) || 0;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -235,7 +334,7 @@ const EditProductModal = ({
                 </div>
               </div>
 
-              {/* Right Column - Images */}
+              {/* Right Column - Images and Rating */}
               <div className="space-y-4">
                 {/* Primary Image Upload */}
                 <div>
@@ -320,25 +419,41 @@ const EditProductModal = ({
                   )}
                 </div>
 
+                {/* Product Rating - Fixed */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Initial Rating
+                    Product Rating *
                   </label>
-                  <input
-                    type="number"
-                    value={editingProduct.rating || ""}
-                    onChange={(e) =>
-                      handleNumberChange("rating", e.target.value)
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                    placeholder="0.0"
-                    step="0.1"
-                    min="0"
-                    max="5"
-                    disabled={actionLoading}
-                  />
+                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <input
+                        type="number"
+                        value={currentRating}
+                        onChange={(e) => handleNumberChange("rating", e.target.value)}
+                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.0"
+                        step="0.1"
+                        min="0"
+                        max="5"
+                        disabled={actionLoading}
+                      />
+                      <span className="text-sm text-gray-500">
+                        Rating from 0 to 5
+                      </span>
+                    </div>
+                    {renderRatingStars()}
+                    {(ratingError || (editingProduct.rating !== "" && 
+                      (isNaN(parseFloat(editingProduct.rating)) || 
+                       parseFloat(editingProduct.rating) < 0 || 
+                       parseFloat(editingProduct.rating) > 5))) && (
+                      <p className="text-red-500 text-sm mt-2">
+                        {ratingError || "Rating must be between 0 and 5"}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
+                {/* Initial Sales */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Initial Sales
