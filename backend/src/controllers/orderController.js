@@ -2,7 +2,7 @@
 const Order = require('../models/Order');
 
 class OrderController {
-  // Create a new order (Express Interest)
+  // Create a new order (Express Interest) - Public API (no auth required)
   static async createOrder(req, res) {
     try {
       const {
@@ -15,7 +15,7 @@ class OrderController {
         customerDetails
       } = req.body;
 
-      console.log('Received customerDetails:', customerDetails); // Debug log
+      console.log('Received customerDetails:', customerDetails);
 
       // Validate required fields
       if (!productId || !productName || !productPrice) {
@@ -78,12 +78,12 @@ class OrderController {
         }]
       };
 
-      console.log('Order data being saved:', JSON.stringify(orderData, null, 2)); // Debug log
+      console.log('Order data being saved:', JSON.stringify(orderData, null, 2));
 
       const order = new Order(orderData);
       await order.save();
 
-      console.log('Order saved successfully:', order); // Debug log
+      console.log('Order saved successfully:', order);
 
       res.status(201).json({
         success: true,
@@ -187,8 +187,7 @@ class OrderController {
     }
   }
 
-  // Rest of the methods remain the same...
-  // Get order by ID
+  // Get order by ID - Admin only
   static async getOrderById(req, res) {
     try {
       const { id } = req.params;
@@ -215,13 +214,15 @@ class OrderController {
     }
   }
 
-  // Get order by order number
+  // Get order by order number - Public (for order tracking)
   static async getOrderByNumber(req, res) {
     try {
       const { orderNumber } = req.params;
       
-      // Use the static method from the updated schema
-      const order = await Order.findByOrderNumber(orderNumber);
+      // Return limited fields for public tracking
+      const order = await Order.findOne({ orderNumber }).select(
+        'orderNumber productName productPrice productImage status paymentStatus customerDetails.name customerDetails.email createdAt estimatedDelivery'
+      );
       
       if (!order) {
         return res.status(404).json({
@@ -243,7 +244,7 @@ class OrderController {
     }
   }
 
-  // Get orders by customer email
+  // Get orders by customer email - Public (for customer to view their orders)
   static async getOrdersByCustomer(req, res) {
     try {
       const { email } = req.params;
@@ -255,7 +256,9 @@ class OrderController {
         query.status = status;
       }
       
+      // Return limited fields for customer view
       const orders = await Order.find(query)
+        .select('orderNumber productName productPrice productImage status paymentStatus createdAt estimatedDelivery')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .skip((parseInt(page) - 1) * parseInt(limit));
@@ -283,14 +286,15 @@ class OrderController {
     }
   }
 
-  // Cancel order
+  // Cancel order - Public (customer can cancel their own order)
   static async cancelOrder(req, res) {
     try {
       const { id } = req.params;
       const { 
         cancellationReason, 
         customerNote,
-        refundRequired = false 
+        refundRequired = false,
+        customerEmail // For verification
       } = req.body;
 
       if (!cancellationReason) {
@@ -306,6 +310,14 @@ class OrderController {
         return res.status(404).json({
           success: false,
           error: 'Order not found'
+        });
+      }
+
+      // Verify customer email (optional - for security)
+      if (customerEmail && order.customerDetails.email !== customerEmail.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized to cancel this order'
         });
       }
 
@@ -358,7 +370,7 @@ class OrderController {
     }
   }
 
-  // Update order status (Admin function)
+  // Update order status - Admin only
   static async updateOrderStatus(req, res) {
     try {
       const { id } = req.params;
@@ -417,7 +429,7 @@ class OrderController {
     }
   }
 
-  // Add contact history (Admin function)
+  // Add contact history - Admin only
   static async addContactHistory(req, res) {
     try {
       const { id } = req.params;
@@ -473,7 +485,7 @@ class OrderController {
     }
   }
 
-  // Get all orders with filters (Admin function)
+  // Get all orders with filters - Admin only
   static async getAllOrders(req, res) {
     try {
       const {
@@ -535,6 +547,14 @@ class OrderController {
         }
       ]);
       
+      // Get today's orders count
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todayOrders = await Order.countDocuments({
+        createdAt: { $gte: today }
+      });
+      
       res.json({
         success: true,
         data: {
@@ -551,11 +571,7 @@ class OrderController {
               return acc;
             }, {}),
             totalOrders: total,
-            todayOrders: await Order.countDocuments({
-              createdAt: {
-                $gte: new Date().setHours(0, 0, 0, 0)
-              }
-            })
+            todayOrders
           }
         }
       });
@@ -568,13 +584,14 @@ class OrderController {
     }
   }
 
-  // Get orders summary for dashboard
+  // Get orders summary for dashboard - Admin only
   static async getOrdersSummary(req, res) {
     try {
       const last30Days = new Date();
       last30Days.setDate(last30Days.getDate() - 30);
       
-      const summary = await Order.aggregate([
+      // Get daily summary for chart
+      const dailySummary = await Order.aggregate([
         {
           $match: {
             createdAt: { $gte: last30Days }
@@ -597,14 +614,26 @@ class OrderController {
       
       // Process for chart data
       const chartData = {};
-      summary.forEach(item => {
+      const statuses = ['pending', 'contacted', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+      
+      dailySummary.forEach(item => {
         const date = item._id.date;
         if (!chartData[date]) {
-          chartData[date] = { date, pending: 0, contacted: 0, confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 };
+          chartData[date] = { 
+            date, 
+            pending: 0, 
+            contacted: 0, 
+            confirmed: 0, 
+            processing: 0, 
+            shipped: 0, 
+            delivered: 0, 
+            cancelled: 0 
+          };
         }
         chartData[date][item._id.status] = item.count;
       });
       
+      // Get status counts
       const statusCounts = await Order.aggregate([
         {
           $group: {
@@ -614,6 +643,35 @@ class OrderController {
         }
       ]);
       
+      // Get recent orders
+      const recentOrders = await Order.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('orderNumber customerDetails.name productName status createdAt productPrice');
+      
+      // Get total revenue
+      const revenueData = await Order.aggregate([
+        {
+          $match: {
+            status: { $in: ['delivered', 'shipped'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$productPrice" }
+          }
+        }
+      ]);
+      
+      const totalRevenue = revenueData.length > 0 ? revenueData[0].totalRevenue : 0;
+      
+      // Get pending orders count
+      const pendingOrders = await Order.countDocuments({ status: 'pending' });
+      
+      // Get total orders
+      const totalOrders = await Order.countDocuments();
+      
       res.json({
         success: true,
         data: {
@@ -622,9 +680,13 @@ class OrderController {
             acc[curr._id] = curr.count;
             return acc;
           }, {}),
-          totalOrders: await Order.countDocuments(),
-          pendingOrders: await Order.countDocuments({ status: 'pending' }),
-          recentOrders: await Order.find().sort({ createdAt: -1 }).limit(5)
+          totalOrders,
+          pendingOrders,
+          totalRevenue,
+          recentOrders,
+          todayOrders: await Order.countDocuments({
+            createdAt: { $gte: new Date().setHours(0, 0, 0, 0) }
+          })
         }
       });
     } catch (error) {
@@ -632,6 +694,113 @@ class OrderController {
       res.status(500).json({
         success: false,
         error: 'Failed to fetch orders summary'
+      });
+    }
+  }
+
+  // Bulk update orders - Admin only
+  static async bulkUpdateOrders(req, res) {
+    try {
+      const { orderIds, action, value } = req.body;
+      
+      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Order IDs are required'
+        });
+      }
+      
+      let updateData = {};
+      
+      switch (action) {
+        case 'status':
+          const validStatuses = ['pending', 'contacted', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+          if (!validStatuses.includes(value)) {
+            return res.status(400).json({
+              success: false,
+              error: 'Invalid status value'
+            });
+          }
+          updateData = { status: value, updatedAt: new Date() };
+          break;
+          
+        case 'delete':
+          // Soft delete or actual delete based on your requirement
+          await Order.deleteMany({ _id: { $in: orderIds } });
+          return res.json({
+            success: true,
+            message: `${orderIds.length} orders deleted successfully`
+          });
+          
+        default:
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid action'
+          });
+      }
+      
+      const result = await Order.updateMany(
+        { _id: { $in: orderIds } },
+        updateData
+      );
+      
+      res.json({
+        success: true,
+        message: `${result.modifiedCount} orders updated successfully`,
+        data: result
+      });
+    } catch (error) {
+      console.error('Bulk update orders error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update orders'
+      });
+    }
+  }
+
+  // Export orders - Admin only
+  static async exportOrders(req, res) {
+    try {
+      const { format = 'json', ...filters } = req.query;
+      
+      // Build query based on filters (similar to getAllOrders)
+      const query = {};
+      
+      if (filters.status) {
+        query.status = filters.status;
+      }
+      
+      if (filters.startDate && filters.endDate) {
+        query.createdAt = {
+          $gte: new Date(filters.startDate),
+          $lte: new Date(filters.endDate)
+        };
+      }
+      
+      const orders = await Order.find(query).sort({ createdAt: -1 });
+      
+      if (format === 'csv') {
+        // Convert to CSV format
+        const csvHeader = 'Order Number,Date,Customer Name,Email,Phone,Product,Price,Status,Payment Status\n';
+        const csvRows = orders.map(order => {
+          return `${order.orderNumber},${order.createdAt.toISOString().split('T')[0]},${order.customerDetails.name},${order.customerDetails.email},${order.customerDetails.phone},${order.productName},${order.productPrice},${order.status},${order.paymentStatus}`;
+        }).join('\n');
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=orders.csv');
+        return res.send(csvHeader + csvRows);
+      }
+      
+      // Default JSON export
+      res.json({
+        success: true,
+        data: orders
+      });
+    } catch (error) {
+      console.error('Export orders error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to export orders'
       });
     }
   }
