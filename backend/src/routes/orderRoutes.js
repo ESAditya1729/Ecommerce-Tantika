@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const OrderController = require('../controllers/orderController');
-const { protect, adminOnly } = require('../middleware/authMiddleware');
+const { protect, admin } = require('../middleware/authMiddleware');
 
 // ============= PUBLIC ROUTES (No authentication required) =============
 // Customer order creation and tracking routes
@@ -23,9 +23,9 @@ router.put('/:id/cancel', OrderController.cancelOrder);
 // ============= ADMIN ROUTES (Authentication + Admin role required) =============
 // All routes below this middleware will require admin authentication
 
-// Apply protect and adminOnly middleware to all admin routes
+// Apply protect and admin middleware to all admin routes
 router.use(protect);
-router.use(adminOnly);
+router.use(admin);
 
 // Dashboard summary - Admin only
 router.get('/summary/dashboard', OrderController.getOrdersSummary);
