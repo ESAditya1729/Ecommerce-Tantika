@@ -5,6 +5,7 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const Notification = require('../models/Notification');
 const Payout = require('../models/Payout');
+const mongoose = require('mongoose');
 
 // @desc    Get artisan dashboard data (for approved artisans)
 // @route   GET /api/artisan/dashboard
@@ -68,10 +69,39 @@ exports.getDashboard = async (req, res) => {
     const recentOrders = await Order.find({ 
       'items.artisan': artisan._id 
     })
-      .select('orderNumber status createdAt total payment.status customer.name customer.email')
+      .select('orderNumber status createdAt total payment.status customer.name customer.email items')
       .populate('items.product', 'name image price')
       .sort({ createdAt: -1 })
       .limit(5);
+
+    // Format recent orders to show only artisan's items
+    const formattedRecentOrders = recentOrders.map(order => {
+      const artisanItems = order.items.filter(item => 
+        item.artisan && item.artisan.toString() === artisan._id.toString()
+      );
+      
+      return {
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        createdAt: order.createdAt,
+        customer: {
+          name: order.customer.name,
+          email: order.customer.email
+        },
+        items: artisanItems.map(item => ({
+          product: item.product,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          totalPrice: item.totalPrice,
+          image: item.image
+        })),
+        itemCount: artisanItems.reduce((sum, item) => sum + item.quantity, 0),
+        subtotal: artisanItems.reduce((sum, item) => sum + item.totalPrice, 0),
+        paymentStatus: order.payment?.status
+      };
+    });
 
     // Get order counts from database aggregation
     const orderCounts = await Order.aggregate([
@@ -81,20 +111,17 @@ exports.getDashboard = async (req, res) => {
         } 
       },
       { 
-        $project: {
-          hasArtisanItem: {
-            $filter: {
-              input: "$items",
-              as: "item",
-              cond: { $eq: ["$$item.artisan", artisan._id] }
-            }
-          }
+        $unwind: '$items'
+      },
+      {
+        $match: {
+          'items.artisan': artisan._id
         }
       },
       {
         $group: {
           _id: '$status',
-          count: { $sum: { $size: '$hasArtisanItem' } }
+          count: { $sum: 1 }
         }
       }
     ]);
@@ -133,11 +160,12 @@ exports.getDashboard = async (req, res) => {
             day: { $dayOfMonth: '$createdAt' }
           },
           totalRevenue: { $sum: '$items.totalPrice' },
-          orderCount: { $sum: 1 }
+          orderCount: { $sum: 1 },
+          itemCount: { $sum: '$items.quantity' }
         }
       },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
-      { $limit: 7 }
+      { $limit: 30 }
     ]);
 
     // Get customer metrics
@@ -158,6 +186,7 @@ exports.getDashboard = async (req, res) => {
       { 
         $group: {
           _id: '$customer.email',
+          customerName: { $first: '$customer.name' },
           orderCount: { $sum: 1 },
           totalSpent: { $sum: '$items.totalPrice' }
         }
@@ -169,12 +198,13 @@ exports.getDashboard = async (req, res) => {
           repeatCustomers: {
             $sum: { $cond: [{ $gte: ['$orderCount', 2] }, 1, 0] }
           },
-          avgOrderValue: { $avg: '$totalSpent' }
+          avgOrderValue: { $avg: '$totalSpent' },
+          topSpender: { $max: '$totalSpent' }
         }
       }
     ]);
 
-    // Calculate pending payout amount (from delivered orders)
+    // Calculate pending payout amount (from delivered orders with completed payment)
     const pendingPayouts = await Order.aggregate([
       { 
         $match: { 
@@ -194,7 +224,8 @@ exports.getDashboard = async (req, res) => {
       {
         $group: {
           _id: null,
-          amount: { $sum: '$items.totalPrice' }
+          amount: { $sum: '$items.totalPrice' },
+          orderCount: { $sum: 1 }
         }
       }
     ]);
@@ -210,7 +241,8 @@ exports.getDashboard = async (req, res) => {
           totalSales: { $sum: '$sales' },
           totalRevenue: { 
             $sum: { $multiply: ['$price', '$sales'] } 
-          }
+          },
+          averageRating: { $avg: '$rating' }
         }
       }
     ]);
@@ -236,13 +268,16 @@ exports.getDashboard = async (req, res) => {
           totalOrders: { $sum: 1 },
           completedOrders: {
             $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+          },
+          cancelledOrders: {
+            $sum: { $cond: [{ $in: ['$status', ['cancelled', 'refunded']] }, 1, 0] }
           }
         }
       }
     ]);
 
     const completionRate = orderStats[0] ? 
-      (orderStats[0].completedOrders / orderStats[0].totalOrders * 100) || 0 : 0;
+      ((orderStats[0].completedOrders / orderStats[0].totalOrders) * 100).toFixed(2) || 0 : 0;
 
     // Prepare dashboard data
     const dashboardData = {
@@ -250,12 +285,14 @@ exports.getDashboard = async (req, res) => {
         id: artisan._id,
         businessName: artisan.businessName,
         fullName: artisan.fullName,
-        rating: artisan.rating,
+        rating: artisan.rating || 0,
         totalProducts: productCounts.total,
         totalSales: productStats[0]?.totalSales || 0,
         totalRevenue: productStats[0]?.totalRevenue || 0,
         status: artisan.status,
-        approvedAt: artisan.approvedAt
+        approvedAt: artisan.approvedAt,
+        profileComplete: artisan.profileComplete || false,
+        joinedDate: artisan.createdAt
       },
       stats: {
         totalProducts: productCounts.total,
@@ -263,20 +300,35 @@ exports.getDashboard = async (req, res) => {
         totalRevenue: productStats[0]?.totalRevenue || 0,
         activeProducts: productCounts.approved,
         pendingProducts: productCounts.pending,
+        rejectedProducts: productCounts.rejected,
         totalOrders: orderStats[0]?.totalOrders || 0,
         pendingOrders: orderCountsObj['pending'] || 0,
+        confirmedOrders: orderCountsObj['confirmed'] || 0,
+        processingOrders: orderCountsObj['processing'] || 0,
+        readyToShipOrders: orderCountsObj['ready_to_ship'] || 0,
+        shippedOrders: orderCountsObj['shipped'] || 0,
         deliveredOrders: orderCountsObj['delivered'] || 0,
-        completionRate: completionRate,
-        pendingPayouts: pendingPayouts[0]?.amount || 0
+        cancelledOrders: orderCountsObj['cancelled'] || 0,
+        completionRate: parseFloat(completionRate),
+        pendingPayouts: pendingPayouts[0]?.amount || 0,
+        averageRating: productStats[0]?.averageRating || 0
       },
       metrics: {
-        monthlySales,
+        monthlySales: monthlySales.map(item => ({
+          date: `${item._id.year}-${item._id.month}-${item._id.day}`,
+          revenue: item.totalRevenue,
+          orders: item.orderCount,
+          items: item.itemCount
+        })),
         totalCustomers: customerMetrics[0]?.totalCustomers || 0,
-        repeatRate: customerMetrics[0]?.repeatCustomers || 0,
-        avgOrderValue: customerMetrics[0]?.avgOrderValue || 0
+        repeatCustomers: customerMetrics[0]?.repeatCustomers || 0,
+        repeatRate: customerMetrics[0]?.totalCustomers ? 
+          ((customerMetrics[0]?.repeatCustomers / customerMetrics[0]?.totalCustomers) * 100).toFixed(2) : 0,
+        avgOrderValue: customerMetrics[0]?.avgOrderValue || 0,
+        topSpender: customerMetrics[0]?.topSpender || 0
       },
       recentProducts: products,
-      recentOrders: recentOrders,
+      recentOrders: formattedRecentOrders,
       salesData: {
         totalSales: productStats[0]?.totalSales || 0,
         totalRevenue: productStats[0]?.totalRevenue || 0
@@ -350,7 +402,7 @@ exports.getProducts = async (req, res) => {
 
     // Get products with pagination
     const products = await Product.find(filter)
-      .select('name price stock status approvalStatus image images sales rating createdAt category tags')
+      .select('name price stock status approvalStatus image images sales rating createdAt category tags description')
       .populate('artisan', 'businessName fullName')
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .skip(skip)
@@ -372,6 +424,7 @@ exports.getProducts = async (req, res) => {
           totalRevenue: { 
             $sum: { $multiply: ['$price', '$sales'] } 
           },
+          averagePrice: { $avg: '$price' },
           lowStockCount: {
             $sum: { 
               $cond: [
@@ -395,6 +448,7 @@ exports.getProducts = async (req, res) => {
       totalValue: 0,
       totalSales: 0,
       totalRevenue: 0,
+      averagePrice: 0,
       lowStockCount: 0,
       outOfStockCount: 0
     };
@@ -459,24 +513,34 @@ exports.getOrders = async (req, res) => {
     // Build filter using ObjectId reference
     let matchFilter = { 'items.artisan': artisan._id };
     
-    if (status) matchFilter.status = status;
+    if (status && status !== 'all') {
+      matchFilter.status = status;
+    }
     
     if (dateFrom || dateTo) {
       matchFilter.createdAt = {};
       if (dateFrom) matchFilter.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) matchFilter.createdAt.$lte = new Date(dateTo);
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        matchFilter.createdAt.$lte = endDate;
+      }
     }
     
-    if (search) {
+    if (search && search.trim() !== '') {
+      const searchRegex = new RegExp(search.trim(), 'i');
       matchFilter.$or = [
-        { orderNumber: { $regex: search, $options: 'i' } },
-        { 'customer.name': { $regex: search, $options: 'i' } },
-        { 'customer.email': { $regex: search, $options: 'i' } }
+        { orderNumber: searchRegex },
+        { 'customer.name': searchRegex },
+        { 'customer.email': searchRegex },
+        { 'customer.phone': searchRegex }
       ];
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
 
     // Get orders with pagination using aggregation to filter items by artisan
     const ordersAggregation = await Order.aggregate([
@@ -511,16 +575,46 @@ exports.getOrders = async (req, res) => {
           total: { $first: '$total' },
           customer: { $first: '$customer' },
           payment: { $first: '$payment' },
-          allItems: { $push: '$items' },
-          document: { $first: '$$ROOT' }
+          shipping: { $first: '$shipping' },
+          items: { $push: '$items' },
+          allItems: { $first: '$items' }
+        }
+      },
+      {
+        $project: {
+          orderNumber: 1,
+          status: 1,
+          createdAt: 1,
+          'customer.name': 1,
+          'customer.email': 1,
+          'customer.phone': 1,
+          'payment.status': 1,
+          'payment.method': 1,
+          'shipping.estimatedDelivery': 1,
+          items: {
+            $map: {
+              input: '$items',
+              as: 'item',
+              in: {
+                product: '$$item.product',
+                name: '$$item.name',
+                quantity: '$$item.quantity',
+                price: '$$item.price',
+                totalPrice: '$$item.totalPrice',
+                image: '$$item.image',
+                variant: '$$item.variant',
+                productDetails: '$$item.productDetails'
+              }
+            }
+          }
         }
       },
       { $sort: { [sortBy]: sortOrder === 'desc' ? -1 : 1 } },
       { $skip: skip },
-      { $limit: parseInt(limit) }
+      { $limit: limitNum }
     ]);
 
-    // Get total count
+    // Get total count of orders containing artisan's items
     const totalOrdersAggregation = await Order.aggregate([
       { $match: matchFilter },
       { 
@@ -531,6 +625,7 @@ exports.getOrders = async (req, res) => {
           'items.artisan': artisan._id
         }
       },
+      { $group: { _id: '$_id' } },
       { $count: 'total' }
     ]);
 
@@ -538,7 +633,7 @@ exports.getOrders = async (req, res) => {
 
     // Get summary using aggregation
     const summaryAggregation = await Order.aggregate([
-      { $match: matchFilter },
+      { $match: { 'items.artisan': artisan._id } },
       { 
         $unwind: '$items'
       },
@@ -551,6 +646,7 @@ exports.getOrders = async (req, res) => {
         $group: {
           _id: null,
           totalRevenue: { $sum: '$items.totalPrice' },
+          totalItems: { $sum: '$items.quantity' },
           pendingAmount: {
             $sum: {
               $cond: [
@@ -560,8 +656,18 @@ exports.getOrders = async (req, res) => {
               ]
             }
           },
+          deliveredRevenue: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'delivered'] }, '$items.totalPrice', 0]
+            }
+          },
           deliveredCount: {
             $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+          },
+          pendingCount: {
+            $sum: { 
+              $cond: [{ $in: ['$status', ['pending', 'confirmed', 'processing']] }, 1, 0] 
+            }
           },
           orderCount: { $sum: 1 }
         }
@@ -570,21 +676,60 @@ exports.getOrders = async (req, res) => {
 
     const summary = summaryAggregation[0] || {
       totalRevenue: 0,
+      totalItems: 0,
       pendingAmount: 0,
+      deliveredRevenue: 0,
       deliveredCount: 0,
+      pendingCount: 0,
       orderCount: 0
     };
+
+    // Format orders for response
+    const formattedOrders = ordersAggregation.map(order => ({
+      _id: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      createdAt: order.createdAt,
+      customer: order.customer,
+      paymentStatus: order.payment?.status,
+      paymentMethod: order.payment?.method,
+      estimatedDelivery: order.shipping?.estimatedDelivery,
+      items: order.items.map(item => ({
+        productId: item.product,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        totalPrice: item.totalPrice,
+        image: item.image,
+        variant: item.variant,
+        productDetails: item.productDetails ? {
+          name: item.productDetails.name,
+          image: item.productDetails.image,
+          category: item.productDetails.category
+        } : null
+      })),
+      itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
+      subtotal: order.items.reduce((sum, item) => sum + item.totalPrice, 0)
+    }));
 
     res.status(200).json({
       success: true,
       data: {
-        orders: ordersAggregation,
-        summary,
+        orders: formattedOrders,
+        summary: {
+          totalOrders: summary.orderCount,
+          totalRevenue: summary.totalRevenue,
+          totalItems: summary.totalItems,
+          pendingAmount: summary.pendingAmount,
+          deliveredRevenue: summary.deliveredRevenue,
+          deliveredOrders: summary.deliveredCount,
+          pendingOrders: summary.pendingCount
+        },
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: pageNum,
+          limit: limitNum,
           total: totalOrders,
-          pages: Math.ceil(totalOrders / parseInt(limit))
+          pages: Math.ceil(totalOrders / limitNum)
         }
       }
     });
@@ -593,7 +738,8 @@ exports.getOrders = async (req, res) => {
     console.error('Get artisan orders error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error fetching orders'
+      message: 'Server error fetching orders',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -635,7 +781,8 @@ exports.getAnalytics = async (req, res) => {
       { 
         $match: { 
           'items.artisan': artisan._id,
-          createdAt: { $gte: startDate }
+          createdAt: { $gte: startDate },
+          status: 'delivered'
         }
       },
       { 
@@ -653,11 +800,9 @@ exports.getAnalytics = async (req, res) => {
             month: { $month: '$createdAt' },
             day: { $dayOfMonth: '$createdAt' }
           },
-          totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$items.totalPrice' },
-          deliveredOrders: {
-            $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
-          }
+          orders: { $sum: 1 },
+          revenue: { $sum: '$items.totalPrice' },
+          items: { $sum: '$items.quantity' }
         }
       },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
@@ -695,8 +840,10 @@ exports.getAnalytics = async (req, res) => {
           _id: '$items.product',
           productName: { $first: '$productDetails.name' },
           productImage: { $first: '$productDetails.image' },
+          category: { $first: '$productDetails.category' },
           totalSold: { $sum: '$items.quantity' },
           totalRevenue: { $sum: '$items.totalPrice' },
+          orderCount: { $sum: 1 },
           avgPrice: { $avg: '$items.price' }
         }
       },
@@ -704,17 +851,40 @@ exports.getAnalytics = async (req, res) => {
       { $limit: 10 }
     ]);
 
-    // Get category performance from products
-    const categoryPerformance = await Product.aggregate([
-      { $match: { artisan: artisan._id } },
+    // Get category performance from orders
+    const categoryPerformance = await Order.aggregate([
+      { 
+        $match: { 
+          'items.artisan': artisan._id,
+          createdAt: { $gte: startDate },
+          status: 'delivered'
+        }
+      },
+      { 
+        $unwind: '$items'
+      },
+      {
+        $match: {
+          'items.artisan': artisan._id
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productDetails'
+        }
+      },
+      { $unwind: '$productDetails' },
       {
         $group: {
-          _id: '$category',
+          _id: '$productDetails.category',
           totalProducts: { $sum: 1 },
-          totalSales: { $sum: '$sales' },
-          totalRevenue: { $sum: { $multiply: ['$price', '$sales'] } },
-          avgRating: { $avg: '$rating' },
-          avgPrice: { $avg: '$price' }
+          totalSold: { $sum: '$items.quantity' },
+          totalRevenue: { $sum: '$items.totalPrice' },
+          avgPrice: { $avg: '$items.price' },
+          orderCount: { $sum: 1 }
         }
       },
       { $sort: { totalRevenue: -1 } }
@@ -780,7 +950,7 @@ exports.getAnalytics = async (req, res) => {
           },
           avgOrdersPerCustomer: { $avg: '$orderCount' },
           avgCustomerValue: { $avg: '$totalSpent' },
-          topSpender: { $max: '$totalSpent' }
+          maxCustomerValue: { $max: '$totalSpent' }
         }
       }
     ]);
@@ -805,6 +975,9 @@ exports.getAnalytics = async (req, res) => {
                 0 
               ]
             }
+          },
+          outOfStockProducts: {
+            $sum: { $cond: [{ $eq: ['$stock', 0] }, 1, 0] }
           }
         }
       }
@@ -831,13 +1004,16 @@ exports.getAnalytics = async (req, res) => {
           totalOrders: { $sum: 1 },
           completedOrders: {
             $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+          },
+          cancelledOrders: {
+            $sum: { $cond: [{ $in: ['$status', ['cancelled', 'refunded']] }, 1, 0] }
           }
         }
       }
     ]);
 
     const completionRate = orderStats[0] ? 
-      (orderStats[0].completedOrders / orderStats[0].totalOrders * 100) || 0 : 0;
+      ((orderStats[0].completedOrders / orderStats[0].totalOrders) * 100).toFixed(2) || 0 : 0;
 
     // Get product counts
     const productCounts = await Product.aggregate([
@@ -862,37 +1038,90 @@ exports.getAnalytics = async (req, res) => {
       }
     ]);
 
+    // Calculate revenue by month for chart
+    const monthlyRevenue = await Order.aggregate([
+      { 
+        $match: { 
+          'items.artisan': artisan._id,
+          status: 'delivered',
+          'payment.status': 'completed'
+        }
+      },
+      { 
+        $unwind: '$items'
+      },
+      {
+        $match: {
+          'items.artisan': artisan._id
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$createdAt' },
+            month: { $month: '$createdAt' }
+          },
+          revenue: { $sum: '$items.totalPrice' },
+          orders: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.year': -1, '_id.month': -1 } },
+      { $limit: 12 }
+    ]);
+
     res.status(200).json({
       success: true,
       data: {
         timeframe,
-        salesAnalytics,
-        topProducts,
-        categoryPerformance,
-        orderDistribution,
-        customerMetrics: customerMetrics[0] || {
-          totalCustomers: 0,
-          repeatCustomers: 0,
-          avgOrdersPerCustomer: 0,
-          avgCustomerValue: 0,
-          topSpender: 0
-        },
-        productMetrics: productMetrics[0] || {
-          avgRating: 0,
-          avgPrice: 0,
-          totalStockValue: 0,
-          lowStockProducts: 0
-        },
         summary: {
           totalProducts: productCounts[0]?.totalProducts || 0,
-          totalSales: artisan.totalSales || 0,
-          totalRevenue: artisan.totalRevenue || 0,
-          completionRate: completionRate,
+          totalSales: productStats[0]?.totalSales || 0,
+          totalRevenue: productStats[0]?.totalRevenue || 0,
+          totalOrders: orderStats[0]?.totalOrders || 0,
+          completedOrders: orderStats[0]?.completedOrders || 0,
+          cancelledOrders: orderStats[0]?.cancelledOrders || 0,
+          completionRate: parseFloat(completionRate),
+          activeProducts: productCounts[0]?.activeProducts || 0,
           pendingOrders: await Order.countDocuments({
             'items.artisan': artisan._id,
-            status: { $in: ['pending', 'confirmed', 'processing', 'ready_to_ship', 'shipped', 'out_for_delivery'] }
-          }),
-          activeProducts: productCounts[0]?.activeProducts || 0
+            status: { $in: ['pending', 'confirmed', 'processing', 'ready_to_ship'] }
+          })
+        },
+        salesAnalytics: salesAnalytics.map(item => ({
+          date: `${item._id.year}-${item._id.month}-${item._id.day}`,
+          orders: item.orders,
+          revenue: item.revenue,
+          items: item.items
+        })),
+        monthlyRevenue: monthlyRevenue.map(item => ({
+          month: `${item._id.year}-${item._id.month.toString().padStart(2, '0')}`,
+          revenue: item.revenue,
+          orders: item.orders
+        })),
+        topProducts,
+        categoryPerformance,
+        orderDistribution: orderDistribution.map(item => ({
+          status: item._id,
+          count: item.count,
+          amount: item.totalAmount,
+          percentage: orderStats[0]?.totalOrders ? 
+            ((item.count / orderStats[0].totalOrders) * 100).toFixed(2) : 0
+        })),
+        customerMetrics: {
+          totalCustomers: customerMetrics[0]?.totalCustomers || 0,
+          repeatCustomers: customerMetrics[0]?.repeatCustomers || 0,
+          repeatRate: customerMetrics[0]?.totalCustomers ? 
+            ((customerMetrics[0].repeatCustomers / customerMetrics[0].totalCustomers) * 100).toFixed(2) : 0,
+          avgOrdersPerCustomer: customerMetrics[0]?.avgOrdersPerCustomer?.toFixed(2) || 0,
+          avgCustomerValue: customerMetrics[0]?.avgCustomerValue?.toFixed(2) || 0,
+          maxCustomerValue: customerMetrics[0]?.maxCustomerValue || 0
+        },
+        productMetrics: {
+          avgRating: productMetrics[0]?.avgRating?.toFixed(1) || 0,
+          avgPrice: productMetrics[0]?.avgPrice?.toFixed(2) || 0,
+          totalStockValue: productMetrics[0]?.totalStockValue || 0,
+          lowStockProducts: productMetrics[0]?.lowStockProducts || 0,
+          outOfStockProducts: productMetrics[0]?.outOfStockProducts || 0
         }
       }
     });
@@ -937,22 +1166,32 @@ exports.getEarnings = async (req, res) => {
       case 'last_month':
         startDate.setMonth(startDate.getMonth() - 1);
         startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
         endDate = new Date(startDate);
         endDate.setMonth(endDate.getMonth() + 1);
         endDate.setDate(0);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'last_3_months':
         startDate.setMonth(startDate.getMonth() - 3);
         startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'current_year':
         startDate = new Date(new Date().getFullYear(), 0, 1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(new Date().getFullYear(), 11, 31);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'all_time':
         startDate = new Date(0); // Beginning of time
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
         break;
       default: // current_month
         startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
     }
 
     // Calculate earnings from delivered orders
@@ -978,18 +1217,20 @@ exports.getEarnings = async (req, res) => {
           _id: null,
           totalEarnings: { $sum: '$items.totalPrice' },
           orderCount: { $sum: 1 },
-          itemCount: { $sum: '$items.quantity' }
+          itemCount: { $sum: '$items.quantity' },
+          avgOrderValue: { $avg: '$items.totalPrice' }
         }
       }
     ]);
 
-    // Calculate pending payouts (delivered orders with completed payment)
+    // Calculate pending payouts (delivered orders with completed payment, not yet paid out)
     const pendingPayoutData = await Order.aggregate([
       { 
         $match: { 
           'items.artisan': artisan._id,
           status: 'delivered',
-          'payment.status': 'completed'
+          'payment.status': 'completed',
+          'commission.paidToArtisan': false
         }
       },
       { 
@@ -1004,7 +1245,8 @@ exports.getEarnings = async (req, res) => {
         $group: {
           _id: null,
           pendingPayouts: { $sum: '$items.totalPrice' },
-          pendingOrders: { $sum: 1 }
+          pendingOrders: { $sum: 1 },
+          pendingItems: { $sum: '$items.quantity' }
         }
       }
     ]);
@@ -1018,6 +1260,7 @@ exports.getEarnings = async (req, res) => {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
 
     const monthlyEarnings = await Order.aggregate([
       { 
@@ -1047,7 +1290,7 @@ exports.getEarnings = async (req, res) => {
           items: { $sum: '$items.quantity' }
         }
       },
-      { $sort: { '_id.year': -1, '_id.month': -1 } },
+      { $sort: { '_id.year': 1, '_id.month': 1 } },
       { $limit: 6 }
     ]);
 
@@ -1059,7 +1302,7 @@ exports.getEarnings = async (req, res) => {
           _id: '$status',
           totalAmount: { $sum: '$amount' },
           count: { $sum: 1 },
-          latestDate: { $max: '$requestedAt' }
+          latestDate: { $max: '$processedAt' }
         }
       }
     ]);
@@ -1073,53 +1316,112 @@ exports.getEarnings = async (req, res) => {
     payoutSummary.forEach(item => {
       if (item._id === 'processed') {
         summary.totalProcessed = item.totalAmount;
+        summary.processedCount = item.count;
         summary.lastPayoutDate = item.latestDate;
       } else if (item._id === 'pending' || item._id === 'processing') {
         summary.totalPending += item.totalAmount;
+        summary.pendingCount = (summary.pendingCount || 0) + item.count;
       } else if (item._id === 'failed') {
         summary.totalFailed += item.totalAmount;
+        summary.failedCount = item.count;
       }
     });
 
-    // Calculate commission (platform fee)
-    const platformCommissionRate = 0.15; // 15% platform commission
+    // Calculate platform commission (example: 10% platform fee)
+    const platformCommissionRate = 0.10; // 10% platform commission
     const totalEarnings = earningsData[0]?.totalEarnings || 0;
     const netEarnings = totalEarnings * (1 - platformCommissionRate);
     const platformFee = totalEarnings * platformCommissionRate;
+
+    // Calculate lifetime earnings
+    const lifetimeEarnings = await Order.aggregate([
+      { 
+        $match: { 
+          'items.artisan': artisan._id,
+          status: 'delivered',
+          'payment.status': 'completed'
+        }
+      },
+      { 
+        $unwind: '$items'
+      },
+      {
+        $match: {
+          'items.artisan': artisan._id
+        }
+      },
+      { 
+        $group: {
+          _id: null,
+          total: { $sum: '$items.totalPrice' },
+          orders: { $sum: 1 },
+          items: { $sum: '$items.quantity' }
+        }
+      }
+    ]);
 
     // Check if bank details are verified
     const canWithdraw = artisan.bankDetails?.verified && 
                        artisan.bankDetails?.accountNumber && 
                        artisan.bankDetails?.ifscCode &&
-                       netEarnings >= 500; // Minimum withdrawal amount
+                       (pendingPayoutData[0]?.pendingPayouts || 0) >= 500; // Minimum withdrawal amount
 
     res.status(200).json({
       success: true,
       data: {
         period,
+        dateRange: {
+          start: startDate,
+          end: endDate
+        },
         earnings: {
-          grossEarnings: totalEarnings,
-          netEarnings: netEarnings,
-          platformFee: platformFee,
+          periodEarnings: {
+            gross: totalEarnings,
+            net: netEarnings,
+            platformFee: platformFee,
+            orders: earningsData[0]?.orderCount || 0,
+            items: earningsData[0]?.itemCount || 0,
+            avgOrderValue: earningsData[0]?.avgOrderValue || 0
+          },
+          lifetimeEarnings: {
+            total: lifetimeEarnings[0]?.total || 0,
+            orders: lifetimeEarnings[0]?.orders || 0,
+            items: lifetimeEarnings[0]?.items || 0
+          },
           pendingPayouts: pendingPayoutData[0]?.pendingPayouts || 0,
           pendingOrders: pendingPayoutData[0]?.pendingOrders || 0,
-          deliveredOrders: earningsData[0]?.orderCount || 0,
-          totalItemsSold: earningsData[0]?.itemCount || 0
+          pendingItems: pendingPayoutData[0]?.pendingItems || 0
         },
-        payouts,
-        monthlyEarnings,
-        payoutSummary: summary,
+        payouts: {
+          history: payouts,
+          summary: {
+            totalProcessed: summary.totalProcessed || 0,
+            totalPending: summary.totalPending || 0,
+            totalFailed: summary.totalFailed || 0,
+            processedCount: summary.processedCount || 0,
+            pendingCount: summary.pendingCount || 0,
+            failedCount: summary.failedCount || 0,
+            lastPayoutDate: summary.lastPayoutDate
+          }
+        },
+        monthlyEarnings: monthlyEarnings.map(item => ({
+          month: `${item._id.year}-${item._id.month.toString().padStart(2, '0')}`,
+          earnings: item.earnings,
+          orders: item.orders,
+          items: item.items
+        })),
         bankDetails: {
           accountName: artisan.bankDetails?.accountName,
           bankName: artisan.bankDetails?.bankName,
           accountType: artisan.bankDetails?.accountType,
-          verified: artisan.bankDetails?.verified,
+          verified: artisan.bankDetails?.verified || false,
           canWithdraw: canWithdraw
         },
-        nextPayout: {
+        withdrawalInfo: {
           minimumAmount: 500,
-          estimatedDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 15).toLocaleDateString('en-IN'),
-          processingTime: '3-5 business days',
+          availableBalance: pendingPayoutData[0]?.pendingPayouts || 0,
+          estimatedProcessingDays: '3-5 business days',
+          nextPayoutDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 15).toLocaleDateString('en-IN'),
           platformCommission: `${(platformCommissionRate * 100)}%`
         }
       }
@@ -1165,14 +1467,24 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Validate status transition
+    // Validate status transition (artisan-specific allowed statuses)
+    const artisanAllowedStatuses = ['confirmed', 'processing', 'ready_to_ship', 'cancelled'];
+    
+    if (!artisanAllowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Artisans can only set status to: ${artisanAllowedStatuses.join(', ')}`
+      });
+    }
+
+    // Validate status transition based on current status
     const allowedTransitions = {
       pending: ['confirmed', 'cancelled'],
       confirmed: ['processing', 'cancelled'],
       processing: ['ready_to_ship', 'cancelled'],
-      ready_to_ship: ['shipped', 'cancelled'],
-      shipped: ['out_for_delivery', 'delivered'],
-      out_for_delivery: ['delivered'],
+      ready_to_ship: [], // Cannot change from ready_to_ship (handled by admin)
+      shipped: [], // Cannot change from shipped (handled by admin)
+      out_for_delivery: [], // Cannot change from out_for_delivery (handled by admin)
       delivered: [] // Final state
     };
 
@@ -1183,46 +1495,46 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Update status
-    order.status = status;
-    
-    // Add status history
-    order.statusHistory.push({
+    // Update status using the model's method
+    await order.updateStatus(
       status,
-      changedBy: artisan.userId,
-      reason: notes || 'Status updated by artisan',
-      changedAt: new Date()
-    });
+      artisan.userId,
+      `Status updated by artisan: ${artisan.businessName}`,
+      notes || ''
+    );
 
     // Add admin note
-    order.notes.push({
-      note: `Order status changed to ${status} by artisan${notes ? ': ' + notes : ''}`,
-      addedBy: artisan.userId,
-      type: 'status_update',
-      createdAt: new Date()
-    });
+    await order.addNote(
+      `Order status changed to ${status} by artisan ${artisan.businessName}${notes ? ': ' + notes : ''}`,
+      artisan.userId,
+      'status_update',
+      false // Not internal, customer can see
+    );
 
-    await order.save();
-
-    // Send notification to customer
-    await Notification.create({
-      user: order.customer.userId,
-      title: 'Order Status Updated',
-      message: `Your order ${order.orderNumber} status has been updated to ${status}`,
-      type: 'order_update',
-      data: {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        status: status
-      }
-    });
+    // Send notification to customer if they have userId
+    if (order.customer.userId) {
+      await Notification.create({
+        user: order.customer.userId,
+        title: 'Order Status Updated',
+        message: `Your order ${order.orderNumber} status has been updated to ${status}`,
+        type: 'order_update',
+        data: {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: status,
+          updatedBy: 'artisan'
+        }
+      });
+    }
 
     res.status(200).json({
       success: true,
       message: 'Order status updated successfully',
       data: {
+        orderId: order._id,
         orderNumber: order.orderNumber,
-        status: order.status
+        status: order.status,
+        updatedAt: order.updatedAt
       }
     });
 
@@ -1231,6 +1543,121 @@ exports.updateOrderStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error updating order status'
+    });
+  }
+};
+
+// @desc    Get single order details for artisan
+// @route   GET /api/artisan/orders/:orderId
+// @access  Private (Artisan only)
+exports.getOrderDetails = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Check if user is artisan
+    if (req.user.role !== 'artisan') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Approved artisan role required.'
+      });
+    }
+
+    // Get artisan profile
+    const artisan = await Artisan.findOne({ userId: req.user.id });
+    if (!artisan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Artisan profile not found'
+      });
+    }
+
+    // Find the order and check if it contains this artisan's items
+    const order = await Order.findOne({
+      _id: orderId,
+      'items.artisan': artisan._id
+    })
+    .populate('items.product', 'name sku category')
+    .populate('customer.userId', 'name email phone');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found or you do not have permission to view this order'
+      });
+    }
+
+    // Filter items for this artisan only
+    const artisanItems = order.items.filter(item => 
+      item.artisan && item.artisan.toString() === artisan._id.toString()
+    );
+
+    // Calculate totals for artisan's items
+    const artisanSubtotal = artisanItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const artisanItemCount = artisanItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    // Format response
+    const orderDetails = {
+      _id: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      customer: {
+        name: order.customer.name,
+        email: order.customer.email,
+        phone: order.customer.phone,
+        shippingAddress: order.customer.shippingAddress
+      },
+      items: artisanItems.map(item => ({
+        productId: item.product,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        totalPrice: item.totalPrice,
+        image: item.image,
+        variant: item.variant,
+        sku: item.sku,
+        productDetails: item.product ? {
+          name: item.product.name,
+          category: item.product.category,
+          sku: item.product.sku
+        } : null
+      })),
+      summary: {
+        itemCount: artisanItemCount,
+        subtotal: artisanSubtotal,
+        estimatedDelivery: order.shipping?.estimatedDelivery,
+        shippingMethod: order.shipping?.method
+      },
+      payment: {
+        status: order.payment?.status,
+        method: order.payment?.method
+      },
+      statusHistory: order.statusHistory.filter(history => 
+        history.status === order.status || !history.isInternal
+      ).map(history => ({
+        status: history.status,
+        changedAt: history.changedAt,
+        reason: history.reason,
+        notes: history.notes
+      })),
+      notes: order.notes.filter(note => !note.isInternal).map(note => ({
+        note: note.note,
+        type: note.type,
+        createdAt: note.createdAt
+      }))
+    };
+
+    res.status(200).json({
+      success: true,
+      data: orderDetails
+    });
+
+  } catch (error) {
+    console.error('Get order details error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching order details'
     });
   }
 };
@@ -1270,13 +1697,14 @@ exports.requestPayout = async (req, res) => {
       });
     }
 
-    // Calculate available earnings
+    // Calculate available earnings (delivered orders not yet paid out)
     const earningsData = await Order.aggregate([
       { 
         $match: { 
           'items.artisan': artisan._id,
           status: 'delivered',
-          'payment.status': 'completed'
+          'payment.status': 'completed',
+          'commission.paidToArtisan': false
         }
       },
       { 
@@ -1296,7 +1724,7 @@ exports.requestPayout = async (req, res) => {
     ]);
 
     const totalEarnings = earningsData[0]?.totalEarnings || 0;
-    const platformCommissionRate = 0.15;
+    const platformCommissionRate = 0.10; // 10% platform commission
     const netEarnings = totalEarnings * (1 - platformCommissionRate);
 
     // Check pending payouts
@@ -1323,10 +1751,16 @@ exports.requestPayout = async (req, res) => {
       });
     }
 
+    // Calculate platform fee for this payout
+    const platformFee = amount * platformCommissionRate;
+    const netAmount = amount - platformFee;
+
     // Create payout request
     const payout = await Payout.create({
       artisan: artisan._id,
       amount: amount,
+      netAmount: netAmount,
+      platformFee: platformFee,
       status: 'pending',
       requestedAt: new Date(),
       bankDetails: {
@@ -1336,8 +1770,22 @@ exports.requestPayout = async (req, res) => {
         ifscCode: artisan.bankDetails.ifscCode,
         accountType: artisan.bankDetails.accountType
       },
-      platformFee: amount * platformCommissionRate,
-      netAmount: amount * (1 - platformCommissionRate)
+      metadata: {
+        orderIds: [] // Will be populated by admin when processing
+      }
+    });
+
+    // Create notification for admin
+    await Notification.create({
+      title: 'New Payout Request',
+      message: `${artisan.businessName} has requested a payout of ₹${amount}`,
+      type: 'payout_request',
+      data: {
+        artisanId: artisan._id,
+        payoutId: payout._id,
+        amount: amount
+      },
+      forAdmin: true
     });
 
     res.status(201).json({
@@ -1346,6 +1794,8 @@ exports.requestPayout = async (req, res) => {
       data: {
         payoutId: payout._id,
         amount: payout.amount,
+        netAmount: payout.netAmount,
+        platformFee: payout.platformFee,
         status: payout.status,
         requestedAt: payout.requestedAt,
         estimatedCompletion: '3-5 business days'
@@ -1357,6 +1807,87 @@ exports.requestPayout = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error requesting payout'
+    });
+  }
+};
+
+// @desc    Get payout history
+// @route   GET /api/artisan/payouts
+// @access  Private (Artisan only)
+exports.getPayoutHistory = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    // Get artisan profile
+    const artisan = await Artisan.findOne({ userId: req.user.id });
+    if (!artisan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Artisan profile not found'
+      });
+    }
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const payouts = await Payout.find({ artisan: artisan._id })
+      .sort({ requestedAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    const total = await Payout.countDocuments({ artisan: artisan._id });
+
+    // Calculate summary statistics
+    const summary = await Payout.aggregate([
+      { $match: { artisan: artisan._id } },
+      {
+        $group: {
+          _id: '$status',
+          totalAmount: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const summaryObj = {
+      processed: { amount: 0, count: 0 },
+      pending: { amount: 0, count: 0 },
+      failed: { amount: 0, count: 0 }
+    };
+
+    summary.forEach(item => {
+      if (item._id === 'processed') {
+        summaryObj.processed = { amount: item.totalAmount, count: item.count };
+      } else if (item._id === 'pending' || item._id === 'processing') {
+        summaryObj.pending = { 
+          amount: (summaryObj.pending.amount || 0) + item.totalAmount,
+          count: (summaryObj.pending.count || 0) + item.count
+        };
+      } else if (item._id === 'failed') {
+        summaryObj.failed = { amount: item.totalAmount, count: item.count };
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        payouts,
+        summary: summaryObj,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get payout history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching payout history'
     });
   }
 };
