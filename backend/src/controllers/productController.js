@@ -226,7 +226,10 @@ exports.getProductById = async (req, res) => {
     }
 
     const product = await Product.findOne(query)
-      .populate('artisan', 'businessName fullName email phone profileImage bio rating totalSales address specialization yearsOfExperience')
+      .populate({
+        path: 'artisan',
+        select: 'businessName fullName email phone profileImage bio rating totalSales address specialization yearsOfExperience'
+      })
       .populate('createdBy', 'name email')
       .populate('approvedBy', 'name email')
       .populate('lastModifiedBy', 'name email')
