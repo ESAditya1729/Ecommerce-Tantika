@@ -2,90 +2,102 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
+const Order = require('../models/Order');
+const Artisan = require('../models/Artisan');
 
-// Import both controllers
+// Import controllers
 const artisanController = require('../controllers/artisanController');
 const artisanAnalyticsController = require('../controllers/artisanAnalyticsController');
+const orderController = require('../controllers/OrderController');
 
 // All routes require authentication
 router.use(protect);
 
 // ==================== DASHBOARD & ANALYTICS (Analytics Controller) ====================
-router.get('/dashboard', authorize('artisan'), artisanAnalyticsController.getDashboard);
-router.get('/analytics', authorize('artisan'), artisanAnalyticsController.getAnalytics);
-router.get('/earnings', authorize('artisan'), artisanAnalyticsController.getEarnings);
+if (artisanAnalyticsController.getDashboard) {
+  router.get('/dashboard', authorize('artisan'), artisanAnalyticsController.getDashboard);
+}
 
-// ==================== PRODUCTS (Split between both controllers) ====================
-// GET products with analytics/query features - Analytics Controller
-router.get('/products', authorize('artisan', 'pending_artisan'), artisanAnalyticsController.getProducts);
+if (artisanAnalyticsController.getAnalytics) {
+  router.get('/analytics', authorize('artisan'), artisanAnalyticsController.getAnalytics);
+}
 
-// CRUD operations for products - Main Controller
-router.post('/products', authorize('artisan'), artisanController.createProductArtisan);
-router.put('/products/:id', authorize('artisan'), artisanController.updateProduct);
-router.delete('/products/:id', authorize('artisan'), artisanController.deleteProduct);
+if (artisanAnalyticsController.getEarnings) {
+  router.get('/earnings', authorize('artisan'), artisanAnalyticsController.getEarnings);
+}
 
-// ==================== ORDERS (Combined from both controllers) ====================
-// GET orders with filtering/analytics - Analytics Controller
-router.get('/orders', authorize('artisan'), artisanAnalyticsController.getOrders);
+// ==================== PRODUCTS ====================
+if (artisanAnalyticsController.getProducts) {
+  router.get('/products', authorize('artisan', 'pending_artisan'), artisanAnalyticsController.getProducts);
+}
 
-// Get single order details - Main Controller (new)
-router.get('/orders/:orderId', authorize('artisan'), artisanController.getOrderDetails);
+// CRUD operations for products
+if (artisanController.createProductArtisan) {
+  router.post('/products', authorize('artisan'), artisanController.createProductArtisan);
+}
 
-// Update order status - Main Controller
-router.put('/orders/:orderId/status', authorize('artisan'), artisanController.updateOrderStatus);
+if (artisanController.updateProduct) {
+  router.put('/products/:id', authorize('artisan'), artisanController.updateProduct);
+}
 
-// Add note to order - Main Controller (uses the note method from OrderController)
+if (artisanController.deleteProduct) {
+  router.delete('/products/:id', authorize('artisan'), artisanController.deleteProduct);
+}
+
+// ==================== ORDERS ====================
+if (artisanAnalyticsController.getOrders) {
+  router.get('/orders', authorize('artisan'), artisanAnalyticsController.getOrders);
+}
+
+if (artisanController.getOrderDetails) {
+  router.get('/orders/:orderId', authorize('artisan'), artisanController.getOrderDetails);
+}
+
+if (artisanController.updateOrderStatus) {
+  router.put('/orders/:orderId/status', authorize('artisan'), artisanController.updateOrderStatus);
+}
+
+// Add note to order
 router.post('/orders/:orderId/notes', authorize('artisan'), async (req, res) => {
   try {
     const { orderId } = req.params;
     const { note } = req.body;
     
     if (!note) {
-      return res.status(400).json({
-        success: false,
-        message: 'Note content is required'
-      });
+      return res.status(400).json({ success: false, message: 'Note content is required' });
     }
     
-    // Forward to OrderController's addOrderNote method
-    const OrderController = require('./controllers/orderController');
-    req.params.id = orderId; // Map orderId to id expected by OrderController
-    return OrderController.addOrderNote(req, res);
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to add note'
+    // Check if order exists and belongs to artisan
+    const artisan = await Artisan.findOne({ userId: req.user.id });
+    if (!artisan) {
+      return res.status(404).json({ success: false, message: 'Artisan profile not found' });
+    }
+    
+    const order = await Order.findOne({ 
+      _id: orderId, 
+      'items.artisan': artisan._id 
     });
+    
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    
+    // Add note directly
+    await order.addNote(note, req.user.id, 'artisan_note', false);
+    
+    res.json({ success: true, message: 'Note added successfully' });
+  } catch (error) {
+    console.error('Add note error:', error);
+    res.status(500).json({ success: false, message: 'Failed to add note' });
   }
 });
 
-// ==================== PROFILE & SETTINGS (Main Controller) ====================
-router.get('/profile', authorize('artisan', 'pending_artisan'), artisanController.getProfile);
-router.put('/profile', authorize('artisan', 'pending_artisan'), artisanController.updateProfile);
-router.put('/bank-details', authorize('artisan'), artisanController.updateBankDetails);
-router.get('/pending-status', authorize('pending_artisan'), artisanController.getPendingStatus);
-
-// ==================== NOTIFICATIONS (Main Controller) ====================
-router.get('/notifications', authorize('artisan'), artisanController.getNotifications);
-router.put('/notifications/:id/read', authorize('artisan'), artisanController.markNotificationAsRead);
-
-// ==================== PAYOUTS (Main Controller) ====================
-router.post('/payouts/request', authorize('artisan'), artisanController.requestPayout);
-router.get('/payouts', authorize('artisan'), artisanController.getPayoutHistory);
-
-// ==================== ORDER STATISTICS & REPORTS (New routes) ====================
-// Get order statistics summary
+// Order statistics summary
 router.get('/orders/stats/summary', authorize('artisan'), async (req, res) => {
   try {
-    const Order = require('../models/Order');
-    const Artisan = require('../models/Artisan');
-    
     const artisan = await Artisan.findOne({ userId: req.user.id });
     if (!artisan) {
-      return res.status(404).json({
-        success: false,
-        message: 'Artisan profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Artisan profile not found' });
     }
     
     const stats = await Order.aggregate([
@@ -97,69 +109,44 @@ router.get('/orders/stats/summary', authorize('artisan'), async (req, res) => {
           _id: null,
           totalOrders: { $sum: 1 },
           totalRevenue: { $sum: '$items.totalPrice' },
-          pendingOrders: {
-            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+          pendingOrders: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          deliveredOrders: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+          processingOrders: { 
+            $sum: { $cond: [{ $in: ['$status', ['confirmed', 'processing', 'ready_to_ship']] }, 1, 0] } 
           },
-          deliveredOrders: {
-            $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
-          },
-          processingOrders: {
-            $sum: { 
-              $cond: [{ $in: ['$status', ['confirmed', 'processing', 'ready_to_ship']] }, 1, 0] 
-            }
-          },
-          cancelledOrders: {
-            $sum: { $cond: [{ $in: ['$status', ['cancelled', 'refunded']] }, 1, 0] }
+          cancelledOrders: { 
+            $sum: { $cond: [{ $in: ['$status', ['cancelled', 'refunded']] }, 1, 0] } 
           }
         }
       }
     ]);
     
-    res.status(200).json({
-      success: true,
-      data: stats[0] || {
-        totalOrders: 0,
-        totalRevenue: 0,
-        pendingOrders: 0,
-        deliveredOrders: 0,
-        processingOrders: 0,
-        cancelledOrders: 0
-      }
-    });
+    res.json({ success: true, data: stats[0] || {
+      totalOrders: 0, totalRevenue: 0, pendingOrders: 0,
+      deliveredOrders: 0, processingOrders: 0, cancelledOrders: 0
+    }});
   } catch (error) {
-    console.error('Error fetching order stats:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch order statistics'
-    });
+    console.error('Order stats error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch statistics' });
   }
 });
 
 // Export orders as CSV
 router.get('/orders/export/csv', authorize('artisan'), async (req, res) => {
   try {
-    const Order = require('../models/Order');
-    const Artisan = require('../models/Artisan');
     const { startDate, endDate, status } = req.query;
     
     const artisan = await Artisan.findOne({ userId: req.user.id });
     if (!artisan) {
-      return res.status(404).json({
-        success: false,
-        message: 'Artisan profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Artisan profile not found' });
     }
     
-    let matchFilter = { 'items.artisan': artisan._id };
-    
-    if (status && status !== 'all') {
-      matchFilter.status = status;
-    }
-    
+    const matchFilter = { 'items.artisan': artisan._id };
+    if (status && status !== 'all') matchFilter.status = status;
     if (startDate && endDate) {
       matchFilter.createdAt = {
         $gte: new Date(startDate),
-        $lte: new Date(endDate)
+        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999))
       };
     }
     
@@ -185,32 +172,73 @@ router.get('/orders/export/csv', authorize('artisan'), async (req, res) => {
     
     // Generate CSV
     const csvHeader = 'Order Number,Date,Customer Name,Customer Email,Customer Phone,Product,Quantity,Price,Total,Status\n';
-    const csvRows = orders.map(order => {
-      return [
-        order.orderNumber,
-        new Date(order.createdAt).toLocaleDateString('en-IN'),
-        `"${order.customer?.name || ''}"`,
-        order.customer?.email || '',
-        order.customer?.phone || '',
-        `"${order.items?.name || ''}"`,
-        order.items?.quantity || 0,
-        order.items?.price || 0,
-        order.items?.totalPrice || 0,
-        order.status
-      ].join(',');
-    }).join('\n');
+    const csvRows = orders.map(order => [
+      order.orderNumber,
+      new Date(order.createdAt).toLocaleDateString('en-IN'),
+      `"${order.customer?.name || ''}"`,
+      order.customer?.email || '',
+      order.customer?.phone || '',
+      `"${order.items?.name || ''}"`,
+      order.items?.quantity || 0,
+      order.items?.price || 0,
+      order.items?.totalPrice || 0,
+      order.status
+    ].join(',')).join('\n');
     
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename=orders-${new Date().toISOString().split('T')[0]}.csv`);
     res.send(csvHeader + csvRows);
-    
   } catch (error) {
-    console.error('Error exporting orders:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to export orders'
-    });
+    console.error('Export error:', error);
+    res.status(500).json({ success: false, message: 'Failed to export orders' });
   }
 });
+
+// ==================== PROFILE & SETTINGS ====================
+if (artisanController.getProfile) {
+  router.get('/profile', authorize('artisan', 'pending_artisan'), artisanController.getProfile);
+}
+
+if (artisanController.updateProfile) {
+  router.put('/profile', authorize('artisan', 'pending_artisan'), artisanController.updateProfile);
+}
+
+if (artisanController.updateBankDetails) {
+  router.put('/bank-details', authorize('artisan'), artisanController.updateBankDetails);
+}
+
+if (artisanController.getPendingStatus) {
+  router.get('/pending-status', authorize('pending_artisan'), artisanController.getPendingStatus);
+}
+
+// ==================== NOTIFICATIONS ====================
+if (artisanController.getNotifications) {
+  router.get('/notifications', authorize('artisan'), artisanController.getNotifications);
+}
+
+if (artisanController.markNotificationAsRead) {
+  router.put('/notifications/:id/read', authorize('artisan'), artisanController.markNotificationAsRead);
+}
+
+// ==================== PAYOUTS ====================
+if (artisanController.requestPayout) {
+  router.post('/payouts/request', authorize('artisan'), artisanController.requestPayout);
+}
+
+if (artisanController.getPayoutHistory) {
+  router.get('/payouts', authorize('artisan'), artisanController.getPayoutHistory);
+}
+
+// Debug: Log registered routes
+if (process.env.NODE_ENV !== 'production') {
+  console.log('\n=== Artisan Routes Registered ===');
+  router.stack.forEach(layer => {
+    if (layer.route) {
+      const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
+      console.log(`${methods} ${layer.route.path}`);
+    }
+  });
+  console.log('================================\n');
+}
 
 module.exports = router;
