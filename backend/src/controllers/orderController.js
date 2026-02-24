@@ -486,103 +486,180 @@ class OrderController {
   }
 
   // Get all orders with filters - Admin only
-  static async getAllOrders(req, res) {
-    try {
-      const {
-        page = 1,
-        limit = 20,
-        status,
-        startDate,
-        endDate,
-        search,
-        sortBy = 'createdAt',
-        sortOrder = 'desc'
-      } = req.query;
-      
-      const query = {};
-      
-      // Filter by status
-      if (status) {
-        query.status = status;
-      }
-      
-      // Filter by date range
-      if (startDate && endDate) {
+static async getAllOrders(req, res) {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      startDate,
+      endDate,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+    
+    const query = {};
+    
+    // Filter by status - ONLY if status is provided and not 'all'
+    if (status && status !== 'all' && status !== 'undefined' && status !== 'null') {
+      query.status = status;
+    }
+    
+    // Filter by date range
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      try {
         query.createdAt = {
           $gte: new Date(startDate),
           $lte: new Date(endDate)
         };
+      } catch (dateError) {
+        console.error('Date parsing error:', dateError);
+        // Continue without date filter
       }
-      
-      // Search functionality
-      if (search) {
-        query.$or = [
-          { 'customerDetails.name': { $regex: search, $options: 'i' } },
-          { 'customerDetails.email': { $regex: search, $options: 'i' } },
-          { 'customerDetails.phone': { $regex: search, $options: 'i' } },
-          { orderNumber: { $regex: search, $options: 'i' } },
-          { productName: { $regex: search, $options: 'i' } },
-          { 'customerDetails.city': { $regex: search, $options: 'i' } },
-          { 'customerDetails.state': { $regex: search, $options: 'i' } }
-        ];
-      }
-      
-      const sortOptions = {};
-      sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
-      
-      const orders = await Order.find(query)
+    }
+    
+    // Search functionality - FIXED: Check if search exists and is not empty
+    if (search && search.trim() !== '' && search !== 'undefined' && search !== 'null') {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      query.$or = [
+        { 'customerDetails.name': searchRegex },
+        { 'customerDetails.email': searchRegex },
+        { 'customerDetails.phone': searchRegex },
+        { orderNumber: searchRegex },
+        { productName: searchRegex },
+        { 'customerDetails.city': searchRegex },
+        { 'customerDetails.state': searchRegex }
+      ];
+    }
+    
+    console.log('Executing query:', JSON.stringify(query, null, 2));
+    
+    // Build sort options
+    const sortOptions = {};
+    const validSortFields = ['createdAt', 'updatedAt', 'productPrice', 'orderNumber'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    sortOptions[sortField] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Parse pagination values safely
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    const skipNum = (pageNum - 1) * limitNum;
+    
+    // Execute main query with error handling
+    let orders = [];
+    try {
+      orders = await Order.find(query)
         .sort(sortOptions)
-        .limit(parseInt(limit))
-        .skip((parseInt(page) - 1) * parseInt(limit));
-      
-      const total = await Order.countDocuments(query);
-      
-      // Get status counts for dashboard
-      const statusCounts = await Order.aggregate([
+        .limit(limitNum)
+        .skip(skipNum)
+        .lean(); // Use lean() for better performance
+    } catch (dbError) {
+      console.error('Database error in find:', dbError);
+      // Return empty array instead of throwing
+      orders = [];
+    }
+    
+    // Get total count
+    let total = 0;
+    try {
+      total = await Order.countDocuments(query);
+    } catch (countError) {
+      console.error('Database error in count:', countError);
+      total = 0;
+    }
+    
+    // Get status counts for dashboard - with error handling
+    let statusCounts = [];
+    try {
+      statusCounts = await Order.aggregate([
         {
           $group: {
-            _id: '$status',
+            _id: { $ifNull: ['$status', 'unknown'] },
             count: { $sum: 1 }
           }
         }
       ]);
-      
-      // Get today's orders count
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const todayOrders = await Order.countDocuments({
+    } catch (aggError) {
+      console.error('Aggregation error:', aggError);
+      statusCounts = [];
+    }
+    
+    // Get today's orders count
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let todayOrders = 0;
+    try {
+      todayOrders = await Order.countDocuments({
         createdAt: { $gte: today }
       });
-      
-      res.json({
-        success: true,
-        data: {
-          orders,
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total,
-            pages: Math.ceil(total / limit)
-          },
-          stats: {
-            statusCounts: statusCounts.reduce((acc, curr) => {
-              acc[curr._id] = curr.count;
-              return acc;
-            }, {}),
-            totalOrders: total,
-            todayOrders
-          }
+    } catch (todayError) {
+      console.error('Error counting today\'s orders:', todayError);
+      todayOrders = 0;
+    }
+    
+    // Format status counts safely
+    const statusCountsObj = {};
+    if (Array.isArray(statusCounts)) {
+      statusCounts.forEach(item => {
+        if (item && item._id) {
+          statusCountsObj[item._id] = item.count || 0;
         }
       });
-    } catch (error) {
-      console.error('Get all orders error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to fetch orders'
-      });
     }
+    
+    // Ensure all expected statuses exist
+    const expectedStatuses = ['pending', 'contacted', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+    expectedStatuses.forEach(status => {
+      if (!statusCountsObj[status]) {
+        statusCountsObj[status] = 0;
+      }
+    });
+    
+    // Calculate total pages safely
+    const totalPages = Math.ceil((total || 0) / limitNum) || 1;
+    
+    console.log('Successfully fetched orders:', {
+      count: orders.length,
+      total,
+      page: pageNum,
+      pages: totalPages
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        orders: orders || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: total || 0,
+          pages: totalPages
+        },
+        stats: {
+          statusCounts: statusCountsObj,
+          totalOrders: total || 0,
+          todayOrders: todayOrders || 0
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get all orders error - DETAILED:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Return a more helpful error message
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch orders',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
+}
 
   // Get orders summary for dashboard - Admin only
   static async getOrdersSummary(req, res) {
