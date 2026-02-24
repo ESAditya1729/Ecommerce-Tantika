@@ -1,7 +1,7 @@
 // routes/orderRoutes.js
 const express = require('express');
 const router = express.Router();
-const OrderController = require('../controllers/orderController');
+const OrderController = require('./controllers/orderController');
 const { protect, admin, superAdmin, artisan, optionalAuth } = require('../middleware/authMiddleware');
 
 // ============= PUBLIC ROUTES (Limited information, no auth required) =============
@@ -34,7 +34,11 @@ router.post('/:id/notes', protect, OrderController.addOrderNote);
 router.get('/artisan/:artisanId', protect, artisan, OrderController.getArtisanOrders);
 
 // Get logged-in artisan's orders - Artisan only
-router.get('/artisan/me/orders', protect, artisan, OrderController.getArtisanOrders);
+router.get('/artisan/me/orders', protect, artisan, (req, res) => {
+  // Redirect to the artisan orders endpoint with the user's artisan ID
+  req.params.artisanId = req.user.artisanId || req.user._id;
+  OrderController.getArtisanOrders(req, res);
+});
 
 // Update order status for artisan items - Artisan/Admin/SuperAdmin only
 router.put('/:orderId/artisan-status', protect, artisan, OrderController.updateArtisanOrderStatus);
@@ -70,16 +74,79 @@ router.get('/admin/:id', protect, admin, OrderController.getOrderById);
 
 // ============= SUPER ADMIN ONLY ROUTES =============
 
-// Delete order (hard delete) - SuperAdmin only
-router.delete('/admin/:id', protect, superAdmin, OrderController.deleteOrder);
+// Delete order (soft delete by updating status) - SuperAdmin only
+router.delete('/admin/:id', protect, superAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { permanent = false } = req.query;
+    
+    if (permanent === 'true') {
+      // For permanent deletion, use bulk update with delete action
+      req.body = {
+        orderIds: [id],
+        action: 'delete',
+        value: 'permanent'
+      };
+      return OrderController.bulkUpdateOrders(req, res);
+    } else {
+      // Soft delete by updating status to cancelled
+      req.body = {
+        status: 'cancelled',
+        reason: 'Order deleted by super admin',
+        notes: 'Order has been deleted from the system'
+      };
+      return OrderController.updateOrderStatus(req, res);
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete order'
+    });
+  }
+});
 
 // Bulk delete orders - SuperAdmin only
-router.post('/admin/bulk/delete', protect, superAdmin, OrderController.bulkUpdateOrders);
+router.post('/admin/bulk/delete', protect, superAdmin, async (req, res) => {
+  try {
+    const { orderIds, permanent = false } = req.body;
+    
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Order IDs are required'
+      });
+    }
+    
+    if (permanent) {
+      // Permanent deletion
+      req.body = {
+        orderIds,
+        action: 'delete',
+        value: 'permanent'
+      };
+    } else {
+      // Soft delete by updating status
+      req.body = {
+        orderIds,
+        action: 'status',
+        value: 'cancelled',
+        reason: 'Bulk deletion by super admin'
+      };
+    }
+    
+    return OrderController.bulkUpdateOrders(req, res);
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete orders'
+    });
+  }
+});
 
 
 // ============= LEGACY ROUTES (Maintained for backward compatibility) =============
 
-// Legacy: Create order via express-interest (now redirects to main create)
+// Legacy: Create order via express-interest (now requires authentication)
 router.post('/express-interest', protect, OrderController.createOrder);
 
 // Legacy: Get customer orders by email (redirects to authenticated version)
