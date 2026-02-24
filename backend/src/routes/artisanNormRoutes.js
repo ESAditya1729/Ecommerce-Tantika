@@ -8,7 +8,7 @@ const Artisan = require('../models/Artisan');
 // Import controllers
 const artisanController = require('../controllers/artisanController');
 const artisanAnalyticsController = require('../controllers/artisanAnalyticsController');
-const orderController = require('../controllers/OrderController');
+const orderController = require('../controllers/orderController');
 
 // All routes require authentication
 router.use(protect);

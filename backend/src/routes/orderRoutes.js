@@ -1,7 +1,7 @@
 // routes/orderRoutes.js
 const express = require('express');
 const router = express.Router();
-const orderController = require('../controllers/OrderController');
+const orderController = require('../controllers/orderController');
 const { protect, admin, superAdmin, artisan } = require('../middleware/authMiddleware');
 const Order = require('../models/Order'); // Add this import at the top
 
