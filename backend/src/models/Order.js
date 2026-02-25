@@ -496,19 +496,19 @@ orderSchema.index({ priority: 1 });
 
 // ==================== VIRTUAL FIELDS ====================
 orderSchema.virtual('formattedDate').get(function() {
-  return this.createdAt.toLocaleDateString('en-IN', {
+  return this.createdAt ? this.createdAt.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric'
-  });
+  }) : 'N/A';
 });
 
 orderSchema.virtual('itemCount').get(function() {
-  return this.items.reduce((total, item) => total + item.quantity, 0);
+  return this.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0;
 });
 
 orderSchema.virtual('isPaid').get(function() {
-  return this.payment.status === 'completed';
+  return this.payment?.status === 'completed';
 });
 
 orderSchema.virtual('isDelivered').get(function() {
@@ -520,7 +520,7 @@ orderSchema.virtual('isCancelled').get(function() {
 });
 
 orderSchema.virtual('estimatedDeliveryDate').get(function() {
-  if (this.shipping.estimatedDelivery) {
+  if (this.shipping?.estimatedDelivery) {
     return this.shipping.estimatedDelivery.toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
@@ -531,12 +531,19 @@ orderSchema.virtual('estimatedDeliveryDate').get(function() {
 });
 
 orderSchema.virtual('customerFullAddress').get(function() {
+  if (!this.customer?.shippingAddress) return 'Address not available';
   const addr = this.customer.shippingAddress;
-  return `${addr.street}, ${addr.city}, ${addr.state} - ${addr.postalCode}, ${addr.country}`;
+  return addr ? `${addr.street || ''}, ${addr.city || ''}, ${addr.state || ''} - ${addr.postalCode || ''}, ${addr.country || 'India'}`.replace(/, ,/g, ',').replace(/^, |, $/g, '') : 'Address not available';
 });
 
 orderSchema.virtual('artisans').get(function() {
-  const artisanIds = new Set(this.items.map(item => item.artisan.toString()));
+  if (!this.items || !this.items.length) return [];
+  const artisanIds = new Set();
+  this.items.forEach(item => {
+    if (item.artisan) {
+      artisanIds.add(item.artisan.toString());
+    }
+  });
   return Array.from(artisanIds);
 });
 
