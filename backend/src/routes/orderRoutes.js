@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const OrderController = require('../controllers/OrderController');
+const OrderController = require('../controllers/orderController');
 const { protect, admin } = require('../middleware/authMiddleware'); // Remove superAdmin from here if it doesn't exist
 const Order = require('../models/Order');
 
