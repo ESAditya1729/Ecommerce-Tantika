@@ -44,6 +44,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     e.nativeEvent.stopImmediatePropagation();
     
     console.log("Express Interest clicked for:", product.name);
+    console.log("Product data:", product);
     
     const userInfo = getUserInfo();
 
@@ -149,20 +150,93 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     return stars;
   };
 
-  // Prepare product data for OrderModal
+  // Helper function to get artisan ID properly
+  const getArtisanId = () => {
+    if (!product) return null;
+    
+    // Try to get artisan ID from various possible locations
+    if (product.artisan) {
+      if (typeof product.artisan === 'object' && product.artisan !== null) {
+        return product.artisan._id || product.artisan.id;
+      }
+      return product.artisan; // If it's a string ID
+    }
+    if (product.artisanId) {
+      return product.artisanId;
+    }
+    if (product.artisan_id) {
+      return product.artisan_id;
+    }
+    if (product.createdBy) {
+      if (typeof product.createdBy === 'object' && product.createdBy._id) {
+        return product.createdBy._id;
+      }
+      return product.createdBy;
+    }
+    return null;
+  };
+
+  // Helper function to get artisan display name
+  const getArtisanDisplayName = () => {
+    if (!product) return "Tantika Artisan";
+    
+    if (product.artisanName && typeof product.artisanName === 'string') {
+      return product.artisanName;
+    }
+    if (product.artisan) {
+      if (typeof product.artisan === 'object' && product.artisan !== null) {
+        return product.artisan.businessName || product.artisan.name || product.artisan.fullName || "Artisan";
+      }
+      return String(product.artisan);
+    }
+    return "Tantika Artisan";
+  };
+
+  // Helper function to get artisan location
+  const getArtisanLocation = () => {
+    if (!product) return "India";
+    
+    if (product.location) return product.location;
+    if (product.origin) return product.origin;
+    if (product.artisanLocation) return product.artisanLocation;
+    
+    // If artisan is an object with address
+    if (product.artisan && typeof product.artisan === 'object' && product.artisan.address) {
+      const addr = product.artisan.address;
+      if (addr.city && addr.state) {
+        return `${addr.city}, ${addr.state}`;
+      } else if (addr.city) {
+        return addr.city;
+      } else if (addr.state) {
+        return addr.state;
+      }
+    }
+    
+    return "India";
+  };
+
+  // Prepare product data for OrderModal - FIXED STRUCTURE
   const productForModal = {
-    id: product._id,
-    name: product.name,
-    price: product.price,
-    images:
-      product.images && product.images.length > 0
-        ? product.images
-        : [product.image],
-    artisan: product.artisan || "Handcrafted by Artisans",
-    location: product.location || "Across India",
-    category: product.category,
-    description: product.description,
-    stock: product.stock || 0
+    _id: product._id,  // MongoDB ID
+    id: product._id,    // For compatibility
+    name: product.name || product.title,
+    price: product.price || 0,
+    images: (product.images && product.images.length > 0) ? product.images : 
+            (product.image ? [product.image] : []),
+    image: product.image || (product.images?.[0] || ''),
+    artisanId: getArtisanId(),
+    artisan: {
+      _id: getArtisanId(),
+      businessName: getArtisanDisplayName(),
+      name: getArtisanDisplayName()
+    },
+    artisanName: getArtisanDisplayName(),
+    location: getArtisanLocation(),
+    origin: getArtisanLocation(),
+    category: product.category || 'Uncategorized',
+    description: product.description || '',
+    stock: product.stock || 0,
+    sku: product.sku || ''
   };
 
   // Navigate to product details
@@ -230,7 +304,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             {stockStatus.text}
           </div>
 
-          {/* Quick Action Buttons - Wishlist REMOVED */}
+          {/* Quick Action Buttons */}
           <div
             className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-3 transition-all duration-300 ${
               isHovered
@@ -245,8 +319,6 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             >
               <Eye className="w-5 h-5 text-gray-700" />
             </button>
-
-            {/* WISHLIST BUTTON REMOVED */}
 
             <button
               onClick={handleShare}
@@ -286,7 +358,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             >
               <Tag className="w-4 h-4 text-blue-500" />
               <span className="text-sm font-medium text-blue-600 hover:underline">
-                {product.category}
+                {product.category || 'Uncategorized'}
               </span>
             </div>
 
@@ -328,6 +400,14 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             )}
           </div>
 
+          {/* Artisan Info - Small */}
+          <div className="mb-3 flex items-center gap-1 text-xs text-gray-600">
+            <span>By</span>
+            <span className="font-medium text-blue-600 truncate max-w-[120px]">
+              {getArtisanDisplayName()}
+            </span>
+          </div>
+
           {/* Price */}
           <div className="mb-5">
             <div className="text-2xl font-bold text-gray-900 mb-1">
@@ -363,10 +443,13 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
         </div>
       </div>
 
-      {/* Order Modal */}
+      {/* Order Modal - Pass the properly formatted product */}
       <OrderModal
         isOpen={showOrderModal}
-        onClose={() => setShowOrderModal(false)}
+        onClose={() => {
+          console.log("Closing order modal from card");
+          setShowOrderModal(false);
+        }}
         product={productForModal}
         userId={user?._id}
       />

@@ -1,14 +1,34 @@
 // src/pages/ProductDetails.jsx
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, ShoppingBag, Heart, Share2, Star, 
-  Package, Truck, Shield, Check, ChevronLeft, 
-  ChevronRight, Loader2, Tag, MapPin, Calendar,
-  User, Award, Clock, Sparkles, AlertCircle
-} from 'lucide-react';
-import OrderModal from '../components/Modals/OrderModal';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  ShoppingBag,
+  Heart,
+  Share2,
+  Star,
+  Package,
+  Truck,
+  Shield,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Tag,
+  MapPin,
+  Calendar,
+  User,
+  Award,
+  Clock,
+  Sparkles,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+} from "lucide-react";
+import OrderModal from "../components/Modals/OrderModal";
+import { motion } from "framer-motion";
+import BannerAd from "../components/AdScript";
 
 const ProductDetails = () => {
   const { id } = useParams();
@@ -20,11 +40,10 @@ const ProductDetails = () => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [artisanDetails, setArtisanDetails] = useState(null);
-  const [loadingArtisan, setLoadingArtisan] = useState(false);
 
-  // FIXED: Use consistent API URL with /api prefix
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  const API_URL =
+    process.env.REACT_APP_API_URL ||
+    "https://ecommerce-tantika.onrender.com/api";
 
   useEffect(() => {
     if (id) {
@@ -32,107 +51,69 @@ const ProductDetails = () => {
     }
   }, [id]);
 
-  useEffect(() => {
-    if (product?.artisan) {
-      fetchArtisanDetails(product.artisan);
-    }
-  }, [product]);
-
   const fetchProduct = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       console.log(`Fetching product from: ${API_URL}/products/${id}`);
-      
+
       const response = await fetch(`${API_URL}/products/${id}`);
-      
-      console.log('Response status:', response.status);
-      
+
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error('Product not found');
+          throw new Error("Product not found");
         }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
-      console.log('Product API response:', data);
-      
+
       if (data.success) {
-        // Try multiple possible response structures
-        const productData = data.product || data.data || null;
-        
+        const productData = data.data;
+
         if (!productData) {
-          throw new Error('Product data not found in response');
+          throw new Error("Product data not found in response");
         }
-        
-        console.log('Setting product data:', productData);
+
+        console.log("Product data received:", productData);
+        console.log("Artisan data:", productData.artisan);
+        console.log("Business Name:", productData.artisan?.businessName);
+
         setProduct(productData);
         checkWishlistStatus(productData._id);
       } else {
-        throw new Error(data.message || 'Failed to load product');
+        throw new Error(data.message || "Failed to load product");
       }
     } catch (err) {
-      console.error('Error fetching product:', err);
+      console.error("Error fetching product:", err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch artisan details
-  const fetchArtisanDetails = async (artisanId) => {
-    try {
-      setLoadingArtisan(true);
-      const token = localStorage.getItem('tantika_token');
-      
-      console.log(`Fetching artisan: ${API_URL}/artisans/${artisanId}`);
-      
-      const response = await fetch(`${API_URL}/artisans/${artisanId}`, {
-        headers: token ? {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        } : {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setArtisanDetails(data.artisan || data.data);
-        }
-      } else {
-        console.log('Artisan not found or unauthorized');
-      }
-    } catch (error) {
-      console.error('Error fetching artisan details:', error);
-    } finally {
-      setLoadingArtisan(false);
-    }
-  };
-
-  // Check wishlist status
   const checkWishlistStatus = async (productId) => {
     try {
-      const token = localStorage.getItem('tantika_token');
+      const token = localStorage.getItem("tantika_token");
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/usernorms/wishlist/check/${productId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await fetch(
+        `${API_URL}/usernorms/wishlist/check/${productId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
         setIsWishlisted(data.data?.isInWishlist || false);
       }
     } catch (error) {
-      console.error('Error checking wishlist status:', error);
+      console.error("Error checking wishlist status:", error);
     }
   };
 
@@ -149,157 +130,208 @@ const ProductDetails = () => {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Product link copied to clipboard!');
+      alert("Product link copied to clipboard!");
     }
   };
 
-  // Handle wishlist with API
   const handleWishlist = async () => {
-    // Check if user is logged in
-    const token = localStorage.getItem('tantika_token');
+    const token = localStorage.getItem("tantika_token");
     if (!token) {
-      navigate('/login', { 
-        state: { 
-          from: 'product-details', 
+      navigate("/login", {
+        state: {
+          from: "product-details",
           productId: product._id,
-          productName: product.name
-        } 
+          productName: product.name,
+        },
       });
       return;
     }
 
     setWishlistLoading(true);
-    
+
     try {
       if (isWishlisted) {
-        // Remove from wishlist
-        const response = await fetch(`${API_URL}/usernorms/wishlist/${product._id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await fetch(
+          `${API_URL}/usernorms/wishlist/${product._id}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
 
         if (response.ok) {
           setIsWishlisted(false);
-          alert('Removed from wishlist');
         }
       } else {
-        // Add to wishlist
         const wishlistData = {
           productId: product._id,
           productName: product.name,
-          productImage: product.images?.[0] || product.image || '',
+          productImage: product.image || "",
           productPrice: product.price,
-          artisan: artisanDetails?.businessName || artisanDetails?.fullName || 'Tantika Exclusive',
-          category: product.category || ''
+          artisan: getArtisanName(),
+          category: product.category || "",
         };
 
         const response = await fetch(`${API_URL}/usernorms/wishlist`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify(wishlistData)
+          body: JSON.stringify(wishlistData),
         });
 
         if (response.ok) {
           setIsWishlisted(true);
-          alert('Added to wishlist');
         } else if (response.status === 400) {
           const data = await response.json();
-          if (data.message === 'Product already in wishlist') {
+          if (data.message === "Product already in wishlist") {
             setIsWishlisted(true);
-            alert('Already in wishlist');
           }
         }
       }
     } catch (error) {
-      console.error('Error updating wishlist:', error);
-      alert('Failed to update wishlist');
+      console.error("Error updating wishlist:", error);
     } finally {
       setWishlistLoading(false);
     }
   };
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
     }).format(price);
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   };
 
   const getStockStatus = (stock) => {
-    if (stock === 0) return { text: 'Out of Stock', color: 'bg-red-50 text-red-700 border-red-200' };
-    if (stock < 5) return { text: 'Low Stock', color: 'bg-amber-50 text-amber-700 border-amber-200' };
-    return { text: 'In Stock', color: 'bg-green-50 text-green-700 border-green-200' };
+    if (stock === 0)
+      return {
+        text: "Out of Stock",
+        color: "bg-red-50 text-red-700 border-red-200",
+        icon: XCircle,
+      };
+    if (stock < 5)
+      return {
+        text: "Low Stock",
+        color: "bg-amber-50 text-amber-700 border-amber-200",
+        icon: AlertTriangle,
+      };
+    return {
+      text: "In Stock",
+      color: "bg-green-50 text-green-700 border-green-200",
+      icon: CheckCircle,
+    };
   };
 
-  // Function to get artisan display name
-  const getArtisanDisplayName = () => {
-    if (artisanDetails) {
-      return artisanDetails.businessName || artisanDetails.fullName || 'Tantika Artisan';
+  const getApprovalStatus = (status) => {
+    switch (status) {
+      case "approved":
+        return {
+          text: "Approved",
+          color: "bg-green-50 text-green-700 border-green-200",
+          icon: CheckCircle,
+        };
+      case "pending":
+        return {
+          text: "Pending Approval",
+          color: "bg-amber-50 text-amber-700 border-amber-200",
+          icon: AlertTriangle,
+        };
+      case "rejected":
+        return {
+          text: "Rejected",
+          color: "bg-red-50 text-red-700 border-red-200",
+          icon: XCircle,
+        };
+      default:
+        return {
+          text: status || "Unknown",
+          color: "bg-gray-50 text-gray-700 border-gray-200",
+          icon: AlertCircle,
+        };
     }
-    return product.artisanName || 'Tantika Exclusive';
   };
 
-  // Function to get artisan location
+  // SIMPLIFIED: Get artisan name - directly use businessName
+  const getArtisanName = () => {
+    if (!product?.artisan) {
+      return "Tantika Exclusive";
+    }
+
+    // Directly return businessName since that's what you want to display
+    // From your API: "businessName": "Raina's Artistry"
+    if (product.artisan.businessName) {
+      return product.artisan.businessName;
+    }
+
+    // Fallback to fullName if businessName doesn't exist
+    if (product.artisan.fullName) {
+      return product.artisan.fullName;
+    }
+
+    return "Tantika Exclusive";
+  };
+
+  // Get location from address
   const getArtisanLocation = () => {
-    if (artisanDetails?.address) {
-      const addr = artisanDetails.address;
-      if (addr.city && addr.state) {
-        return `${addr.city}, ${addr.state}`;
-      } else if (addr.city) {
-        return addr.city;
-      } else if (addr.state) {
-        return addr.state;
-      }
+    if (!product?.artisan?.address) return "India";
+
+    const addr = product.artisan.address;
+    if (addr.city && addr.state) {
+      return `${addr.city}, ${addr.state}`;
+    } else if (addr.city) {
+      return addr.city;
+    } else if (addr.state) {
+      return addr.state;
     }
-    return 'India';
+    return "India";
   };
 
-  // Function to get artisan specialization
+  // Get specialization
   const getArtisanSpecialization = () => {
-    if (artisanDetails?.specialization && artisanDetails.specialization.length > 0) {
-      return artisanDetails.specialization.join(', ');
+    if (product?.artisan?.specialization?.length > 0) {
+      return product.artisan.specialization.join(", ");
     }
-    return 'Handcrafted Excellence';
+    return null;
   };
 
+  // Get product images
   const getProductImages = () => {
-    if (product.images && product.images.length > 0) {
-      return product.images;
+    const images = [];
+    if (product?.image) {
+      images.push(product.image);
     }
-    return product.image ? [product.image] : [];
+    if (product?.images?.length > 0) {
+      images.push(...product.images);
+    }
+    if (product?.galleryImages?.length > 0) {
+      images.push(...product.galleryImages);
+    }
+    return images.length > 0 ? images : [];
   };
 
   if (loading) {
     return (
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="min-h-screen flex flex-col items-center justify-center bg-gray-50"
-      >
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mb-4"
-        />
-        <p className="text-gray-600">Loading product details...</p>
-        <p className="text-sm text-gray-400 mt-2">Product ID: {id}</p>
-      </motion.div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading product details...</p>
+        </div>
+      </div>
     );
   }
 
@@ -309,10 +341,11 @@ const ProductDetails = () => {
         <div className="text-center max-w-md p-8 bg-white rounded-2xl shadow-lg border border-gray-100">
           <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {error ? 'Error Loading Product' : 'Product Not Found'}
+            {error ? "Error Loading Product" : "Product Not Found"}
           </h2>
           <p className="text-gray-600 mb-6">
-            {error || "The product you're looking for doesn't exist or has been removed."}
+            {error ||
+              "The product you're looking for doesn't exist or has been removed."}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
@@ -322,7 +355,7 @@ const ProductDetails = () => {
               Go Back
             </button>
             <button
-              onClick={() => navigate('/shop')}
+              onClick={() => navigate("/shop")}
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg transition-shadow font-medium"
             >
               Browse Products
@@ -334,20 +367,41 @@ const ProductDetails = () => {
   }
 
   const stockStatus = getStockStatus(product.stock || 0);
+  const StockIcon = stockStatus.icon;
+  const approvalStatus = getApprovalStatus(product.approvalStatus);
+  const ApprovalIcon = approvalStatus.icon;
   const images = getProductImages();
+
+  // Get artisan information
+  const artisanName = getArtisanName();
+  console.log("Artisan name being displayed:", artisanName); // Should log: "Raina's Artistry"
+
+  const artisanLocation = getArtisanLocation();
+  const artisanSpecialization = getArtisanSpecialization();
 
   // Prepare product data for OrderModal
   const productForModal = {
-    id: product._id,
+    _id: product._id,
     name: product.name,
     price: product.price,
     images: images,
-    artisan: getArtisanDisplayName(),
-    artisanDetails: artisanDetails,
-    location: getArtisanLocation(),
+    image: product.image || images[0] || "",
+    artisanId: product.artisan?._id,
+    artisan: {
+      _id: product.artisan?._id,
+      businessName: artisanName,
+      name: artisanName,
+      phone: product.artisan?.phone,
+      email: product.artisan?.email,
+      address: product.artisan?.address,
+    },
+    artisanName: artisanName,
+    location: artisanLocation,
+    origin: artisanLocation,
     category: product.category,
     description: product.description,
-    stock: product.stock
+    stock: product.stock,
+    sku: product.sku,
   };
 
   return (
@@ -380,12 +434,13 @@ const ProductDetails = () => {
               <div className="relative aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200">
                 {images.length > 0 ? (
                   <img
-                    src={images[currentImageIndex]}
+                    src={images[currentImageIndex] || images[0]}
                     alt={product.name}
                     className="w-full h-full object-contain p-4"
                     onError={(e) => {
                       e.target.onerror = null;
-                      e.target.src = 'https://via.placeholder.com/600x600/f3f4f6/9ca3af?text=Image+Not+Available';
+                      e.target.src =
+                        "https://via.placeholder.com/600x600/f3f4f6/9ca3af?text=Image+Not+Available";
                     }}
                   />
                 ) : (
@@ -393,33 +448,33 @@ const ProductDetails = () => {
                     <Package className="w-20 h-20 text-gray-400" />
                   </div>
                 )}
-                
-                {/* Navigation arrows - only show if multiple images */}
+
+                {/* Navigation arrows */}
                 {images.length > 1 && (
                   <>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCurrentImageIndex(prev => 
-                          prev === 0 ? images.length - 1 : prev - 1
-                        );
-                      }}
+                      onClick={() =>
+                        setCurrentImageIndex((prev) =>
+                          prev === 0 ? images.length - 1 : prev - 1,
+                        )
+                      }
                       className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-all shadow-lg hover:scale-110"
                     >
                       <ChevronLeft className="w-5 h-5 text-gray-600" />
                     </button>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCurrentImageIndex(prev => (prev + 1) % images.length);
-                      }}
+                      onClick={() =>
+                        setCurrentImageIndex(
+                          (prev) => (prev + 1) % images.length,
+                        )
+                      }
                       className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-all shadow-lg hover:scale-110"
                     >
                       <ChevronRight className="w-5 h-5 text-gray-600" />
                     </button>
                   </>
                 )}
-                
+
                 {/* Top badges */}
                 <div className="absolute top-4 left-4 flex flex-col gap-2">
                   {product.isFeatured && (
@@ -439,7 +494,7 @@ const ProductDetails = () => {
                   )}
                 </div>
               </div>
-              
+
               {/* Thumbnails */}
               {images.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-2">
@@ -448,9 +503,9 @@ const ProductDetails = () => {
                       key={idx}
                       onClick={() => setCurrentImageIndex(idx)}
                       className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                        currentImageIndex === idx 
-                          ? 'border-blue-500 shadow-md scale-105' 
-                          : 'border-gray-200 hover:border-gray-300'
+                        currentImageIndex === idx
+                          ? "border-blue-500 shadow-md scale-105"
+                          : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
                       <img
@@ -459,7 +514,8 @@ const ProductDetails = () => {
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = 'https://via.placeholder.com/100x100/f3f4f6/9ca3af?text=Image';
+                          e.target.src =
+                            "https://via.placeholder.com/100x100/f3f4f6/9ca3af?text=Image";
                         }}
                       />
                     </button>
@@ -470,19 +526,23 @@ const ProductDetails = () => {
 
             {/* Right Column - Product Info */}
             <div className="space-y-6">
-              {/* Category and Stock Status */}
-              <div className="flex flex-wrap gap-3">
+              {/* Category and Status Badges */}
+              <div className="flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm font-medium">
                   <Tag className="w-4 h-4" />
-                  {product.category || 'Uncategorized'}
+                  {product.category || "Uncategorized"}
                 </span>
-                <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${stockStatus.color}`}>
-                  <div className={`w-2 h-2 rounded-full ${
-                    stockStatus.text.includes('Out') ? 'bg-red-500' : 
-                    stockStatus.text.includes('Low') ? 'bg-amber-500' : 
-                    'bg-green-500'
-                  }`} />
+                <span
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${stockStatus.color}`}
+                >
+                  <StockIcon className="w-4 h-4" />
                   {stockStatus.text}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${approvalStatus.color}`}
+                >
+                  <ApprovalIcon className="w-4 h-4" />
+                  {approvalStatus.text}
                 </span>
               </div>
 
@@ -490,7 +550,7 @@ const ProductDetails = () => {
               <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 leading-tight">
                 {product.name}
               </h1>
-              
+
               {/* Rating */}
               <div className="flex items-center gap-3">
                 <div className="flex">
@@ -499,18 +559,19 @@ const ProductDetails = () => {
                       key={i}
                       className={`w-5 h-5 ${
                         i < Math.floor(product.rating || 0)
-                          ? 'text-amber-400 fill-amber-400'
-                          : 'text-gray-300'
+                          ? "text-amber-400 fill-amber-400"
+                          : "text-gray-300"
                       }`}
                     />
                   ))}
                 </div>
                 <span className="text-gray-700 font-medium">
-                  {product.rating?.toFixed(1) || '0.0'}
+                  {product.rating?.toFixed(1) || "0.0"}
                 </span>
                 {product.reviewCount > 0 && (
                   <span className="text-gray-500 text-sm">
-                    ({product.reviewCount} review{product.reviewCount !== 1 ? 's' : ''})
+                    ({product.reviewCount} review
+                    {product.reviewCount !== 1 ? "s" : ""})
                   </span>
                 )}
               </div>
@@ -520,64 +581,91 @@ const ProductDetails = () => {
                 <div className="text-4xl font-bold text-gray-900">
                   {formatPrice(product.price)}
                 </div>
-                <div className="text-sm text-gray-500">Inclusive of taxes • Free shipping over ₹999</div>
-              </div>
-
-              {/* Artisan Info */}
-              <div className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 rounded-2xl p-4 border border-blue-100">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center flex-shrink-0">
-                    {loadingArtisan ? (
-                      <Loader2 className="w-5 h-5 text-white animate-spin" />
-                    ) : (
-                      <User className="w-6 h-6 text-white" />
-                    )}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm text-gray-600">Handcrafted by</span>
-                      {artisanDetails?.status === 'approved' && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                          <Check className="w-3 h-3" />
-                          Verified
-                        </span>
-                      )}
-                    </div>
-                    
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">
-                      {getArtisanDisplayName()}
-                    </h3>
-                    
-                    <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        {getArtisanLocation()}
-                      </span>
-                      
-                      {artisanDetails?.yearsOfExperience > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          {artisanDetails.yearsOfExperience} years
-                        </span>
-                      )}
-                    </div>
-                    
-                    {artisanDetails?.specialization && (
-                      <div className="mt-2">
-                        <div className="text-xs font-medium text-gray-500 mb-1">Specializes in</div>
-                        <div className="text-sm text-gray-700">{getArtisanSpecialization()}</div>
-                      </div>
-                    )}
-                  </div>
+                <div className="text-sm text-gray-500">
+                  Inclusive of taxes • Free shipping over ₹999
                 </div>
               </div>
 
+              {/* Artisan Info - FIXED SECTION */}
+              {product.artisan && (
+                <div className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-6 border border-amber-100">
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <User className="w-8 h-8 text-white" />
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
+                          Handcrafted by
+                        </span>
+                      </div>
+
+                      {/* This will now show "Raina's Artistry" */}
+                      <h3 className="text-xl font-bold text-gray-900 mb-3">
+                        {product.artisan.businessName ||
+                          product.artisan.fullName ||
+                          "Tantika Exclusive"}
+                      </h3>
+
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-4 h-4 text-amber-500" />
+                          {"India"}
+                        </span>
+
+                        {product.artisan.yearsOfExperience > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-4 h-4 text-amber-500" />
+                            {product.artisan.yearsOfExperience} years
+                          </span>
+                        )}
+
+                        {/* <span className="flex items-center gap-1">
+                          <Award className="w-4 h-4 text-amber-500" />
+                          Rating: {product.artisan.rating?.toFixed(1) || "4.5"}
+                        </span> */}
+                      </div>
+
+                      {product.artisan.specialization?.length > 0 && (
+                        <div className="mt-3">
+                          <div className="flex flex-wrap gap-2">
+                            {product.artisan.specialization.map(
+                              (spec, index) => (
+                                <span
+                                  key={index}
+                                  className="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-full"
+                                >
+                                  {spec}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 flex justify-center">
+                <BannerAd
+                  key="708f1310e8b739077a59073d869d1360"
+                  height={90}
+                  width={728}
+                  className="rounded-lg shadow-md"
+                />
+              </div>
+              <br />
+
               {/* Description */}
               <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-gray-900">Description</h3>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Description
+                </h3>
                 <div className="text-gray-600 leading-relaxed whitespace-pre-line">
-                  {product.description || 'No description available for this product.'}
+                  {product.description ||
+                    "No description available for this product."}
                 </div>
               </div>
 
@@ -586,28 +674,36 @@ const ProductDetails = () => {
                 <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
                   <Truck className="w-5 h-5 text-blue-600" />
                   <div>
-                    <div className="font-medium text-gray-900">Free Shipping</div>
+                    <div className="font-medium text-gray-900">
+                      Free Shipping
+                    </div>
                     <div className="text-xs text-gray-600">Across India</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
                   <Shield className="w-5 h-5 text-green-600" />
                   <div>
-                    <div className="font-medium text-gray-900">Secure Payment</div>
+                    <div className="font-medium text-gray-900">
+                      Secure Payment
+                    </div>
                     <div className="text-xs text-gray-600">100% protected</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
                   <Package className="w-5 h-5 text-purple-600" />
                   <div>
-                    <div className="font-medium text-gray-900">Easy Returns</div>
+                    <div className="font-medium text-gray-900">
+                      Easy Returns
+                    </div>
                     <div className="text-xs text-gray-600">7-day policy</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl">
                   <Check className="w-5 h-5 text-amber-600" />
                   <div>
-                    <div className="font-medium text-gray-900">Quality Checked</div>
+                    <div className="font-medium text-gray-900">
+                      Quality Checked
+                    </div>
                     <div className="text-xs text-gray-600">Handcrafted</div>
                   </div>
                 </div>
@@ -615,37 +711,47 @@ const ProductDetails = () => {
 
               {/* Action Buttons */}
               <div className="space-y-4 pt-4">
-                {/* Main Action Button */}
                 <button
                   onClick={handleExpressInterest}
-                  disabled={product.stock === 0}
+                  disabled={
+                    product.stock === 0 || product.approvalStatus !== "approved"
+                  }
                   className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
-                    product.stock === 0
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-xl hover:shadow-blue-200/50 active:scale-[0.98]'
+                    product.stock === 0 || product.approvalStatus !== "approved"
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-xl hover:shadow-blue-200/50 active:scale-[0.98]"
                   }`}
                 >
                   <ShoppingBag className="w-6 h-6" />
-                  {product.stock === 0 ? 'Out of Stock' : 'Express Interest'}
+                  {product.stock === 0
+                    ? "Out of Stock"
+                    : product.approvalStatus !== "approved"
+                      ? "Not Available"
+                      : "Express Interest"}
                 </button>
 
-                {/* Secondary Actions */}
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={handleWishlist}
                     disabled={wishlistLoading}
                     className={`py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all border disabled:opacity-50 disabled:cursor-not-allowed ${
                       isWishlisted
-                        ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
-                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        ? "bg-red-50 border-red-200 text-red-600 hover:bg-red-100"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
                     }`}
                   >
                     {wishlistLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                      <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
+                      <Heart
+                        className={`w-5 h-5 ${isWishlisted ? "fill-current" : ""}`}
+                      />
                     )}
-                    {wishlistLoading ? 'Processing...' : (isWishlisted ? 'Wishlisted' : 'Wishlist')}
+                    {wishlistLoading
+                      ? "Processing..."
+                      : isWishlisted
+                        ? "Wishlisted"
+                        : "Wishlist"}
                   </button>
                   <button
                     onClick={handleShare}
@@ -660,14 +766,21 @@ const ProductDetails = () => {
               {/* Stock and Date Info */}
               <div className="pt-4 border-t border-gray-200 text-sm text-gray-600">
                 <div className="flex justify-between">
-                  <span>Available: <span className="font-medium">{product.stock || 0} units</span></span>
+                  <span>
+                    Available:{" "}
+                    <span className="font-medium">
+                      {product.stock || 0} units
+                    </span>
+                  </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
                     Added {formatDate(product.createdAt)}
                   </span>
                 </div>
                 {product.sku && (
-                  <div className="mt-2">SKU: <span className="font-mono">{product.sku}</span></div>
+                  <div className="mt-2">
+                    SKU: <span className="font-mono">{product.sku}</span>
+                  </div>
                 )}
               </div>
             </div>

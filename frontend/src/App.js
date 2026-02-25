@@ -12,7 +12,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ProductDetails from './pages/ProductDetails';
 import ArtisanStories from "./pages/ArtisiansStories";
 import ArtisanPendingApproval from './pages/ArtisanPendingApproval';
-// import ArtisanDashboard from './pages/ArtisanDashboard'
+import ArtisanDashboard from './pages/ArtisanPage'
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -100,7 +100,7 @@ function App() {
         />
         
         {/* Artisan Dashboard */}
-        {/* <Route 
+        <Route 
           path="/artisan/dashboard" 
           element={
             <DashboardLayout>
@@ -109,7 +109,7 @@ function App() {
               </ProtectedRoute>
             </DashboardLayout>
           } 
-        /> */}
+        />
         
         {/* Artisan Pending Approval */}
         <Route 

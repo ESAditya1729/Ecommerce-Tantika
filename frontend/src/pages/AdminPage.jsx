@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Admin Components
@@ -23,6 +23,9 @@ const AdminPage = () => {
     role: 'Super Admin'
   });
 
+  // Add a state to track if we should refresh order data
+  const [refreshOrders, setRefreshOrders] = useState(0);
+
   // Mock data
   const [dashboardStats, setDashboardStats] = useState({
     totalRevenue: 248500,
@@ -43,7 +46,7 @@ const AdminPage = () => {
     { id: 'TNT-2452', customer: 'Rajesh Mehta', amount: 899, status: 'delivered', date: '2024-01-12', items: 1 },
   ]);
 
-  // Check admin authentication - FIXED: Use correct localStorage keys
+  // Check admin authentication
   useEffect(() => {
     const checkAdminAuth = () => {
       const token = localStorage.getItem('tantika_token');
@@ -58,12 +61,10 @@ const AdminPage = () => {
         const user = JSON.parse(userStr);
         // Check if user is actually an admin
         if (user.role !== 'admin' && user.role !== 'superadmin') {
-          // If not admin, redirect to dashboard
           navigate('/dashboard');
           return;
         }
         
-        // Update adminData with actual user info
         setAdminData({
           name: user.username || 'Admin',
           email: user.email || 'admin@tantika.com',
@@ -82,7 +83,6 @@ const AdminPage = () => {
   }, [navigate]);
 
   const handleLogout = () => {
-    // Remove the correct localStorage items
     localStorage.removeItem('tantika_token');
     localStorage.removeItem('tantika_user');
     navigate('/login');
@@ -90,26 +90,39 @@ const AdminPage = () => {
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
+    
+    // If switching to orders tab, trigger a refresh
+    if (tabId === 'orders') {
+      setRefreshOrders(prev => prev + 1);
+    }
+    
     // Only close sidebar on mobile
     if (window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
   };
 
+  // Function to refresh orders from child components
+  const handleOrderUpdate = useCallback(() => {
+    setRefreshOrders(prev => prev + 1);
+  }, []);
+
+  // Render content based on active tab
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
           <div className="space-y-8">
             <StatsOverview stats={dashboardStats} />
-            <RecentOrders orders={recentOrders} />
+            <RecentOrders orders={recentOrders} onOrderUpdate={handleOrderUpdate} />
             <AnalyticsDashboard />
           </div>
         );
       case 'products':
-        return <ProductManagement />;
+        return <ProductManagement onUpdate={handleOrderUpdate} />;
       case 'orders':
-        return <OrderManagement />;
+        // Pass refresh trigger to OrderManagement
+        return <OrderManagement key={`orders-${refreshOrders}`} refreshTrigger={refreshOrders} />;
       case 'users':
         return <UserManagement />;
       case 'analytics':
@@ -122,7 +135,7 @@ const AdminPage = () => {
         return (
           <div className="space-y-8">
             <StatsOverview stats={dashboardStats} />
-            <RecentOrders orders={recentOrders} />
+            <RecentOrders orders={recentOrders} onOrderUpdate={handleOrderUpdate} />
           </div>
         );
     }
@@ -130,7 +143,7 @@ const AdminPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Admin Sidebar - Fixed on left */}
+      {/* Admin Sidebar */}
       <AdminSidebar 
         activeTab={activeTab}
         setActiveTab={handleTabChange}
@@ -138,11 +151,11 @@ const AdminPage = () => {
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      {/* Main Layout - Content area */}
+      {/* Main Layout */}
       <div className={`transition-all duration-300 ${
         isSidebarOpen ? 'lg:pl-64' : 'pl-0'
       }`}>
-        {/* Admin Header - Fixed at top */}
+        {/* Admin Header */}
         <AdminHeader 
           adminData={adminData}
           onLogout={handleLogout}
@@ -161,7 +174,14 @@ const AdminPage = () => {
               
               {activeTab !== 'dashboard' && (
                 <div className="flex items-center space-x-4">
-                  <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                  <button 
+                    onClick={handleOrderUpdate}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <span className="mr-2">↻</span>
+                    Refresh
+                  </button>
+                  <button className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                     <span className="mr-2">+</span>
                     Add New
                   </button>
@@ -170,8 +190,8 @@ const AdminPage = () => {
             </div>
           </div>
 
-          {/* Content Area */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+          {/* Content Area - Remove the white background wrapper to allow OrderManagement to have its own styling */}
+          <div className={activeTab === 'orders' ? '' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6'}>
             {renderContent()}
           </div>
 
@@ -186,7 +206,7 @@ const AdminPage = () => {
                       <p className="text-2xl font-bold text-gray-900">24</p>
                     </div>
                     <div className="p-3 bg-green-100 rounded-lg">
-                      <span className="text-green-600">👤</span>
+                      <span className="text-green-600 text-xl">👤</span>
                     </div>
                   </div>
                 </div>
@@ -198,7 +218,7 @@ const AdminPage = () => {
                       <p className="text-2xl font-bold text-gray-900">₹8,450</p>
                     </div>
                     <div className="p-3 bg-blue-100 rounded-lg">
-                      <span className="text-blue-600">💰</span>
+                      <span className="text-blue-600 text-xl">💰</span>
                     </div>
                   </div>
                 </div>
@@ -210,7 +230,7 @@ const AdminPage = () => {
                       <p className="text-2xl font-bold text-gray-900">₹1,850</p>
                     </div>
                     <div className="p-3 bg-purple-100 rounded-lg">
-                      <span className="text-purple-600">📈</span>
+                      <span className="text-purple-600 text-xl">📈</span>
                     </div>
                   </div>
                 </div>
@@ -222,7 +242,7 @@ const AdminPage = () => {
                       <p className="text-2xl font-bold text-gray-900">3.2%</p>
                     </div>
                     <div className="p-3 bg-amber-100 rounded-lg">
-                      <span className="text-amber-600">⚡</span>
+                      <span className="text-amber-600 text-xl">⚡</span>
                     </div>
                   </div>
                 </div>
@@ -238,22 +258,22 @@ const AdminPage = () => {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-4 border border-gray-200 rounded-lg">
-                    <span className="text-2xl mb-2">💾</span>
+                    <span className="text-2xl mb-2 block">💾</span>
                     <p className="font-medium">Database</p>
                     <p className="text-sm text-green-600">✓ Online</p>
                   </div>
                   <div className="text-center p-4 border border-gray-200 rounded-lg">
-                    <span className="text-2xl mb-2">🛡️</span>
+                    <span className="text-2xl mb-2 block">🛡️</span>
                     <p className="font-medium">Security</p>
                     <p className="text-sm text-green-600">✓ Secure</p>
                   </div>
                   <div className="text-center p-4 border border-gray-200 rounded-lg">
-                    <span className="text-2xl mb-2">📦</span>
+                    <span className="text-2xl mb-2 block">📦</span>
                     <p className="font-medium">Inventory</p>
                     <p className="text-sm text-green-600">89 Items</p>
                   </div>
                   <div className="text-center p-4 border border-gray-200 rounded-lg">
-                    <span className="text-2xl mb-2">💬</span>
+                    <span className="text-2xl mb-2 block">💬</span>
                     <p className="font-medium">Support</p>
                     <p className="text-sm text-green-600">✓ Active</p>
                   </div>

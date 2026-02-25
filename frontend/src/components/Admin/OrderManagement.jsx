@@ -5,10 +5,6 @@ import {
   RefreshCw,
   AlertCircle,
   ShoppingBag,
-  MessageSquare,
-  Truck,
-  Package,
-  CheckCircle,
   X,
   ChevronDown,
   Edit,
@@ -19,8 +15,8 @@ import QuickStats from "./Order-Management/QuickStats";
 import OrderFilters from "./Order-Management/OrderFilters";
 import OrderTable from "./Order-Management/OrderTable";
 
-// API Base URL - Production endpoint
-const API_BASE_URL = process.env.REACT_APP_API_URL || "https://ecommerce-tantika.onrender.com/api";
+// API Base URL - Make it configurable
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const OrderManagement = () => {
   // State
@@ -52,6 +48,9 @@ const OrderManagement = () => {
   const searchTermRef = useRef(searchTerm);
   const dateRangeRef = useRef(dateRange);
   const isMounted = useRef(true);
+  const fetchInProgress = useRef(false);
+  // const initialFetchDone = useRef(false);
+  const loadingTimeoutRef = useRef(null);
 
   // Auth helpers
   const getAuthToken = () => localStorage.getItem("tantika_token");
@@ -68,7 +67,7 @@ const OrderManagement = () => {
 
   const isCurrentUserAdmin = () => {
     const user = getCurrentUser();
-    return user?.role === "admin";
+    return user?.role === "admin" || user?.role === "superAdmin";
   };
 
   // Update refs
@@ -82,15 +81,43 @@ const OrderManagement = () => {
   useEffect(() => {
     return () => {
       isMounted.current = false;
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
     };
   }, []);
+
+  // Safety timeout to prevent infinite loading
+  useEffect(() => {
+    if (loading && initialLoad) {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+      
+      loadingTimeoutRef.current = setTimeout(() => {
+        if (isMounted.current && loading) {
+          console.warn('Loading timeout - forcing reset');
+          setLoading(false);
+          setInitialLoad(false);
+          setError('Loading timeout. Please refresh the page.');
+          fetchInProgress.current = false;
+        }
+      }, 15000);
+    }
+    
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, [loading, initialLoad]);
 
   // Verify admin access
   useEffect(() => {
     const token = getAuthToken();
     const user = getCurrentUser();
 
-    if (!token || !user || user.role !== "admin") {
+    if (!token || !user || !isCurrentUserAdmin()) {
       setError("Admin access required. Please log in with an admin account.");
       setLoading(false);
       setInitialLoad(false);
@@ -106,12 +133,13 @@ const OrderManagement = () => {
       if (!token) return;
 
       const response = await axios.get(
-        `${API_BASE_URL}/orders/summary/dashboard`,
+        `${API_BASE_URL}/orders/admin/summary/dashboard`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
+          timeout: 10000
         }
       );
 
@@ -123,8 +151,103 @@ const OrderManagement = () => {
     }
   }, []);
 
-  // Fetch orders
-  const fetchOrders = useCallback(async () => {
+  // Transform backend order to frontend format
+  const transformOrder = (backendOrder) => {
+    if (!backendOrder) return null;
+
+    const firstItem = backendOrder.items && backendOrder.items.length > 0 
+      ? backendOrder.items[0] 
+      : null;
+
+    const totalItems = backendOrder.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+
+    const artisanName = firstItem?.artisanName || 
+                       firstItem?.artisan?.businessName || 
+                       'Unknown';
+
+    return {
+      _id: backendOrder._id,
+      id: backendOrder.id || backendOrder._id,
+      orderNumber: backendOrder.orderNumber || 'N/A',
+      status: backendOrder.status || 'pending',
+      createdAt: backendOrder.createdAt,
+      updatedAt: backendOrder.updatedAt,
+      
+      customerDetails: {
+        name: backendOrder.customer?.name || 'N/A',
+        email: backendOrder.customer?.email || '',
+        phone: backendOrder.customer?.phone || '',
+        address: backendOrder.customer?.shippingAddress || {},
+        shippingAddress: backendOrder.customer?.shippingAddress || {},
+        billingAddress: backendOrder.customer?.billingAddress || {},
+        message: backendOrder.customer?.message || ''
+      },
+      
+      customerName: backendOrder.customer?.name || 'N/A',
+      customerEmail: backendOrder.customer?.email || '',
+      customerPhone: backendOrder.customer?.phone || '',
+      
+      productName: firstItem?.name || (backendOrder.items?.length > 1 ? 'Multiple Items' : 'No items'),
+      productPrice: firstItem?.price || 0,
+      productImage: firstItem?.image || '',
+      quantity: firstItem?.quantity || 0,
+      itemsCount: backendOrder.items?.length || 0,
+      totalQuantity: totalItems,
+      
+      artisan: artisanName,
+      artisanName: artisanName,
+      artisanId: firstItem?.artisan?._id || null,
+      
+      paymentMethod: backendOrder.payment?.method || 'cod',
+      paymentStatus: backendOrder.payment?.status || 'pending',
+      payment: backendOrder.payment || {},
+      isPaid: backendOrder.isPaid || false,
+      
+      shippingMethod: backendOrder.shipping?.method || 'standard',
+      shippingCost: backendOrder.shippingCost || 0,
+      shipping: backendOrder.shipping || {},
+      
+      total: backendOrder.total || 0,
+      subtotal: backendOrder.subtotal || 0,
+      tax: backendOrder.tax || 0,
+      discount: backendOrder.discount || 0,
+      currency: backendOrder.currency || 'INR',
+      
+      items: backendOrder.items || [],
+      
+      isDelivered: backendOrder.isDelivered || false,
+      isCancelled: backendOrder.isCancelled || false,
+      
+      statusHistory: backendOrder.statusHistory || [],
+      contactHistory: backendOrder.contactHistory || [],
+      
+      commission: backendOrder.commission || {},
+      communicationPrefs: backendOrder.communicationPrefs || {},
+      
+      source: backendOrder.source || 'website',
+      priority: backendOrder.priority || 'normal',
+      tags: backendOrder.tags || [],
+      notes: backendOrder.notes || [],
+      
+      customerAddress: backendOrder.customer?.shippingAddress || {},
+      customerFullAddress: backendOrder.customerFullAddress || '',
+      
+      formattedDate: backendOrder.formattedDate || 
+        (backendOrder.createdAt ? new Date(backendOrder.createdAt).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }) : 'N/A'),
+      estimatedDeliveryDate: backendOrder.estimatedDeliveryDate || 'Not available'
+    };
+  };
+
+  // Fetch orders - FIXED VERSION
+  const fetchOrders = useCallback(async (skipLoadingState = false) => {
+    // Prevent concurrent fetches
+    if (fetchInProgress.current) return;
+fetchInProgress.current = true;
+
     if (!isCurrentUserAdmin()) {
       setError("Admin access required. Please log in with an admin account.");
       setLoading(false);
@@ -132,25 +255,26 @@ const OrderManagement = () => {
       return;
     }
 
-    setLoading(true);
+    // Set loading only if not skipped AND not already loading
+    if (!skipLoadingState && !loading) {
+      setLoading(true);
+    }
+    
     setError(null);
+    fetchInProgress.current = true;
 
     try {
       const token = getAuthToken();
       if (!token) {
         setError("Authentication required. Please log in.");
-        setLoading(false);
         return;
       }
 
       const params = {
         page: currentPage,
         limit: itemsPerPage,
-        sortBy: "createdAt",
-        sortOrder: "desc",
       };
 
-      // Apply filters
       if (filterStatusRef.current !== "all") {
         params.status = filterStatusRef.current;
       }
@@ -158,98 +282,112 @@ const OrderManagement = () => {
         params.search = searchTermRef.current;
       }
 
-      // Date range filtering
-      if (dateRangeRef.current !== "all") {
-        const today = new Date();
-        const startDate = new Date();
-
-        switch (dateRangeRef.current) {
-          case "today":
-            startDate.setHours(0, 0, 0, 0);
-            break;
-          case "week":
-            startDate.setDate(today.getDate() - 7);
-            break;
-          case "month":
-            startDate.setMonth(today.getMonth() - 1);
-            break;
-          case "quarter":
-            startDate.setMonth(today.getMonth() - 3);
-            break;
-          default:
-            break;
-        }
-
-        if (startDate) {
-          params.startDate = startDate.toISOString();
-          params.endDate = today.toISOString();
-        }
-      }
-
-      const response = await axios.get(`${API_BASE_URL}/orders`, {
+      const response = await axios.get(`${API_BASE_URL}/orders/admin/all`, {
         params,
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        timeout: 15000
       });
 
-      if (isMounted.current && response.data?.success) {
-        const ordersData = response.data.data?.orders || [];
-        const pagination = response.data.data?.pagination;
+      if (!isMounted.current) return;
 
-        setOrders(ordersData);
-        setFilteredOrders(ordersData);
+      if (response.data?.success) {
+        const responseData = response.data.data || {};
+        const ordersData = responseData.orders || [];
+        const pagination = responseData.pagination;
+
+        const transformedOrders = ordersData.map(transformOrder).filter(Boolean);
+        
+        setOrders(transformedOrders);
+        setFilteredOrders(transformedOrders);
 
         if (pagination) {
           setTotalPages(pagination.pages || 1);
-          setTotalOrders(pagination.total || ordersData.length);
+          setTotalOrders(pagination.total || transformedOrders.length);
+        } else {
+          setTotalPages(1);
+          setTotalOrders(transformedOrders.length);
         }
 
-        await fetchDashboardSummary();
+        // Don't await this - let it run in background
+        fetchDashboardSummary().catch(console.error);
+      } else {
+        setError(response.data?.error || 'Failed to fetch orders');
+        setOrders([]);
+        setFilteredOrders([]);
       }
     } catch (error) {
       console.error("Error fetching orders:", error);
 
-      if (isMounted.current) {
-        let errorMessage = "Failed to connect to server. Please try again.";
+      if (!isMounted.current) return;
 
-        if (error.code === "ERR_NETWORK") {
-          errorMessage = "Network error: Cannot connect to the server.";
-        } else if (error.response) {
-          if (error.response.status === 401) {
-            errorMessage = "Session expired. Please log in again.";
-          } else if (error.response.status === 403) {
-            errorMessage = "You do not have permission to view orders.";
-          } else {
-            errorMessage = error.response.data?.error || "Failed to fetch orders";
-          }
+      let errorMessage = "Failed to connect to server. Please try again.";
+
+      if (error.code === "ECONNABORTED") {
+        errorMessage = "Connection timeout. Server took too long to respond.";
+      } else if (error.code === "ERR_NETWORK") {
+        errorMessage = "Network error. Please check if the backend server is running.";
+      } else if (error.response) {
+        if (error.response.status === 401) {
+          errorMessage = "Session expired. Please log in again.";
+        } else if (error.response.status === 403) {
+          errorMessage = "You do not have permission to view orders.";
+        } else if (error.response.status === 404) {
+          errorMessage = "API endpoint not found. Please check server configuration.";
+        } else {
+          errorMessage = error.response.data?.error || "Failed to fetch orders";
         }
-
-        setError(errorMessage);
       }
+
+      setError(errorMessage);
+      setOrders([]);
+      setFilteredOrders([]);
     } finally {
       if (isMounted.current) {
         setLoading(false);
         setInitialLoad(false);
       }
+      fetchInProgress.current = false;
+      
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
     }
   }, [currentPage, itemsPerPage, fetchDashboardSummary]);
 
-  // Initial fetch and auto-refresh
+  // Initial fetch - run only once
+useEffect(() => {
+  if (!isCurrentUserAdmin()) {
+    setLoading(false);
+    setInitialLoad(false);
+    return;
+  }
+
+  fetchOrders(false);
+}, [currentPage, fetchOrders]);
+
+  // // Separate effect for page changes - ONLY trigger when currentPage changes
+  // useEffect(() => {
+  //   if (initialFetchDone.current && isCurrentUserAdmin() && !fetchInProgress.current) {
+  //     fetchOrders(true);
+  //   }
+  // }, [currentPage, fetchOrders]);
+
+  // Auto-refresh every 60 seconds
   useEffect(() => {
-    if (isCurrentUserAdmin()) {
-      fetchOrders();
-    }
+    if (!isCurrentUserAdmin() || error) return;
 
     const interval = setInterval(() => {
-      if (isMounted.current && !error && isCurrentUserAdmin()) {
-        fetchOrders();
+      if (isMounted.current && !fetchInProgress.current && !loading) {
+        fetchOrders(true);
       }
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [fetchOrders, error]);
+  }, [fetchOrders, error, loading]);
 
   // Filter orders locally
   useEffect(() => {
@@ -260,45 +398,66 @@ const OrderManagement = () => {
 
     let result = [...orders];
 
-    // Apply search
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(
         (order) =>
           order.orderNumber?.toLowerCase().includes(term) ||
-          order.customerDetails?.name?.toLowerCase().includes(term) ||
-          order.customerDetails?.email?.toLowerCase().includes(term) ||
-          order.customerDetails?.phone?.includes(term) ||
+          order.customerName?.toLowerCase().includes(term) ||
+          order.customerEmail?.toLowerCase().includes(term) ||
+          order.customerPhone?.includes(term) ||
           order.productName?.toLowerCase().includes(term) ||
-          order.artisan?.toLowerCase().includes(term)
+          order.artisanName?.toLowerCase().includes(term)
       );
     }
 
-    // Apply status filter
     if (filterStatus !== "all") {
       result = result.filter((order) => order.status === filterStatus);
     }
 
-    // Apply sorting
+    if (dateRange !== "all") {
+      const now = new Date();
+      const startDate = new Date();
+      
+      switch (dateRange) {
+        case "today":
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case "week":
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case "month":
+          startDate.setMonth(now.getMonth() - 1);
+          break;
+        case "quarter":
+          startDate.setMonth(now.getMonth() - 3);
+          break;
+        default:
+          break;
+      }
+      
+      result = result.filter(order => new Date(order.createdAt) >= startDate);
+    }
+
     result.sort((a, b) => {
       switch (sortBy) {
         case "oldest":
           return new Date(a.createdAt) - new Date(b.createdAt);
         case "priceHigh":
-          return (b.productPrice || 0) - (a.productPrice || 0);
+          return (b.total || 0) - (a.total || 0);
         case "priceLow":
-          return (a.productPrice || 0) - (b.productPrice || 0);
+          return (a.total || 0) - (b.total || 0);
         case "status":
           return (a.status || "").localeCompare(b.status || "");
-        default: // newest
+        default:
           return new Date(b.createdAt) - new Date(a.createdAt);
       }
     });
 
     setFilteredOrders(result);
-  }, [orders, searchTerm, filterStatus, sortBy]);
+  }, [orders, searchTerm, filterStatus, dateRange, sortBy]);
 
-  // Handlers
+  // Handlers - FIXED: Only update state, don't call fetchOrders directly
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -306,7 +465,16 @@ const OrderManagement = () => {
 
   const handleRetry = () => {
     setCurrentPage(1);
-    fetchOrders();
+    setError(null);
+  };
+
+  const handleRefresh = () => {
+    setCurrentPage(1);
+  };
+
+  const handleFilterChange = (setter) => (value) => {
+    setter(value);
+    setCurrentPage(1);
   };
 
   const handleUpdateStatus = async (orderId, newStatus, notes = "") => {
@@ -315,8 +483,8 @@ const OrderManagement = () => {
       if (!token) throw new Error("Authentication required");
 
       const response = await axios.put(
-        `${API_BASE_URL}/orders/${orderId}/status`,
-        { status: newStatus, adminNote: notes },
+        `${API_BASE_URL}/orders/admin/${orderId}/status`,
+        { status: newStatus, reason: notes },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -324,7 +492,7 @@ const OrderManagement = () => {
         setOrders((prev) =>
           prev.map((order) =>
             order._id === orderId
-              ? { ...order, status: newStatus, updatedAt: new Date().toISOString() }
+              ? { ...order, status: newStatus }
               : order
           )
         );
@@ -343,14 +511,14 @@ const OrderManagement = () => {
       if (!token) throw new Error("Authentication required");
 
       const response = await axios.post(
-        `${API_BASE_URL}/orders/${orderId}/contact`,
+        `${API_BASE_URL}/orders/admin/${orderId}/contact`,
         contactData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.data?.success) {
         alert("Contact history added successfully");
-        await fetchOrders();
+        fetchOrders(true);
       }
     } catch (error) {
       console.error("Error adding contact:", error);
@@ -358,7 +526,7 @@ const OrderManagement = () => {
     }
   };
 
-  const handleCancelOrder = async (orderId, reason = "Cancelled by admin", refundRequired = false) => {
+  const handleCancelOrder = async (orderId, reason = "Cancelled by admin") => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;
 
     try {
@@ -367,7 +535,7 @@ const OrderManagement = () => {
 
       const response = await axios.put(
         `${API_BASE_URL}/orders/${orderId}/cancel`,
-        { cancellationReason: reason, refundRequired },
+        { cancellationReason: reason },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -375,7 +543,7 @@ const OrderManagement = () => {
         setOrders((prev) =>
           prev.map((order) =>
             order._id === orderId
-              ? { ...order, status: "cancelled", paymentStatus: refundRequired ? "refunded" : order.paymentStatus }
+              ? { ...order, status: "cancelled" }
               : order
           )
         );
@@ -396,7 +564,7 @@ const OrderManagement = () => {
       if (!token) throw new Error("Authentication required");
 
       const response = await axios.post(
-        `${API_BASE_URL}/orders/bulk/update`,
+        `${API_BASE_URL}/orders/admin/bulk/update`,
         {
           orderIds: selectedOrders,
           action: "status",
@@ -409,8 +577,7 @@ const OrderManagement = () => {
         alert(`${selectedOrders.length} orders updated successfully`);
         setSelectedOrders([]);
         setShowBulkActions(false);
-        await fetchOrders();
-        await fetchDashboardSummary();
+        fetchOrders(true);
       }
     } catch (error) {
       console.error("Error in bulk update:", error);
@@ -428,7 +595,7 @@ const OrderManagement = () => {
       if (searchTerm) params.append("search", searchTerm);
 
       const response = await axios.get(
-        `${API_BASE_URL}/orders/export/all?${params.toString()}`,
+        `${API_BASE_URL}/orders/admin/export/all?${params.toString()}`,
         {
           headers: { Authorization: `Bearer ${token}` },
           responseType: exportFormat === "csv" ? "blob" : "json",
@@ -463,13 +630,16 @@ const OrderManagement = () => {
   };
 
   const handleContactCustomer = (order) => {
-    if (!order.customerDetails?.phone) {
+    const phone = order.customerPhone || order.customerDetails?.phone;
+    const name = order.customerName || order.customerDetails?.name;
+    
+    if (!phone) {
       alert("Customer phone number not available");
       return;
     }
 
-    const message = `Hello ${order.customerDetails.name}, this is তন্তিকা regarding your order ${order.orderNumber}. How can we help you today?`;
-    const phoneNumber = order.customerDetails.phone.replace(/\D/g, "");
+    const message = `Hello ${name}, this is তন্তিকা regarding your order ${order.orderNumber}. How can we help you today?`;
+    const phoneNumber = phone.replace(/\D/g, "");
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
 
     handleAddContact(order._id, {
@@ -533,14 +703,14 @@ const OrderManagement = () => {
                 <tr>
                   <td>${order.orderNumber || ""}</td>
                   <td>
-                    ${order.customerDetails?.name || ""}<br>
-                    <small>${order.customerDetails?.phone || ""}</small>
+                    ${order.customerName || ""}<br>
+                    <small>${order.customerPhone || ""}</small>
                   </td>
                   <td>${order.productName || ""}</td>
-                  <td>₹${(order.productPrice || 0).toLocaleString()}</td>
+                  <td>₹${(order.total || 0).toLocaleString('en-IN')}</td>
                   <td><span class="status status-${order.status || "pending"}">${order.status || "pending"}</span></td>
                   <td>${order.paymentStatus || "pending"}</td>
-                  <td>${order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ""}</td>
+                  <td>${order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN') : ""}</td>
                 </tr>
               `
                 )
@@ -550,23 +720,18 @@ const OrderManagement = () => {
           <div class="total">
             <p><strong>Summary:</strong></p>
             <p>Total Orders: ${filteredOrders.length}</p>
-            <p>Total Value: ₹${filteredOrders.reduce((sum, order) => sum + (order.productPrice || 0), 0).toLocaleString()}</p>
+            <p>Total Value: ₹${filteredOrders.reduce((sum, order) => sum + (order.total || 0), 0).toLocaleString('en-IN')}</p>
             <p>Pending Orders: ${filteredOrders.filter((o) => o.status === "pending").length}</p>
             <p>Delivered Orders: ${filteredOrders.filter((o) => o.status === "delivered").length}</p>
           </div>
           <div class="footer">
             <p>This is a system generated report from তন্তিকা Admin Panel</p>
           </div>
-        </body>
+        </html>
       </html>
     `);
     printWindow.document.close();
     printWindow.print();
-  };
-
-  const handleRefresh = () => {
-    setCurrentPage(1);
-    fetchOrders();
   };
 
   const handleClearFilters = () => {
@@ -586,13 +751,21 @@ const OrderManagement = () => {
   };
 
   const handleToggleSelect = (orderId) => {
-    setSelectedOrders((prev) =>
-      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId]
-    );
+    if (orderId === 'all') {
+      if (selectedOrders.length === filteredOrders.length) {
+        setSelectedOrders([]);
+      } else {
+        setSelectedOrders(filteredOrders.map((order) => order._id));
+      }
+    } else {
+      setSelectedOrders((prev) =>
+        prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId]
+      );
+    }
   };
 
   // Calculate metrics
-  const totalRevenue = orders.reduce((sum, order) => sum + (order.productPrice || 0), 0);
+  const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
   const pendingOrders = orders.filter((o) => o.status === "pending").length;
   const contactedOrders = orders.filter((o) => o.status === "contacted").length;
@@ -609,6 +782,26 @@ const OrderManagement = () => {
         <div className="flex flex-col items-center justify-center py-12">
           <RefreshCw className="w-12 h-12 animate-spin text-blue-600 mb-4" />
           <p className="text-gray-600">Loading orders...</p>
+          {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state without loading
+  if (error && !loading) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-medium text-red-800 mb-2">Error Loading Orders</h3>
+          <p className="text-red-600 mb-6">{error}</p>
+          <button
+            onClick={handleRetry}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -712,7 +905,7 @@ const OrderManagement = () => {
       </div>
 
       {/* Error Display */}
-      {error && (
+      {error && !loading && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-start">
             <AlertCircle className="w-5 h-5 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
@@ -738,25 +931,13 @@ const OrderManagement = () => {
       <div className="space-y-6">
         <OrderFilters
           searchTerm={searchTerm}
-          onSearchChange={(e) => {
-            setSearchTerm(e.target.value);
-            setCurrentPage(1);
-          }}
+          onSearchChange={handleFilterChange(setSearchTerm)}
           filterStatus={filterStatus}
-          onStatusFilter={(e) => {
-            setFilterStatus(e.target.value);
-            setCurrentPage(1);
-          }}
+          onStatusFilter={handleFilterChange(setFilterStatus)}
           dateRange={dateRange}
-          onDateRangeChange={(e) => {
-            setDateRange(e.target.value);
-            setCurrentPage(1);
-          }}
+          onDateRangeChange={handleFilterChange(setDateRange)}
           sortBy={sortBy}
-          onSortChange={(e) => {
-            setSortBy(e.target.value);
-            setCurrentPage(1);
-          }}
+          onSortChange={handleFilterChange(setSortBy)}
           loading={loading}
           selectedCount={selectedOrders.length}
           onSelectAll={handleSelectAll}
@@ -768,6 +949,7 @@ const OrderManagement = () => {
           onStatusFilter={setFilterStatus}
           loading={loading}
           stats={{
+            totalOrders: orders.length,
             pending: pendingOrders,
             contacted: contactedOrders,
             confirmed: confirmedOrders,
@@ -777,6 +959,7 @@ const OrderManagement = () => {
             cancelled: cancelledOrders,
             totalRevenue,
             avgOrderValue,
+            todayOrders: dashboardStats?.todayOrders || 0
           }}
         />
 
@@ -830,144 +1013,8 @@ const OrderManagement = () => {
             <ShoppingBag className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Orders Found</h3>
             <p className="text-gray-600 max-w-md mx-auto">
-              There are no orders to display at the moment. New orders will appear here when customers express interest in products.
+              There are no orders to display at the moment. New orders will appear here when customers place orders.
             </p>
-          </div>
-        )}
-
-        {orders.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-            {/* Order Summary */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center">
-                <ShoppingBag className="w-5 h-5 mr-2 text-blue-600" />
-                Order Summary
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total Orders</span>
-                  <span className="font-bold text-lg">{orders.length}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Pending</span>
-                  <span className="font-bold text-yellow-600">{pendingOrders}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Contacted</span>
-                  <span className="font-bold text-blue-600">{contactedOrders}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Confirmed</span>
-                  <span className="font-bold text-green-600">{confirmedOrders}</span>
-                </div>
-                <div className="flex justify-between items-center border-t pt-3 border-blue-200">
-                  <span className="text-gray-600 font-medium">Total Revenue</span>
-                  <span className="font-bold text-lg text-green-700">
-                    ₹{totalRevenue.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Avg. Order Value</span>
-                  <span className="font-bold">₹{avgOrderValue.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center">
-                <MessageSquare className="w-5 h-5 mr-2 text-green-600" />
-                Quick Actions
-              </h3>
-              <div className="space-y-3">
-                <button
-                  onClick={() => {
-                    const pending = orders.filter((o) => o.status === "pending");
-                    if (pending.length) {
-                      pending.forEach((order) => setTimeout(() => handleContactCustomer(order), 100));
-                    } else {
-                      alert("No pending orders to contact");
-                    }
-                  }}
-                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm flex items-center justify-center transition-colors"
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  Contact Pending Customers
-                </button>
-                <button
-                  onClick={() => {
-                    const confirmed = orders.filter((o) => o.status === "confirmed");
-                    alert(confirmed.length ? `Ready to process ${confirmed.length} confirmed orders.` : "No confirmed orders to process");
-                  }}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm flex items-center justify-center transition-colors"
-                >
-                  <Package className="w-4 h-4 mr-2" />
-                  Process Confirmed Orders
-                </button>
-                <button
-                  onClick={() => {
-                    const shipped = orders.filter((o) => o.status === "shipped");
-                    alert(shipped.length ? `${shipped.length} orders in transit.` : "No orders in transit");
-                  }}
-                  className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm flex items-center justify-center transition-colors"
-                >
-                  <Truck className="w-4 h-4 mr-2" />
-                  Update Tracking
-                </button>
-              </div>
-            </div>
-
-            {/* Status Distribution */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center">
-                <CheckCircle className="w-5 h-5 mr-2 text-purple-600" />
-                Status Distribution
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Delivered</span>
-                    <span className="font-medium">{deliveredOrders}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-green-500 h-2 rounded-full"
-                      style={{ width: `${orders.length ? (deliveredOrders / orders.length) * 100 : 0}%` }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Processing</span>
-                    <span className="font-medium">{processingOrders + shippedOrders}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full"
-                      style={{ width: `${orders.length ? ((processingOrders + shippedOrders) / orders.length) * 100 : 0}%` }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Pending/Contact</span>
-                    <span className="font-medium">{pendingOrders + contactedOrders}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-yellow-500 h-2 rounded-full"
-                      style={{ width: `${orders.length ? ((pendingOrders + contactedOrders) / orders.length) * 100 : 0}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="pt-2 border-t border-purple-200">
-                  <div className="flex justify-between text-sm">
-                    <span>Today's Orders</span>
-                    <span className="font-bold">{dashboardStats?.todayOrders || 0}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </div>
