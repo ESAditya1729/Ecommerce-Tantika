@@ -4,111 +4,167 @@ const Product = require('../models/Product');
 const Artisan = require('../models/Artisan');
 
 class OrderController {
-  // Create a new order
-  static async createOrder(req, res) {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ success: false, error: 'Authentication required' });
+// controllers/order.controller.js
+static async createOrder(req, res) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const {
+      items,
+      productId,
+      quantity = 1,
+      customerDetails,
+      paymentMethod = 'cod',
+      notes
+    } = req.body;
+
+    /* -------------------- VALIDATE CUSTOMER -------------------- */
+    const requiredFields = ['name', 'email', 'phone', 'street', 'city', 'state', 'postalCode'];
+    const missing = requiredFields.filter(f => !customerDetails?.[f]);
+
+    if (missing.length) {
+      return res.status(400).json({
+        success: false,
+        error: `Missing fields: ${missing.join(', ')}`
+      });
+    }
+
+    /* -------------------- PREPARE ITEMS -------------------- */
+    const orderItems = [];
+
+    const processProduct = async (product, qty) => {
+      if (!product.artisan) {
+        throw new Error(`Product "${product.name}" has no artisan`);
       }
 
-      const { items, productId, customerDetails, quantity = 1, paymentMethod = 'cod', notes } = req.body;
+      return {
+        product: product._id,
+        variant: '',
+        name: product.name,
+        price: product.price,
+        costPrice: product.costPrice || 0,
+        quantity: qty,
+        sku: product.sku || '',
+        image: product.images?.[0] || '',
+        artisan: product.artisan._id,
+        artisanName:
+          product.artisan.businessName ||
+          product.artisan.name ||
+          'Unknown',
+        discountApplied: 0,
+        taxAmount: 0,
+        totalPrice: product.price * qty
+      };
+    };
 
-      // Validate customer details
-      const requiredFields = ['name', 'email', 'phone', 'address', 'city', 'state', 'pincode'];
-      const missingFields = requiredFields.filter(field => !customerDetails?.[field]);
-      if (missingFields.length > 0) {
-        return res.status(400).json({ success: false, error: `Missing fields: ${missingFields.join(', ')}` });
-      }
-
-      // Prepare order items
-      let orderItems = [];
-      
-      if (items?.length) {
-        for (const item of items) {
-          const product = await Product.findById(item.productId).populate('artisan');
-          if (!product) return res.status(404).json({ success: false, error: `Product not found: ${item.productId}` });
-          
-          orderItems.push({
-            product: product._id,
-            name: product.name,
-            price: product.price,
-            quantity: item.quantity,
-            image: product.images?.[0] || '',
-            artisan: product.artisan?._id || null,
-            artisanName: product.artisan?.businessName || product.artisan?.name || 'Unknown',
-            totalPrice: product.price * item.quantity
+    if (items?.length) {
+      for (const item of items) {
+        const product = await Product.findById(item.productId).populate('artisan');
+        if (!product) {
+          return res.status(404).json({
+            success: false,
+            error: `Product not found: ${item.productId}`
           });
         }
-      } else if (productId) {
-        const product = await Product.findById(productId).populate('artisan');
-        if (!product) return res.status(404).json({ success: false, error: 'Product not found' });
-        
-        orderItems.push({
-          product: product._id,
-          name: product.name,
-          price: product.price,
-          quantity,
-          image: product.images?.[0] || '',
-          artisan: product.artisan?._id || null,
-          artisanName: product.artisan?.businessName || product.artisan?.name || 'Unknown',
-          totalPrice: product.price * quantity
-        });
-      } else {
-        return res.status(400).json({ success: false, error: 'Order must contain items' });
+        orderItems.push(await processProduct(product, item.quantity));
       }
-
-      // Calculate totals
-      const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
-      const tax = subtotal * 0.18;
-      const shippingCost = subtotal > 500 ? 0 : 40;
-      const total = subtotal + tax + shippingCost;
-
-      // Create order
-      const order = new Order({
-        orderNumber: `ORD-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        customer: {
-          userId: req.user.role === 'user' ? req.user._id : null,
-          name: customerDetails.name,
-          email: customerDetails.email.toLowerCase(),
-          phone: customerDetails.phone,
-          shippingAddress: {
-            street: customerDetails.address,
-            city: customerDetails.city,
-            state: customerDetails.state,
-            postalCode: customerDetails.pincode,
-            country: customerDetails.country || 'India'
-          }
-        },
-        items: orderItems,
-        subtotal,
-        tax,
-        shippingCost,
-        total,
-        currency: 'INR',
-        status: 'pending',
-        payment: { method: paymentMethod, status: paymentMethod === 'cod' ? 'pending' : 'processing' },
-        shipping: { method: 'standard', shippingCost },
-        source: req.user.role === 'admin' ? 'admin_panel' : 'website'
+    } else if (productId) {
+      const product = await Product.findById(productId).populate('artisan');
+      if (!product) {
+        return res.status(404).json({ success: false, error: 'Product not found' });
+      }
+      orderItems.push(await processProduct(product, quantity));
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Order must contain at least one item'
       });
-
-      await order.save();
-
-      res.status(201).json({
-        success: true,
-        message: 'Order placed successfully',
-        data: {
-          orderId: order._id,
-          orderNumber: order.orderNumber,
-          total: order.total,
-          status: order.status
-        }
-      });
-
-    } catch (error) {
-      console.error('Create order error:', error);
-      res.status(500).json({ success: false, error: 'Failed to place order' });
     }
+
+    /* -------------------- CALCULATE TOTALS -------------------- */
+    const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
+    const tax = +(subtotal * 0.18).toFixed(2);
+    const shippingCost = subtotal > 500 ? 0 : 40;
+    const total = subtotal + tax + shippingCost;
+
+    /* -------------------- CREATE ORDER -------------------- */
+    const order = await Order.create({
+      orderNumber: Order.generateOrderNumber(),
+
+      customer: {
+        userId: req.user.role === 'user' ? req.user._id : null,
+        name: customerDetails.name,
+        email: customerDetails.email.toLowerCase(),
+        phone: customerDetails.phone,
+        shippingAddress: {
+          street: customerDetails.street,
+          city: customerDetails.city,
+          state: customerDetails.state,
+          postalCode: customerDetails.postalCode,
+          country: customerDetails.country || 'India',
+          landmark: customerDetails.landmark || ''
+        },
+        billingAddress: {
+          sameAsShipping: true
+        },
+        message: notes || ''
+      },
+
+      items: orderItems,
+
+      subtotal,
+      discount: 0,
+      tax,
+      shippingCost,
+      total,
+      currency: 'INR',
+
+      status: 'pending',
+      statusHistory: [{
+        status: 'pending',
+        changedBy: req.user._id,
+        reason: 'Order placed',
+        changedAt: new Date()
+      }],
+
+      payment: {
+        method: paymentMethod,
+        status: paymentMethod === 'cod' ? 'pending' : 'processing',
+        amountPaid: 0
+      },
+
+      shipping: {
+        method: 'standard',
+        shippingCost
+      },
+
+      source: req.user.role === 'admin' ? 'admin_panel' : 'website',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      priority: 'normal'
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Order placed successfully',
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        total: order.total,
+        status: order.status
+      }
+    });
+
+  } catch (err) {
+    console.error('Create order error:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Failed to place order'
+    });
   }
+}
 
   // Get user's orders
   static async getMyOrders(req, res) {

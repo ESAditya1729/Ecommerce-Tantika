@@ -699,69 +699,85 @@ orderSchema.methods.calculateCommission = function() {
 };
 
 // ==================== PRE-SAVE MIDDLEWARE ====================
-orderSchema.pre('save', function(next) {
+orderSchema.pre('save', function () {
   if (this.isNew && !this.orderNumber) {
     this.orderNumber = this.constructor.generateOrderNumber();
   }
-  
-  // Calculate totals before save
+
+  // Calculate totals
   if (this.isModified('items') || this.isNew) {
-    this.subtotal = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
-    // Calculate item totals including discount
+    this.subtotal = this.items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+
     this.items.forEach(item => {
       item.totalPrice = (item.price - item.discountApplied) * item.quantity;
     });
-    
+
     this.total = this.subtotal - this.discount + this.tax + this.shippingCost;
   }
-  
-  // Set billing address same as shipping if not specified
-  if (this.customer.billingAddress.sameAsShipping) {
+
+  // Billing address fallback
+  if (this.customer?.billingAddress?.sameAsShipping) {
     this.customer.billingAddress = {
       ...this.customer.shippingAddress,
       sameAsShipping: true
     };
   }
-  
+
   this.updatedAt = new Date();
-  next();
 });
 
 // ==================== POST-SAVE MIDDLEWARE ====================
-orderSchema.post('save', async function(doc, next) {
+orderSchema.post('save', async function (doc) {
   try {
-    // Update product stock if order is confirmed
+    // Update product stock
     if (doc.status === 'confirmed' || doc.status === 'processing') {
+      const Product = mongoose.model('Product');
+
       for (const item of doc.items) {
-        const Product = mongoose.model('Product');
         await Product.findByIdAndUpdate(
           item.product,
-          { $inc: { stock: -item.quantity, sales: item.quantity } }
+          {
+            $inc: {
+              stock: -item.quantity,
+              sales: item.quantity
+            }
+          }
         );
       }
     }
-    
+
     // Update artisan statistics
-    const artisanIds = [...new Set(doc.items.map(item => item.artisan.toString()))];
     const Artisan = mongoose.model('Artisan');
-    
+    const artisanIds = [...new Set(doc.items.map(i => i.artisan.toString()))];
+
     for (const artisanId of artisanIds) {
-      const artisanOrders = doc.items.filter(item => item.artisan.toString() === artisanId);
-      const artisanRevenue = artisanOrders.reduce((sum, item) => sum + item.totalPrice, 0);
-      
+      const artisanOrders = doc.items.filter(
+        item => item.artisan.toString() === artisanId
+      );
+
+      const revenue = artisanOrders.reduce(
+        (sum, item) => sum + item.totalPrice,
+        0
+      );
+
+      const totalSales = artisanOrders.reduce(
+        (sum, item) => sum + item.quantity,
+        0
+      );
+
       await Artisan.findByIdAndUpdate(artisanId, {
         $inc: {
           totalOrders: 1,
-          totalRevenue: artisanRevenue,
-          totalSales: artisanOrders.reduce((sum, item) => sum + item.quantity, 0)
+          totalRevenue: revenue,
+          totalSales
         }
       });
     }
-    
-    next();
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    console.error('Post-save hook error:', err);
   }
 });
 
