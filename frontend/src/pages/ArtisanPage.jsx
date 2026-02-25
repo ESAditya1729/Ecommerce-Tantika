@@ -1,4 +1,3 @@
-// frontend\src\pages\ArtisanPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ArtisanSidebar from '../components/ArtisanDashboard/ArtisanSidebar';
@@ -12,6 +11,7 @@ import SettingsTab from '../components/ArtisanDashboard/SettingsTab';
 const ArtisanDashboard = () => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentTab, setCurrentTab] = useState('overview');
   const [artisan, setArtisan] = useState(null);
   const [stats, setStats] = useState({
@@ -34,6 +34,16 @@ const ArtisanDashboard = () => {
     { id: 2, name: 'Hand-painted Diya Set', price: '₹599', submittedDate: '2024-02-22', status: 'changes_requested' },
     { id: 3, name: 'Crochet Baby Blanket', price: '₹2,499', submittedDate: '2024-02-21', status: 'under_review' },
   ]);
+
+  // Listen for sidebar collapse changes
+  useEffect(() => {
+    const handleSidebarChange = (e) => {
+      setSidebarCollapsed(e.detail.collapsed);
+    };
+
+    window.addEventListener('sidebarCollapsed', handleSidebarChange);
+    return () => window.removeEventListener('sidebarCollapsed', handleSidebarChange);
+  }, []);
 
   // Get artisan data from localStorage
   useEffect(() => {
@@ -60,6 +70,12 @@ const ArtisanDashboard = () => {
     }
   }, [navigate]);
 
+  // Calculate main content margin based on sidebar state
+  const getMainContentMargin = () => {
+    if (window.innerWidth < 1024) return 'ml-0';
+    return sidebarCollapsed ? 'lg:ml-24' : 'lg:ml-72';
+  };
+
   // Render current tab
   const renderTab = () => {
     switch(currentTab) {
@@ -85,23 +101,49 @@ const ArtisanDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50">
+      {/* Sidebar */}
       <ArtisanSidebar 
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         currentTab={currentTab}
         onTabChange={setCurrentTab}
         stats={stats}
+        onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
       />
 
-      <div className="lg:pl-64 transition-all duration-300">
+      {/* Main Content */}
+      <div 
+        className={`
+          transition-all duration-300 ease-in-out
+          ${getMainContentMargin()}
+        `}
+      >
+        {/* Header */}
         <ArtisanHeader 
           onMenuClick={() => setSidebarOpen(true)}
           artisan={artisan}
+          sidebarCollapsed={sidebarCollapsed}
         />
 
-        <main className="p-6">
-          {renderTab()}
+        {/* Page Content */}
+        <main className="p-4 lg:p-6 xl:p-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Tab Content */}
+            {renderTab()}
+          </div>
         </main>
+
+        {/* Footer (optional) */}
+        <footer className="border-t border-amber-100/50 py-4 px-4 lg:px-8">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-500">
+            <p>© 2024 Tantika Artisan Dashboard. All rights reserved.</p>
+            <div className="flex items-center gap-4">
+              <a href="#" className="hover:text-amber-600 transition-colors">Privacy Policy</a>
+              <a href="#" className="hover:text-amber-600 transition-colors">Terms of Service</a>
+              <a href="#" className="hover:text-amber-600 transition-colors">Help Center</a>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
