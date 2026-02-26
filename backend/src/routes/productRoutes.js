@@ -44,21 +44,55 @@ router.get('/export', protect, admin, (req, res, next) => {
 });
 
 // ========== ARTISAN & ADMIN ==========
-router.post('/', protect, admin, artisan, (req, res, next) => {
-  createProduct(req, res).catch(next);
-});
 
-router.put('/:id/stock', protect, admin, artisan, (req, res, next) => {
-  updateStock(req, res).catch(next);
-});
+const adminOrArtisan = (req, res, next) => {
+  const allowedRoles = ['admin', 'superadmin', 'artisan', 'pending_artisan'];
 
-router.put('/:id', protect, admin, artisan, (req, res, next) => {
-  updateProduct(req, res).catch(next);
-});
+  if (!req.user || !allowedRoles.includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: `Access denied. Required roles: ${allowedRoles.join(', ')}. Your role: ${req.user?.role}`
+    });
+  }
 
-router.delete('/:id', protect, admin, artisan, (req, res, next) => {
-  deleteProduct(req, res).catch(next);
-});
+  next();
+};
+
+router.post(
+  '/',
+  protect,
+  adminOrArtisan,
+  (req, res, next) => {
+    createProduct(req, res).catch(next);
+  }
+);
+
+router.put(
+  '/:id/stock',
+  protect,
+  adminOrArtisan,
+  (req, res, next) => {
+    updateStock(req, res).catch(next);
+  }
+);
+
+router.put(
+  '/:id',
+  protect,
+  adminOrArtisan,
+  (req, res, next) => {
+    updateProduct(req, res).catch(next);
+  }
+);
+
+router.delete(
+  '/:id',
+  protect,
+  adminOrArtisan,
+  (req, res, next) => {
+    deleteProduct(req, res).catch(next);
+  }
+);
 
 // ⚠️ MUST BE LAST
 router.get('/:id', (req, res, next) => {
