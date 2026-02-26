@@ -118,12 +118,12 @@ const ArtisanDashboard = () => {
           ${getMainContentMargin()}
         `}
       >
-        {/* Header */}
+        {/* Header
         <ArtisanHeader 
           onMenuClick={() => setSidebarOpen(true)}
           artisan={artisan}
           sidebarCollapsed={sidebarCollapsed}
-        />
+        /> */}
 
         {/* Page Content */}
         <main className="p-4 lg:p-6 xl:p-8">
