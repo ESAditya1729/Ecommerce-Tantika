@@ -44,19 +44,19 @@ router.get('/export', protect, admin, (req, res, next) => {
 });
 
 // ========== ARTISAN & ADMIN ==========
-router.post('/', protect, artisan, (req, res, next) => {
+router.post('/', protect, admin, artisan, (req, res, next) => {
   createProduct(req, res).catch(next);
 });
 
-router.put('/:id/stock', protect, artisan, (req, res, next) => {
+router.put('/:id/stock', protect, admin, artisan, (req, res, next) => {
   updateStock(req, res).catch(next);
 });
 
-router.put('/:id', protect, artisan, (req, res, next) => {
+router.put('/:id', protect, admin, artisan, (req, res, next) => {
   updateProduct(req, res).catch(next);
 });
 
-router.delete('/:id', protect, artisan, (req, res, next) => {
+router.delete('/:id', protect, admin, artisan, (req, res, next) => {
   deleteProduct(req, res).catch(next);
 });
 
