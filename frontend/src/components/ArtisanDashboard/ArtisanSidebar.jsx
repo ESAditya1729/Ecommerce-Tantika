@@ -368,7 +368,7 @@ const SidebarContent = ({
           {!isCollapsed && <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900">Theme</span>}
         </button>
 
-        {/* Notifications */}
+        {/* Notifications
         <button
           className={`group relative flex items-center w-full rounded-xl transition-all duration-300 hover:bg-amber-100 ${
             isCollapsed ? 'justify-center px-2 py-3' : 'px-4 py-3'
@@ -390,7 +390,7 @@ const SidebarContent = ({
           {isCollapsed && (
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
           )}
-        </button>
+        </button> */}
 
         {/* Logout Button */}
         <button
