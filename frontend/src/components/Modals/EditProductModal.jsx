@@ -23,35 +23,33 @@ const EditProductModal = ({
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  // Default artisan data
-  const DEFAULT_ARTISAN = {
-    _id: "6980ec0e019484c9645856c4",
-    businessName: "Default Artisan",
-    fullName: "Default Artisan",
-    name: "Default Artisan",
-    status: "approved"
-  };
-
-  // Get filtered artisans (with default fallback)
+  // Get filtered artisans - handle nested data structure
   const getFilteredArtisans = () => {
     if (!artisans || !Array.isArray(artisans) || artisans.length === 0) {
-      console.log("Using default artisan");
-      return [DEFAULT_ARTISAN];
+      return [];
     }
     
+    // Filter for approved artisans
     const filtered = artisans.filter(artisan => 
       artisan && 
       typeof artisan === 'object' && 
       artisan._id && 
-      (artisan.status === 'approved' || !artisan.status || artisan.status === 'active')
+      artisan.status === 'approved'
     );
     
-    return filtered.length > 0 ? filtered : [DEFAULT_ARTISAN];
+    return filtered;
   };
 
   // Initialize images and ensure rating has proper value when product loads
   useEffect(() => {
-    if (editingProduct) {
+    if (editingProduct && showEditModal) {
+      console.log("Edit modal opened with artisans data:", {
+        rawArtisans: artisans,
+        filteredArtisans: getFilteredArtisans(),
+        artisanCount: artisans?.length || 0,
+        loadingArtisans
+      });
+      
       setProductImages(editingProduct.images || []);
       
       // Ensure rating is properly set and is a number
@@ -63,23 +61,24 @@ const EditProductModal = ({
         }));
       }
 
-      // Set selected artisan
+      // Set selected artisan - handle both object and string cases
       if (editingProduct.artisan) {
-        setSelectedArtisan(
-          typeof editingProduct.artisan === 'object' 
-            ? editingProduct.artisan._id 
-            : editingProduct.artisan
-        );
+        const artisanId = typeof editingProduct.artisan === 'object' 
+          ? editingProduct.artisan._id 
+          : editingProduct.artisan;
+        setSelectedArtisan(artisanId);
+        console.log("Setting selected artisan to:", artisanId);
       }
 
       // Check if current user is artisan
       const userIsArtisan = currentUser?.role === 'artisan' || currentUser?.role === 'pending_artisan';
       setIsArtisan(userIsArtisan);
     }
-  }, [editingProduct, setEditingProduct, currentUser]);
+  }, [editingProduct, showEditModal, artisans, loadingArtisans, currentUser, setEditingProduct]);
 
   const validateForm = () => {
     const newErrors = {};
+    const filteredArtisans = getFilteredArtisans();
 
     if (!editingProduct?.name?.trim()) newErrors.name = "Product name is required";
     if (!editingProduct?.category) newErrors.category = "Category is required";
@@ -96,9 +95,13 @@ const EditProductModal = ({
       newErrors.rating = "Rating must be between 0 and 5";
     }
 
-    // Artisan validation (only for admin)
-    if (!isArtisan && !editingProduct?.artisan) {
-      newErrors.artisan = "Artisan is required";
+    // Artisan validation (only for admin) - only validate if artisans exist
+    if (!isArtisan) {
+      if (filteredArtisans.length === 0) {
+        newErrors.artisan = "No approved artisans available";
+      } else if (!editingProduct?.artisan && !selectedArtisan) {
+        newErrors.artisan = "Artisan is required";
+      }
     }
 
     return newErrors;
@@ -139,8 +142,10 @@ const EditProductModal = ({
       stock: parseInt(editingProduct.stock) || 0,
       // Ensure sales is number
       sales: parseInt(editingProduct.sales) || 0,
-      // Ensure artisan is properly set (handle both object and string cases)
-      artisan: selectedArtisan || editingProduct.artisan || DEFAULT_ARTISAN._id
+      // Ensure artisan is properly set - use selectedArtisan if available
+      artisan: selectedArtisan || (typeof editingProduct.artisan === 'object' 
+        ? editingProduct.artisan._id 
+        : editingProduct.artisan)
     };
 
     // Ensure rating is between 0-5 and rounded to 1 decimal
@@ -311,17 +316,16 @@ const EditProductModal = ({
     });
   };
 
-  const getArtisanDisplayName = () => {
-    if (!editingProduct?.artisan) return "No artisan assigned";
+  const getCurrentArtisanName = () => {
+    if (!selectedArtisan && !editingProduct?.artisan) return "Select Artisan";
     
-    const artisanId = typeof editingProduct.artisan === 'object' 
+    const artisanId = selectedArtisan || (typeof editingProduct.artisan === 'object' 
       ? editingProduct.artisan._id 
-      : editingProduct.artisan;
+      : editingProduct.artisan);
     
     const filteredArtisans = getFilteredArtisans();
-    const artisan = filteredArtisans.find(a => a._id === artisanId);
-    
-    return artisan?.businessName || artisan?.fullName || artisan?.name || "Unknown Artisan";
+    const selected = filteredArtisans.find(a => a._id === artisanId);
+    return selected?.businessName || selected?.fullName || selected?.name || 'Artisan';
   };
 
   if (!showEditModal || !editingProduct) return null;
@@ -369,6 +373,10 @@ const EditProductModal = ({
                         <Loader2 className="w-5 h-5 text-gray-400 animate-spin mr-2" />
                         <span className="text-gray-500">Loading artisans...</span>
                       </div>
+                    ) : filteredArtisans.length === 0 ? (
+                      <div className="w-full px-4 py-3 border border-yellow-300 rounded-lg bg-yellow-50 text-yellow-700">
+                        No approved artisans available. Please add and approve artisans first.
+                      </div>
                     ) : (
                       <>
                         <div className="relative">
@@ -385,16 +393,12 @@ const EditProductModal = ({
                             }`}
                             disabled={actionLoading}
                           >
-                            {filteredArtisans.length === 0 ? (
-                              <option value="" disabled>No artisans available</option>
-                            ) : (
-                              filteredArtisans.map((artisan) => (
-                                <option key={artisan._id} value={artisan._id}>
-                                  {artisan.businessName || artisan.fullName || artisan.name || 'Artisan'} 
-                                  {artisan.status && artisan.status !== 'approved' && ` (${artisan.status})`}
-                                </option>
-                              ))
-                            )}
+                            <option value="" disabled>Select an artisan</option>
+                            {filteredArtisans.map((artisan) => (
+                              <option key={artisan._id} value={artisan._id}>
+                                {artisan.businessName || artisan.fullName || artisan.name || 'Artisan'}
+                              </option>
+                            ))}
                           </select>
                           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -408,16 +412,16 @@ const EditProductModal = ({
                           </p>
                         )}
                         
-                        {selectedArtisan && filteredArtisans.length > 0 && (
+                        {(selectedArtisan || editingProduct.artisan) && filteredArtisans.length > 0 && (
                           <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 flex items-center justify-center">
                                 <span className="text-white font-semibold text-xs">
-                                  {getArtisanDisplayName().charAt(0)}
+                                  {getCurrentArtisanName().charAt(0)}
                                 </span>
                               </div>
                               <div>
-                                <p className="font-medium text-gray-900">{getArtisanDisplayName()}</p>
+                                <p className="font-medium text-gray-900">{getCurrentArtisanName()}</p>
                                 <p className="text-xs text-gray-600">
                                   This artisan owns and manages this product
                                 </p>
