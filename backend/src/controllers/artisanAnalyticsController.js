@@ -148,17 +148,31 @@ exports.getProducts = async (req, res) => {
     }
 
     const artisan = await getArtisanFromUser(req.user.id);
-    const { page = 1, limit = 10, status, approvalStatus, search } = req.query;
+    // FIXED: Added category to destructured query parameters
+    const { page = 1, limit = 10, status, approvalStatus, search, category } = req.query;
 
     const filter = { artisan: artisan._id };
-    if (status) filter.status = status;
-    if (approvalStatus) filter.approvalStatus = approvalStatus;
+    
+    // Add status filter if provided
+    if (status && status !== 'all') filter.status = status;
+    
+    // Add approvalStatus filter if provided
+    if (approvalStatus && approvalStatus !== 'all') filter.approvalStatus = approvalStatus;
+    
+    // FIXED: Add category filter if provided and not 'all'
+    if (category && category !== 'all' && category !== 'All Categories') {
+      filter.category = category;
+    }
+    
+    // Add search filter if provided
     if (search) {
       filter.$or = [
         { name: new RegExp(search, 'i') },
         { description: new RegExp(search, 'i') }
       ];
     }
+
+    console.log('Applied filters:', filter); // For debugging
 
     const [products, total] = await Promise.all([
       Product.find(filter)
@@ -169,10 +183,51 @@ exports.getProducts = async (req, res) => {
       Product.countDocuments(filter)
     ]);
 
+    // Calculate summary statistics
+    const summary = await Product.aggregate([
+      { $match: { artisan: artisan._id } },
+      {
+        $group: {
+          _id: null,
+          totalValue: { $sum: { $multiply: ['$price', '$stock'] } },
+          totalSales: { $sum: '$sales' },
+          totalRevenue: { $sum: { $multiply: ['$price', '$sales'] } },
+          lowStockCount: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $gt: ['$stock', 0] },
+                  { $lte: ['$stock', 5] }
+                ]},
+                1,
+                0
+              ]
+            }
+          },
+          outOfStockCount: {
+            $sum: {
+              $cond: [
+                { $eq: ['$stock', 0] },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
     res.json({
       success: true,
       data: {
         products,
+        summary: summary[0] || {
+          totalValue: 0,
+          totalSales: 0,
+          totalRevenue: 0,
+          lowStockCount: 0,
+          outOfStockCount: 0
+        },
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
