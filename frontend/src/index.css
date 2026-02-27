@@ -2,26 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* Modern CSS Reset with better defaults */
+  * {
+    @apply m-0 p-0 box-border;
+  }
+
+  body {
+    @apply bg-gradient-to-br from-amber-50 via-white to-orange-50 text-gray-900;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Better focus styles for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-amber-500 ring-offset-2 ring-offset-white;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 @layer utilities {
-  .animate-fadeIn {
-    animation: fadeIn 0.3s ease-out;
-  }
-  .animate-blob {
-    animation: blob 7s infinite;
-  }
-  
-  .animation-delay-2000 {
-    animation-delay: 2s;
-  }
-  
-  .animation-delay-4000 {
-    animation-delay: 4s;
-  }
-  
+  /* Custom Animations */
   @keyframes fadeIn {
     from {
       opacity: 0;
       transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
     }
     to {
       opacity: 1;
@@ -42,6 +94,252 @@
     100% {
       transform: translate(0px, 0px) scale(1);
     }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+
+  /* Animation Classes */
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  .animate-fadeInUp {
+    animation: fadeInUp 0.4s ease-out;
+  }
+  
+  .animate-slideIn {
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  .animate-slideDown {
+    animation: slideDown 0.2s ease-out;
+  }
+  
+  .animate-slideUp {
+    animation: slideUp 0.2s ease-out;
+  }
+  
+  .animate-blob {
+    animation: blob 7s infinite;
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  /* Animation Delays */
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  /* Glass Morphism */
+  .glass {
+    @apply bg-white bg-opacity-70 backdrop-blur-xl border border-white border-opacity-20 shadow-xl;
+  }
+  
+  .glass-card {
+    @apply bg-white bg-opacity-80 backdrop-blur-md border border-amber-100 border-opacity-50 shadow-lg hover:shadow-xl transition-all duration-300;
+  }
+
+  /* Custom Scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #fcd34d;
+    border-radius: 20px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #f59e0b;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Text Gradients */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-600;
+  }
+
+  /* Layout Utilities */
+  .content-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Card Styles */
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+  }
+  
+  .card-gradient {
+    @apply bg-gradient-to-br from-white to-amber-50 bg-opacity-30 border border-amber-100 border-opacity-50;
+  }
+
+  /* Loading Skeleton */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+  
+  .skeleton-text {
+    @apply h-4 skeleton;
+  }
+  
+  .skeleton-circle {
+    @apply rounded-full skeleton;
+  }
+
+  /* Responsive Typography */
+  .responsive-text-xs {
+    @apply text-xs sm:text-sm;
+  }
+  
+  .responsive-text-sm {
+    @apply text-sm sm:text-base;
+  }
+  
+  .responsive-text-base {
+    @apply text-base sm:text-lg;
+  }
+  
+  .responsive-text-lg {
+    @apply text-lg sm:text-xl;
+  }
+  
+  .responsive-text-xl {
+    @apply text-xl sm:text-2xl;
+  }
+
+  /* Mobile Touch Optimizations */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  .tap-highlight-none {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Z-index management */
+  .z-sidebar {
+    z-index: 40;
+  }
+  
+  .z-header {
+    z-index: 50;
+  }
+  
+  .z-dropdown {
+    z-index: 60;
+  }
+  
+  .z-modal {
+    z-index: 70;
+  }
+
+  /* Custom Shadows */
+  .shadow-soft {
+    box-shadow: 0 10px 40px -15px rgba(0, 0, 0, 0.1);
+  }
+  
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+  }
+}
+
+/* Dark mode support */
+.dark body {
+  @apply bg-gray-900 text-gray-100;
+}
+
+.dark .glass {
+  @apply bg-gray-900 bg-opacity-70 border-gray-800 border-opacity-50;
+}
+
+.dark .glass-card {
+  @apply bg-gray-900 bg-opacity-80 border-gray-800 border-opacity-50;
+}
+
+.dark .card-gradient {
+  @apply bg-gradient-to-br from-gray-900 to-gray-800 bg-opacity-30 border-gray-800 border-opacity-50;
+}
+
+.dark .shadow-soft {
+  box-shadow: 0 10px 40px -15px rgba(0, 0, 0, 0.3);
+}
+
+.dark .shadow-glow {
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.2);
+}
+
+.dark .bg-white {
+  background-color: #1f2937;
+}
+
+.dark .text-gray-900 {
+  color: #f3f4f6;
+}
+
+.dark .text-gray-600 {
+  color: #d1d5db;
+}
+
+.dark .border-amber-100 {
+  border-color: #374151;
+}
+
+.dark .bg-gray-50 {
+  background-color: #374151;
+}
+
+.dark .hover\:bg-amber-50:hover {
+  background-color: #4b5563;
+}
+
+/* Responsive breakpoint overrides */
+@media (max-width: 640px) {
+  .hide-on-mobile {
+    display: none;
+  }
+  
+  .full-width-mobile {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .hide-on-tablet {
+    display: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none;
   }
 }
 
@@ -92,124 +390,4 @@
   .admin-header-fixed {
     left: 0;
   }
-}
-
-
-/* Add to your global.css or index.css */
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.2s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-.animate-slideIn {
-  animation: slideIn 0.3s ease-out;
-}
-
-/* Custom scrollbar for the sidebar */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #fcd34d;
-  border-radius: 20px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #f59e0b;
-}
-
-/* Dark mode support */
-.dark .bg-white {
-  background-color: #1f2937;
-}
-
-.dark .text-gray-900 {
-  color: #f3f4f6;
-}
-
-.dark .text-gray-600 {
-  color: #d1d5db;
-}
-
-.dark .border-amber-100 {
-  border-color: #374151;
-}
-/* Add to your global.css */
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-slideDown {
-  animation: slideDown 0.2s ease-out;
-}
-
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-2px);
-  }
-}
-
-.animate-bounce {
-  animation: bounce 1s infinite;
-}
-
-/* Dark mode styles */
-.dark .bg-white {
-  background-color: #1f2937;
-}
-
-.dark .text-gray-900 {
-  color: #f3f4f6;
-}
-
-.dark .text-gray-600 {
-  color: #d1d5db;
-}
-
-.dark .border-gray-100 {
-  border-color: #374151;
-}
-
-.dark .bg-gray-50 {
-  background-color: #374151;
-}
-
-.dark .hover\:bg-amber-50:hover {
-  background-color: #4b5563;
 }

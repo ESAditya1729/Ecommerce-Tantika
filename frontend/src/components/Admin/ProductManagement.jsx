@@ -689,143 +689,170 @@ const fetchArtisans = async () => {
     }
   };
 
-  // ==================== PRODUCT CRUD OPERATIONS ====================
+// ==================== PRODUCT CRUD OPERATIONS ====================
 
-  // Handle adding new product
-  const handleAddProduct = async (productDataFromModal) => {
-    try {
-      setActionLoading(true);
+// Handle adding new product
+const handleAddProduct = async (productDataFromModal) => {
+  try {
+    setActionLoading(true);
 
-      // Validate required fields
-      if (
-        !productDataFromModal?.name ||
-        !productDataFromModal?.category ||
-        !productDataFromModal?.price
-      ) {
-        alert("Please fill in all required fields (*)");
-        return;
-      }
-
-      // Prepare product data based on user role
-      const productData = {
-        name: productDataFromModal.name.trim(),
-        description: productDataFromModal.description?.trim() || "",
-        category: productDataFromModal.category,
-        price: parseFloat(productDataFromModal.price),
-        stock: parseInt(productDataFromModal.stock) || 0,
-        image: productDataFromModal.image || "",
-        images: productDataFromModal.images || [],
-        status:
-          productDataFromModal.status ||
-          (currentUser?.role === "artisan" ? "draft" : "active"),
-        artisan:
-          productDataFromModal.artisan ||
-          currentUser?.artisanId ||
-          currentUser?._id,
-        approvalStatus:
-          productDataFromModal.approvalStatus ||
-          (currentUser?.role === "artisan" ? "pending" : "approved"),
-        specifications: productDataFromModal.specifications || [],
-        variants: productDataFromModal.variants || [],
-        tags: productDataFromModal.tags || [],
-        materials: productDataFromModal.materials || [],
-        colors: productDataFromModal.colors || [],
-        sizes: productDataFromModal.sizes || [],
-      };
-
-      console.log("Sending product data:", productData);
-
-      const response = await axios.post(
-        `${API_BASE_URL}/products`,
-        productData,
-        { headers: getAuthHeaders() },
-      );
-
-      if (response.data.success) {
-        fetchProducts();
-        setShowAddModal(false);
-        alert(response.data.message || "Product added successfully!");
-      }
-    } catch (err) {
-      console.error("Error adding product:", err);
-      alert(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Failed to add product",
-      );
-    } finally {
-      setActionLoading(false);
+    // Validate required fields
+    if (
+      !productDataFromModal?.name ||
+      !productDataFromModal?.category ||
+      !productDataFromModal?.price
+    ) {
+      alert("Please fill in all required fields (*)");
+      return;
     }
-  };
 
-  // Handle updating product
-  const handleUpdateProduct = async (productData) => {
-    try {
-      setActionLoading(true);
+    // Prepare product data based on user role
+    const productData = {
+      name: productDataFromModal.name.trim(),
+      description: productDataFromModal.description?.trim() || "",
+      category: productDataFromModal.category,
+      price: parseFloat(productDataFromModal.price),
+      stock: parseInt(productDataFromModal.stock) || 0,
+      image: productDataFromModal.image || "",
+      images: productDataFromModal.images || [],
+      // FIXED: Include rating field from modal
+      rating: productDataFromModal.rating !== undefined 
+        ? parseFloat(productDataFromModal.rating) 
+        : 4.0, // Default rating if not provided
+      status:
+        productDataFromModal.status ||
+        (currentUser?.role === "artisan" ? "draft" : "active"),
+      artisan:
+        productDataFromModal.artisan ||
+        currentUser?.artisanId ||
+        currentUser?._id,
+      approvalStatus:
+        productDataFromModal.approvalStatus ||
+        (currentUser?.role === "artisan" ? "pending" : "approved"),
+      specifications: productDataFromModal.specifications || [],
+      variants: productDataFromModal.variants || [],
+      tags: productDataFromModal.tags || [],
+      materials: productDataFromModal.materials || [],
+      colors: productDataFromModal.colors || [],
+      sizes: productDataFromModal.sizes || [],
+    };
 
-      if (!editingProduct?._id) {
-        alert("No product selected for update");
-        return;
-      }
-
-      console.log("Updating product:", editingProduct._id, productData);
-
-      const response = await axios.put(
-        `${API_BASE_URL}/products/${editingProduct._id}`,
-        productData,
-        { headers: getAuthHeaders() },
-      );
-
-      if (response.data.success) {
-        fetchProducts();
-        setEditingProduct(null);
-        setShowEditModal(false);
-        alert(response.data.message || "Product updated successfully!");
-      }
-    } catch (err) {
-      console.error("Error updating product:", err);
-      alert(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Failed to update product",
-      );
-    } finally {
-      setActionLoading(false);
+    // Ensure rating is a valid number between 0-5
+    if (productData.rating !== undefined) {
+      productData.rating = Math.min(5, Math.max(0, Number(productData.rating)));
+      // Round to 1 decimal place for consistency
+      productData.rating = Math.round(productData.rating * 10) / 10;
     }
-  };
 
-  // Handle deleting product
-  const handleDeleteProduct = async () => {
-    try {
-      setActionLoading(true);
+    console.log("Sending product data with rating:", {
+      ...productData,
+      rating: productData.rating,
+      ratingType: typeof productData.rating
+    });
 
-      if (!selectedProduct?._id) {
-        alert("No product selected for deletion");
-        return;
-      }
+    const response = await axios.post(
+      `${API_BASE_URL}/products`,
+      productData,
+      { headers: getAuthHeaders() },
+    );
 
-      const response = await axios.delete(
-        `${API_BASE_URL}/products/${selectedProduct._id}`,
-        { headers: getAuthHeaders() },
-      );
-
-      if (response.data.success) {
-        fetchProducts();
-        setSelectedProduct(null);
-        setShowDeleteModal(false);
-        alert(response.data.message || "Product deleted successfully!");
-      }
-    } catch (err) {
-      console.error("Error deleting product:", err);
-      alert(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Failed to delete product",
-      );
-    } finally {
-      setActionLoading(false);
+    if (response.data.success) {
+      fetchProducts();
+      setShowAddModal(false);
+      alert(response.data.message || "Product added successfully!");
     }
-  };
+  } catch (err) {
+    console.error("Error adding product:", err);
+    alert(
+      err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to add product",
+    );
+  } finally {
+    setActionLoading(false);
+  }
+};
+
+// Handle updating product
+const handleUpdateProduct = async (productData) => {
+  try {
+    setActionLoading(true);
+
+    if (!editingProduct?._id) {
+      alert("No product selected for update");
+      return;
+    }
+
+    // FIXED: Include rating in update as well
+    const updateData = {
+      ...productData,
+      // Ensure rating is properly formatted for update
+      rating: productData.rating !== undefined 
+        ? Math.min(5, Math.max(0, parseFloat(productData.rating) || 4.0))
+        : editingProduct.rating || 4.0
+    };
+
+    console.log("Updating product with rating:", {
+      id: editingProduct._id,
+      rating: updateData.rating
+    });
+
+    const response = await axios.put(
+      `${API_BASE_URL}/products/${editingProduct._id}`,
+      updateData,
+      { headers: getAuthHeaders() },
+    );
+
+    if (response.data.success) {
+      fetchProducts();
+      setEditingProduct(null);
+      setShowEditModal(false);
+      alert(response.data.message || "Product updated successfully!");
+    }
+  } catch (err) {
+    console.error("Error updating product:", err);
+    alert(
+      err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to update product",
+    );
+  } finally {
+    setActionLoading(false);
+  }
+};
+
+// Handle deleting product (no changes needed here)
+const handleDeleteProduct = async () => {
+  try {
+    setActionLoading(true);
+
+    if (!selectedProduct?._id) {
+      alert("No product selected for deletion");
+      return;
+    }
+
+    const response = await axios.delete(
+      `${API_BASE_URL}/products/${selectedProduct._id}`,
+      { headers: getAuthHeaders() },
+    );
+
+    if (response.data.success) {
+      fetchProducts();
+      setSelectedProduct(null);
+      setShowDeleteModal(false);
+      alert(response.data.message || "Product deleted successfully!");
+    }
+  } catch (err) {
+    console.error("Error deleting product:", err);
+    alert(
+      err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to delete product",
+    );
+  } finally {
+    setActionLoading(false);
+  }
+};
 
   // ==================== MODAL HANDLERS ====================
 

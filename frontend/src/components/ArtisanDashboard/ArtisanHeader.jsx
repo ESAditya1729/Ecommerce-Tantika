@@ -386,7 +386,7 @@ const ArtisanHeader = ({ onMenuClick, artisan, sidebarCollapsed = false, unreadN
         </div>
       </div>
 
-      {/* Quick Stats Bar */}
+      {/* Quick Stats Bar
       <div className="hidden lg:flex items-center gap-4 xl:gap-6 px-4 lg:px-6 xl:px-8 py-2 bg-amber-50/30 border-t border-amber-100/50 text-xs overflow-x-auto">
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-gray-600">Today's Revenue:</span>
@@ -407,7 +407,7 @@ const ArtisanHeader = ({ onMenuClick, artisan, sidebarCollapsed = false, unreadN
           <span className="text-gray-600">Avg. Rating:</span>
           <span className="font-semibold text-amber-600">4.8 ★</span>
         </div>
-      </div>
+      </div> */}
     </header>
   );
 };

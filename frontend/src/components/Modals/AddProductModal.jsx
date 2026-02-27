@@ -1,6 +1,6 @@
-// AddProductModal.jsx - Updated with rating field
+// AddProductModal.jsx - Fixed rating submission
 import React, { useState, useEffect } from "react";
-import { X, Upload, AlertCircle, Check, Info, Plus, Trash2, User, Camera, Loader2, Star } from "lucide-react";
+import { X, AlertCircle, Check, Info, Plus, Trash2, User, Camera, Loader2, Star } from "lucide-react";
 import ImageUpload from "../Common/ImageUpload";
 
 const AddProductModal = ({
@@ -32,7 +32,7 @@ const AddProductModal = ({
     price: "",
     stock: "",
     image: "",
-    rating: 4, // Default rating of 4
+    rating: 4.0, // Changed to number explicitly
     status: currentUser?.role === 'artisan' ? "draft" : "active",
     approvalStatus: currentUser?.role === 'artisan' ? "pending" : "approved",
     artisan: "",
@@ -60,7 +60,7 @@ const AddProductModal = ({
   const [variants, setVariants] = useState([{ name: "", price: "", stock: "" }]);
   const [isArtisan, setIsArtisan] = useState(false);
   const [selectedArtisan, setSelectedArtisan] = useState("");
-  const [hoveredRating, setHoveredRating] = useState(0); // For rating hover effect
+  const [hoveredRating, setHoveredRating] = useState(0);
 
   // Define available status options
   const getApprovalStatusOptions = (isArtisanUser) => {
@@ -85,7 +85,6 @@ const AddProductModal = ({
       return [DEFAULT_ARTISAN];
     }
     
-    // Filter only approved artisans for admin selection
     const filtered = artisans.filter(artisan => 
       artisan && 
       typeof artisan === 'object' && 
@@ -105,11 +104,9 @@ const AddProductModal = ({
         loadingArtisans
       });
       
-      // Check if current user is artisan
       const userIsArtisan = currentUser?.role === 'artisan' || currentUser?.role === 'pending_artisan';
       setIsArtisan(userIsArtisan);
       
-      // Reset form when modal opens
       const resetFormData = {
         name: "",
         description: "",
@@ -117,7 +114,7 @@ const AddProductModal = ({
         price: "",
         stock: "",
         image: "",
-        rating: 4, // Default rating of 4
+        rating: 4.0, // Ensure rating is a number
         status: userIsArtisan ? "draft" : "active",
         approvalStatus: userIsArtisan ? "pending" : "approved",
         artisan: "",
@@ -141,7 +138,6 @@ const AddProductModal = ({
       setErrors({});
       setTouched({});
       
-      // Set artisan ID automatically for artisans
       if (userIsArtisan && currentUser?.artisanProfile?._id) {
         setSelectedArtisan(currentUser.artisanProfile._id);
         setNewProduct(prev => ({
@@ -151,7 +147,6 @@ const AddProductModal = ({
         }));
       }
       
-      // For admin, use first available artisan
       if (!userIsArtisan) {
         const filteredArtisans = getFilteredArtisans();
         if (filteredArtisans.length > 0) {
@@ -171,7 +166,6 @@ const AddProductModal = ({
   const validateForm = () => {
     const newErrors = {};
 
-    // Use optional chaining to safely access properties
     if (!newProduct?.name?.trim()) newErrors.name = "Product name is required";
     if (!newProduct?.category) newErrors.category = "Category is required";
     if (!newProduct?.price || Number(newProduct?.price) <= 0) {
@@ -179,22 +173,22 @@ const AddProductModal = ({
     }
     if (!newProduct?.image) newErrors.image = "Main image is required";
     
-    // Validate rating
-    if (!newProduct?.rating || newProduct.rating < 0 || newProduct.rating > 5) {
+    // FIXED: Better rating validation
+    const ratingValue = Number(newProduct?.rating);
+    if (newProduct?.rating === undefined || newProduct?.rating === null || newProduct?.rating === "") {
+      newErrors.rating = "Rating is required";
+    } else if (isNaN(ratingValue) || ratingValue < 0 || ratingValue > 5) {
       newErrors.rating = "Rating must be between 0 and 5";
     }
     
-    // Validate approvalStatus
     if (!newProduct?.approvalStatus) {
       newErrors.approvalStatus = "Approval status is required";
     }
 
-    // Validate artisan field (required for all)
     if (!newProduct?.artisan) {
       newErrors.artisan = "Artisan is required";
     }
 
-    // Validation rules with safe property access
     if (newProduct?.name && newProduct.name.length > 100) {
       newErrors.name = "Name must be less than 100 characters";
     }
@@ -218,7 +212,9 @@ const AddProductModal = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Mark all fields as touched
+    console.log("Current newProduct state:", newProduct);
+    console.log("Current rating value:", newProduct?.rating, "Type:", typeof newProduct?.rating);
+    
     const allFields = ['name', 'category', 'price', 'image', 'rating', 'approvalStatus', 'artisan'];
     const touchedObj = {};
     allFields.forEach(field => touchedObj[field] = true);
@@ -230,15 +226,18 @@ const AddProductModal = ({
       return;
     }
 
-    // Get selected artisan name
-    const filteredArtisans = getFilteredArtisans();
-    const selectedArtisanData = filteredArtisans.find(a => a._id === newProduct.artisan);
-    const artisanName = selectedArtisanData?.businessName || 
-                       selectedArtisanData?.fullName || 
-                       selectedArtisanData?.name || 
-                       'Artisan';
+    // FIXED: Ensure rating is properly parsed and validated
+    let ratingValue = 4.0; // Default
+    
+    if (newProduct?.rating !== undefined && newProduct?.rating !== null && newProduct?.rating !== "") {
+      const parsedRating = parseFloat(newProduct.rating);
+      if (!isNaN(parsedRating)) {
+        // Ensure rating is between 0 and 5 and rounded to 1 decimal place
+        ratingValue = Math.min(5, Math.max(0, Math.round(parsedRating * 10) / 10));
+      }
+    }
 
-    // Prepare product data
+    // Prepare product data with explicit rating handling
     const productData = {
       name: newProduct?.name || "",
       description: newProduct?.description || "",
@@ -246,35 +245,29 @@ const AddProductModal = ({
       price: parseFloat(newProduct?.price || 0),
       stock: newProduct?.stock ? parseInt(newProduct.stock) : 0,
       image: newProduct?.image || "",
-      rating: parseFloat(newProduct?.rating || 4), // Include rating in product data
+      // FIXED: Use the validated rating value
+      rating: ratingValue,
       approvalStatus: isArtisan ? "pending" : (newProduct?.approvalStatus || "approved"),
       status: isArtisan ? "draft" : (newProduct?.status || "active"),
-      artisan: newProduct?.artisan || DEFAULT_ARTISAN._id, // Use default if empty
+      artisan: newProduct?.artisan || DEFAULT_ARTISAN._id,
       shortDescription: newProduct?.shortDescription || "",
       subcategory: newProduct?.subcategory || "",
       costPrice: newProduct?.costPrice || null,
-      materials: newProduct?.materials || [],
-      tags: newProduct?.tags || [],
-      colors: newProduct?.colors || [],
-      sizes: newProduct?.sizes || [],
+      materials: Array.isArray(newProduct?.materials) ? newProduct.materials : [],
+      tags: Array.isArray(newProduct?.tags) ? newProduct.tags : [],
+      colors: Array.isArray(newProduct?.colors) ? newProduct.colors : [],
+      sizes: Array.isArray(newProduct?.sizes) ? newProduct.sizes : [],
       weight: newProduct?.weight || null,
-      features: newProduct?.features || [],
+      features: Array.isArray(newProduct?.features) ? newProduct.features : [],
       specifications: specifications.filter(spec => spec.key && spec.value),
-      variants: variants.filter(variant => variant.name),
+      variants: variants.filter(variant => variant.name && variant.price && variant.stock),
       sku: generateSKU(),
       submittedAt: isArtisan ? new Date().toISOString() : null
     };
 
-    // Remove empty fields
-    Object.keys(productData).forEach(key => {
-      if (productData[key] === null || productData[key] === undefined || productData[key] === "") {
-        delete productData[key];
-      }
-    });
-
-    console.log('Product data prepared:', productData);
+    console.log('Final payload being sent:', JSON.stringify(productData, null, 2));
+    console.log('Rating in payload:', productData.rating, 'Type:', typeof productData.rating);
     
-    // Call the handleAddProduct function WITH the prepared data
     await handleAddProduct(productData);
   };
 
@@ -294,7 +287,7 @@ const AddProductModal = ({
       price: "",
       stock: "",
       image: "",
-      rating: 4, // Default rating of 4
+      rating: 4.0, // Ensure rating is a number
       status: userIsArtisan ? "draft" : "active",
       approvalStatus: userIsArtisan ? "pending" : "approved",
       artisan: userIsArtisan ? (currentUser?.artisanProfile?._id || "") : "",
@@ -333,19 +326,37 @@ const AddProductModal = ({
         setNewProduct({ ...newProduct, [field]: numValue });
       }
     }
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors({ ...errors, [field]: undefined });
     }
   };
 
+  // FIXED: Improved rating change handler
   const handleRatingChange = (rating) => {
-    setNewProduct({ ...newProduct, rating });
-    // Clear error when rating is selected
+    let validRating = rating;
+    
+    // Handle both direct star clicks and input changes
+    if (typeof rating === 'number') {
+      validRating = Math.min(5, Math.max(0, rating));
+    } else if (typeof rating === 'string') {
+      const parsed = parseFloat(rating);
+      if (!isNaN(parsed)) {
+        validRating = Math.min(5, Math.max(0, parsed));
+      } else {
+        validRating = 4.0; // Default if invalid
+      }
+    }
+    
+    // Round to 1 decimal place for consistency
+    validRating = Math.round(validRating * 10) / 10;
+    
+    setNewProduct({ ...newProduct, rating: validRating });
+    
+    console.log("Rating changed to:", validRating, "Type:", typeof validRating);
+    
     if (errors.rating) {
       setErrors({ ...errors, rating: undefined });
     }
-    // Clear touched error
     if (touched.rating) {
       setTouched({ ...touched, rating: false });
     }
@@ -363,7 +374,6 @@ const AddProductModal = ({
       artisanName: selected?.businessName || selected?.fullName || selected?.name || 'Artisan'
     }));
     
-    // Clear error when user selects artisan
     if (errors.artisan) {
       setErrors({ ...errors, artisan: undefined });
     }
@@ -408,7 +418,6 @@ const AddProductModal = ({
       ...prev,
       image: url,
     }));
-    // Clear error when image is uploaded
     if (errors.image) {
       setErrors({ ...errors, image: undefined });
     }
@@ -420,13 +429,11 @@ const AddProductModal = ({
   const approvalStatusOptions = getApprovalStatusOptions(isArtisan);
   const filteredArtisans = getFilteredArtisans();
 
-  // Function to get status badge color
   const getStatusBadge = (status) => {
     const option = approvalStatusOptions.find(opt => opt.value === status);
     return option ? option.color : "bg-gray-100 text-gray-800";
   };
 
-  // Get current artisan name for display
   const getCurrentArtisanName = () => {
     if (isArtisan) {
       return currentUser?.artisanProfile?.businessName || currentUser?.name || 'You (Artisan)';
@@ -436,9 +443,9 @@ const AddProductModal = ({
     return selected?.businessName || selected?.fullName || selected?.name || 'Select Artisan';
   };
 
-  // Render star rating component
+  // FIXED: Render rating stars with proper value handling
   const renderRatingStars = () => {
-    const currentRating = hoveredRating || newProduct?.rating || 0;
+    const currentRating = hoveredRating || newProduct?.rating || 4.0;
     
     return (
       <div className="flex items-center gap-1">
@@ -462,7 +469,7 @@ const AddProductModal = ({
           </button>
         ))}
         <span className="ml-2 text-sm text-gray-600">
-          ({newProduct?.rating || 0}/5)
+          ({typeof newProduct?.rating === 'number' ? newProduct.rating.toFixed(1) : '4.0'}/5)
         </span>
       </div>
     );
@@ -506,9 +513,7 @@ const AddProductModal = ({
               </div>
               
               <div className="space-y-4">
-                {/* Artisan Selection/Display */}
                 {isArtisan ? (
-                  // For artisans: Show their info (non-editable)
                   <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-100">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 flex items-center justify-center">
@@ -528,7 +533,6 @@ const AddProductModal = ({
                     </span>
                   </div>
                 ) : (
-                  // For admins: Show dropdown to select artisan
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
                       Select Artisan <span className="text-red-500">*</span>
@@ -579,7 +583,6 @@ const AddProductModal = ({
                           </p>
                         )}
                         
-                        {/* Selected Artisan Preview */}
                         {selectedArtisan && filteredArtisans.length > 0 && (
                           <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <div className="flex items-center gap-3">
@@ -598,7 +601,6 @@ const AddProductModal = ({
                           </div>
                         )}
                         
-                        {/* Debug info (remove in production) */}
                         <div className="mt-2 text-xs text-gray-500">
                           <p>Available artisans: {filteredArtisans.length}</p>
                           <p>Selected artisan ID: {selectedArtisan}</p>
@@ -608,7 +610,6 @@ const AddProductModal = ({
                   </div>
                 )}
                 
-                {/* Information Note */}
                 <div className={`p-3 rounded-lg ${isArtisan ? 'bg-yellow-50 border border-yellow-200' : 'bg-blue-50 border border-blue-200'}`}>
                   <p className={`text-sm ${isArtisan ? 'text-yellow-700' : 'text-blue-700'}`}>
                     {isArtisan ? (
@@ -631,7 +632,6 @@ const AddProductModal = ({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Left Column */}
                 <div className="space-y-6">
-                  {/* Product Name */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
                       Product Name <span className="text-red-500">*</span>
@@ -662,7 +662,6 @@ const AddProductModal = ({
                     )}
                   </div>
 
-                  {/* Category */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
                       Category <span className="text-red-500">*</span>
@@ -691,7 +690,6 @@ const AddProductModal = ({
                     </select>
                   </div>
 
-                  {/* Price */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
                       Price <span className="text-red-500">*</span>
@@ -721,7 +719,6 @@ const AddProductModal = ({
                     )}
                   </div>
 
-                  {/* Stock */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Stock Quantity
@@ -740,13 +737,11 @@ const AddProductModal = ({
 
                 {/* Right Column - Image Upload and Rating */}
                 <div className="space-y-6">
-                  {/* Product Image */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Product Image <span className="text-red-500">*</span>
                     </label>
                     <div className="space-y-4">
-                      {/* Main Image Upload */}
                       <div className={`border-2 ${newProduct?.image ? 'border-green-500' : 'border-dashed border-gray-300'} rounded-xl p-4 transition-all duration-200`}>
                         {newProduct?.image ? (
                           <div className="relative group">
@@ -776,7 +771,6 @@ const AddProductModal = ({
                         )}
                       </div>
                       
-                      {/* Image Requirements Note */}
                       <div className="text-xs text-gray-500 space-y-1">
                         <p className="flex items-center gap-1">
                           <Camera className="w-3 h-3" />
@@ -792,7 +786,7 @@ const AddProductModal = ({
                     )}
                   </div>
 
-                  {/* Product Rating - NEW FIELD */}
+                  {/* Product Rating - FIXED */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
                       Product Rating <span className="text-red-500">*</span>
@@ -807,8 +801,8 @@ const AddProductModal = ({
                       <div className="mt-3 flex items-center gap-4">
                         <input
                           type="number"
-                          value={newProduct?.rating || ""}
-                          onChange={(e) => handleRatingChange(parseFloat(e.target.value))}
+                          value={newProduct?.rating !== undefined ? newProduct.rating : 4.0}
+                          onChange={(e) => handleRatingChange(e.target.value)}
                           onBlur={() => handleBlur('rating')}
                           className={`w-24 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                             touched.rating && errors.rating
@@ -825,11 +819,15 @@ const AddProductModal = ({
                           Enter rating from 0 to 5
                         </span>
                       </div>
+                      {/* Debug info - remove in production */}
+                      <div className="mt-2 p-2 bg-blue-50 text-blue-700 text-xs rounded">
+                        Debug: Current rating value = {newProduct?.rating} (type: {typeof newProduct?.rating})
+                      </div>
                       {touched.rating && errors.rating && (
                         <p className="text-red-500 text-sm mt-2">{errors.rating}</p>
                       )}
                       <p className="text-xs text-gray-500 mt-2">
-                        Default rating is 4.0 for new products.
+                        Default rating is 4.0 for new products. Ratings are typically updated based on customer reviews.
                       </p>
                     </div>
                   </div>
@@ -837,7 +835,6 @@ const AddProductModal = ({
               </div>
             </div>
 
-            {/* Description */}
             <div className="mb-8">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Description
@@ -854,7 +851,6 @@ const AddProductModal = ({
               />
             </div>
 
-            {/* Specifications */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-lg font-semibold text-gray-900">Specifications</h4>
@@ -897,9 +893,7 @@ const AddProductModal = ({
               </div>
             </div>
 
-            {/* Additional Settings */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              {/* Approval Status */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Approval Status
@@ -950,7 +944,6 @@ const AddProductModal = ({
                   <p className="text-red-500 text-sm mt-2">{errors.approvalStatus}</p>
                 )}
                 
-                {/* Status Info */}
                 <div className="mt-2">
                   <p className="text-xs text-gray-500">
                     {isArtisan 
@@ -960,7 +953,6 @@ const AddProductModal = ({
                 </div>
               </div>
 
-              {/* Product Status (hidden for artisans) */}
               {!isArtisan && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -983,7 +975,6 @@ const AddProductModal = ({
               )}
             </div>
 
-            {/* Help Text for Statuses */}
             <div className={`mb-8 p-4 rounded-xl border ${isArtisan ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200'}`}>
               <h4 className={`text-sm font-semibold ${isArtisan ? 'text-yellow-800' : 'text-blue-800'} mb-2 flex items-center gap-1`}>
                 <Info className="w-4 h-4" /> Important Information
@@ -1006,7 +997,6 @@ const AddProductModal = ({
               </ul>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
               <button
                 type="button"
