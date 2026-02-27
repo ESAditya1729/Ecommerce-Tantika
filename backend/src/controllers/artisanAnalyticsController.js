@@ -162,7 +162,7 @@ exports.getProducts = async (req, res) => {
 
     const [products, total] = await Promise.all([
       Product.find(filter)
-        .select('name price stock status approvalStatus image sales rating createdAt')
+        .select('name price stock status approvalStatus image sales rating createdAt category views')
         .sort({ createdAt: -1 })
         .skip((parseInt(page) - 1) * parseInt(limit))
         .limit(parseInt(limit)),
