@@ -59,41 +59,64 @@ exports.getProducts = async (req, res) => {
     // Build query based on user role
     let query = {};
 
-    // Public users see only approved, active products
-    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'superadmin')) {
+    // Check if user is authenticated
+    const isAuthenticated = req.user && (req.user._id || req.user.id);
+    const userRole = req.user?.role;
+
+    // PUBLIC USERS - Only see approved, active products
+    if (!isAuthenticated || (userRole !== 'admin' && userRole !== 'superadmin' && userRole !== 'artisan')) {
       query.status = 'active';
       query.approvalStatus = 'approved';
-    }
-
-    // Admins/Artisans can filter by status and approval
-    if (req.user) {
-      if (req.user.role === 'admin' || req.user.role === 'superadmin') {
-        if (status && status !== 'all') query.status = status;
-        if (approvalStatus && approvalStatus !== 'all') query.approvalStatus = approvalStatus;
+      console.log('Public user: showing only approved & active products');
+    } 
+    // ADMIN/SUPERADMIN - Can see ALL products (no default filters)
+    else if (userRole === 'admin' || userRole === 'superadmin') {
+      console.log('Admin user: showing ALL products');
+      // Start with empty query to show ALL products
+      // Only apply filters if they are explicitly provided and not 'all'
+      if (status && status !== 'all' && status !== 'undefined' && status !== 'null') {
+        query.status = status;
+      }
+      if (approvalStatus && approvalStatus !== 'all' && approvalStatus !== 'undefined' && approvalStatus !== 'null') {
+        query.approvalStatus = approvalStatus;
+      }
+    } 
+    // ARTISAN - Can see their own products
+    else if (userRole === 'artisan') {
+      console.log('Artisan user: showing own products');
+      // Get artisan ID from user object
+      const artisanId = req.user.artisanId || req.user._id;
+      query.artisan = artisanId;
+      
+      // Apply status filter if provided
+      if (status && status !== 'all' && status !== 'undefined' && status !== 'null') {
+        query.status = status;
       }
       
-      // Artisans can only see their own products
-      if (req.user.role === 'artisan') {
-        query.artisan = req.user.artisanId || req.user._id;
-        if (status && status !== 'all') query.status = status;
+      // Apply approvalStatus filter if provided
+      if (approvalStatus && approvalStatus !== 'all' && approvalStatus !== 'undefined' && approvalStatus !== 'null') {
+        query.approvalStatus = approvalStatus;
       }
     }
 
     // Filter by category
-    if (category && category !== 'all') {
+    if (category && category !== 'all' && category !== 'undefined' && category !== 'null') {
       query.category = category;
     }
 
-    // Filter by artisan
-    if (artisan && (req.user?.role === 'admin' || req.user?.role === 'superadmin')) {
+    // Filter by specific artisan (admin only)
+    if (artisan && artisan !== 'undefined' && artisan !== 'null' && (userRole === 'admin' || userRole === 'superadmin')) {
       query.artisan = artisan;
     }
 
     // Price range filter
-    if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = parseFloat(minPrice);
-      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+    if (minPrice && minPrice !== 'undefined' && minPrice !== 'null') {
+      if (!query.price) query.price = {};
+      query.price.$gte = parseFloat(minPrice);
+    }
+    if (maxPrice && maxPrice !== 'undefined' && maxPrice !== 'null') {
+      if (!query.price) query.price = {};
+      query.price.$lte = parseFloat(maxPrice);
     }
 
     // Stock filter
@@ -109,21 +132,21 @@ exports.getProducts = async (req, res) => {
     if (newArrival === 'true') query.isNewArrival = true;
 
     // Array filters
-    if (tags) {
+    if (tags && tags !== 'undefined' && tags !== 'null') {
       query.tags = { $in: tags.split(',').map(tag => tag.trim().toLowerCase()) };
     }
-    if (materials) {
+    if (materials && materials !== 'undefined' && materials !== 'null') {
       query.materials = { $in: materials.split(',').map(m => m.trim()) };
     }
-    if (colors) {
+    if (colors && colors !== 'undefined' && colors !== 'null') {
       query.colors = { $in: colors.split(',').map(c => c.trim()) };
     }
-    if (sizes) {
+    if (sizes && sizes !== 'undefined' && sizes !== 'null') {
       query.sizes = { $in: sizes.split(',').map(s => s.trim()) };
     }
 
     // Search functionality
-    if (search && search.trim()) {
+    if (search && search.trim() && search !== 'undefined' && search !== 'null') {
       const searchRegex = new RegExp(search.trim(), 'i');
       query.$or = [
         { name: searchRegex },
@@ -135,16 +158,19 @@ exports.getProducts = async (req, res) => {
       ];
     }
 
+    // Log the final query for debugging
+    console.log('Final MongoDB query:', JSON.stringify(query, null, 2));
+
     // Parse sort options
     let sortOptions = {};
-    if (sort) {
+    if (sort && sort !== 'undefined' && sort !== 'null') {
       const sortField = sort.startsWith('-') ? sort.slice(1) : sort;
       const sortOrder = sort.startsWith('-') ? -1 : 1;
       sortOptions[sortField] = sortOrder;
     }
 
     // Price-specific sort
-    if (priceSort) {
+    if (priceSort && (priceSort === 'asc' || priceSort === 'desc')) {
       sortOptions.price = priceSort === 'asc' ? 1 : -1;
     }
 
@@ -156,7 +182,7 @@ exports.getProducts = async (req, res) => {
     // Execute query with population
     const [products, total] = await Promise.all([
       Product.find(query)
-        .populate('artisan', 'name username profileImage')
+        .populate('artisan', 'name username profileImage businessName')
         .populate('createdBy', 'name email')
         .sort(sortOptions)
         .skip(skip)
@@ -182,6 +208,14 @@ exports.getProducts = async (req, res) => {
         }
       }
     ]);
+
+    // Log counts for debugging
+    console.log(`Found ${products.length} products out of ${total} total`);
+    console.log('Sample product statuses:', products.slice(0, 3).map(p => ({ 
+      name: p.name, 
+      status: p.status, 
+      approvalStatus: p.approvalStatus 
+    })));
 
     res.json({
       success: true,
