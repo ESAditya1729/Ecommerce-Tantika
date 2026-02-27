@@ -315,6 +315,19 @@ const ProductManagement = () => {
     fetchArtisansIfNeeded();
   }, [showAddModal, currentUser]);
 
+  useEffect(() => {
+    const fetchArtisansForEditIfNeeded = async () => {
+      if (
+        showEditModal &&
+        (currentUser?.role === "admin" || currentUser?.role === "superadmin")
+      ) {
+        console.log("Fetching artisans for edit modal...");
+        await fetchArtisans();
+      }
+    };
+
+    fetchArtisansForEditIfNeeded();
+  }, [showEditModal, currentUser]);
   // Fetch artisans function
 // Fetch artisans function - UPDATED to handle nested structure
 const fetchArtisans = async () => {
