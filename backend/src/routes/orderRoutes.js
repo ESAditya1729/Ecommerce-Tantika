@@ -33,7 +33,7 @@ const superAdmin = (req, res, next) => {
 router.get('/track/:orderNumber', OrderController.getOrderByNumber);
 
 // ============= AUTHENTICATED USER ROUTES =============
-router.post('/', protect, OrderController.createOrder);
+router.post('/express-interest', protect, OrderController.createOrder);
 router.get('/my-orders', protect, OrderController.getMyOrders);
 router.get('/:id', protect, OrderController.getOrderById);
 router.put('/:id/cancel', protect, OrderController.cancelOrder);
