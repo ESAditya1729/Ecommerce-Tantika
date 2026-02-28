@@ -15,22 +15,18 @@ import ProductCard from "./Product-Management/ProductCard.jsx";
 import ProductFilters from "./Product-Management/ProductFilters.jsx";
 import SummaryCards from "./Product-Management/SummaryCards";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL =  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 // Helper function to get auth headers using logged-in user's credentials
 const getAuthHeaders = () => {
   const token =
-    localStorage.getItem("tantika_token") || sessionStorage.getItem("token");
+    localStorage.getItem("tantika_token") ||
+    sessionStorage.getItem("tantika_token");
 
-  if (token) {
-    return {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
-  }
+  if (!token) return { "Content-Type": "application/json" };
 
   return {
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 };
@@ -104,7 +100,7 @@ const ProductManagement = () => {
     minPrice: "",
     maxPrice: "",
     inStock: "all",
-    lowStock: false, // NEW: Separate low stock filter
+    lowStock: false,
   });
 
   // ==================== UTILITY FUNCTIONS ====================
@@ -296,7 +292,7 @@ const ProductManagement = () => {
   // Fetch current user on component mount
   useEffect(() => {
     const user = getCurrentUser();
-    console.log("Current user loaded:", user);
+    console.log("Current user loaded:", user.role);
     setCurrentUser(user);
   }, []);
 
@@ -411,7 +407,6 @@ const fetchArtisans = async () => {
   }
 };
 
-  // Fetch products from API - FIXED LOW STOCK FILTER
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
@@ -673,10 +668,12 @@ const fetchArtisans = async () => {
   };
 
   // Initial data fetch
-  useEffect(() => {
+ useEffect(() => {
+  if (currentUser !== null) {
     fetchProducts();
     fetchCategories();
-  }, []);
+  }
+}, [currentUser]);
 
   // Handle search with debounce
   useEffect(() => {

@@ -692,9 +692,12 @@ exports.updateArtisan = async (req, res) => {
       });
     }
 
-    // Check what fields are being updated
-    console.log('Updating artisan:', id);
-    console.log('Update data:', updateData);
+    // Check if status is being updated
+    const isStatusChanging = updateData.status && updateData.status !== artisan.status;
+    const oldStatus = artisan.status;
+    const newStatus = updateData.status;
+
+    console.log('Status change detected:', { oldStatus, newStatus, isStatusChanging });
 
     // Update allowed fields
     const allowedUpdates = [
@@ -726,14 +729,97 @@ exports.updateArtisan = async (req, res) => {
     // Save the updated artisan
     await artisan.save();
 
-    // Get updated artisan with user data
+    // If status is changing, find and update the associated User
+    if (isStatusChanging) {
+      // Try to find user by artisanId (since User document has artisanId field)
+      const User = mongoose.model('User');
+      
+      // First, try to find user by artisanId field
+      let user = await User.findOne({ artisanId: artisan._id });
+      
+      // If not found by artisanId, try to find by email (if email exists)
+      if (!user && artisan.email) {
+        user = await User.findOne({ email: artisan.email });
+      }
+      
+      // If still not found, try to find by phone
+      if (!user && artisan.phone) {
+        user = await User.findOne({ phone: artisan.phone });
+      }
+
+      if (user) {
+        console.log('Found associated user:', { userId: user._id, currentRole: user.role });
+        
+        // Map artisan status to user role
+        let newUserRole = user.role; // Default to current role
+        
+        switch (newStatus) {
+          case 'approved':
+            newUserRole = 'artisan';
+            break;
+          case 'pending':
+            newUserRole = 'pending_artisan';
+            break;
+          case 'rejected':
+          case 'suspended':
+            // For rejected or suspended, set to pending_artisan
+            newUserRole = 'pending_artisan';
+            break;
+          default:
+            newUserRole = user.role;
+        }
+
+        // Only update if role changed
+        if (newUserRole !== user.role) {
+          user.role = newUserRole;
+          
+          // Also ensure the artisanId reference is correct
+          if (!user.artisanId || user.artisanId.toString() !== artisan._id.toString()) {
+            user.artisanId = artisan._id;
+          }
+          
+          await user.save();
+          
+          console.log(`User role updated from ${user.role} to ${newUserRole} for user ${user._id}`);
+        } else {
+          console.log('User role unchanged:', user.role);
+        }
+      } else {
+        console.log('No associated user found for artisan:', artisan._id);
+        
+        // Optional: If no user found, you might want to create one or handle differently
+        console.log('Search criteria used:', {
+          artisanId: artisan._id,
+          email: artisan.email,
+          phone: artisan.phone
+        });
+      }
+    }
+
+    // Get updated artisan with any available user data
     const updatedArtisan = await Artisan.findById(id)
-      .populate('userId', 'username email');
+      .populate('userId', 'username email role'); // If you have userId field in artisan
+
+    // Also try to get user data from User model if needed
+    let userData = null;
+    if (!updatedArtisan.userId) {
+      const User = mongoose.model('User');
+      userData = await User.findOne({ artisanId: updatedArtisan._id })
+        .select('username email role');
+    }
 
     res.status(200).json({
       success: true,
       message: 'Artisan updated successfully',
-      data: updatedArtisan
+      data: {
+        ...updatedArtisan.toObject(),
+        user: userData || updatedArtisan.userId
+      },
+      metadata: {
+        statusChanged: isStatusChanging,
+        oldStatus: isStatusChanging ? oldStatus : undefined,
+        newStatus: isStatusChanging ? newStatus : undefined
+      }
     });
 
   } catch (error) {
