@@ -1,6 +1,6 @@
 // src/components/Modals/EditProductModal.jsx
 import React, { useState, useEffect } from "react";
-import { X, Star, User, Info, AlertCircle, Loader2 } from "lucide-react";
+import { X, Star, User, Info, AlertCircle, Loader2, Clock, CheckCircle, XCircle, FileText } from "lucide-react";
 import ImageUpload from "../Common/ImageUpload";
 
 const EditProductModal = ({
@@ -22,6 +22,7 @@ const EditProductModal = ({
   const [isArtisan, setIsArtisan] = useState(false);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
+  const [newNote, setNewNote] = useState("");
 
   // Get filtered artisans - handle nested data structure
   const getFilteredArtisans = () => {
@@ -40,16 +41,12 @@ const EditProductModal = ({
     return filtered;
   };
 
+  // Check if user is admin
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
+
   // Initialize images and ensure rating has proper value when product loads
   useEffect(() => {
     if (editingProduct && showEditModal) {
-      console.log("Edit modal opened with artisans data:", {
-        rawArtisans: artisans,
-        filteredArtisans: getFilteredArtisans(),
-        artisanCount: artisans?.length || 0,
-        loadingArtisans
-      });
-      
       setProductImages(editingProduct.images || []);
       
       // Ensure rating is properly set and is a number
@@ -67,14 +64,13 @@ const EditProductModal = ({
           ? editingProduct.artisan._id 
           : editingProduct.artisan;
         setSelectedArtisan(artisanId);
-        console.log("Setting selected artisan to:", artisanId);
       }
 
       // Check if current user is artisan
       const userIsArtisan = currentUser?.role === 'artisan' || currentUser?.role === 'pending_artisan';
       setIsArtisan(userIsArtisan);
     }
-  }, [editingProduct, showEditModal, artisans, loadingArtisans, currentUser, setEditingProduct]);
+  }, [editingProduct, showEditModal, artisans, currentUser, setEditingProduct]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -154,15 +150,31 @@ const EditProductModal = ({
       productData.rating = Math.round(productData.rating * 10) / 10;
     }
 
-    console.log('Submitting product with rating and artisan:', {
-      originalRating: editingProduct.rating,
-      parsedRating: productData.rating,
-      artisan: productData.artisan,
-      productData
-    });
-
     // Call the update function with prepared data
     handleUpdateProduct(productData);
+  };
+
+  const handleAddNote = () => {
+    if (newNote.trim() && currentUser) {
+      const note = {
+        text: newNote.trim(),
+        addedBy: currentUser._id || currentUser.id,
+        addedAt: new Date()
+      };
+      
+      setEditingProduct(prev => ({
+        ...prev,
+        notes: [...(prev.notes || []), note]
+      }));
+      setNewNote("");
+    }
+  };
+
+  const handleRemoveNote = (index) => {
+    setEditingProduct(prev => ({
+      ...prev,
+      notes: prev.notes.filter((_, i) => i !== index)
+    }));
   };
 
   const isFormValid = () => {
@@ -178,6 +190,7 @@ const EditProductModal = ({
     setSelectedArtisan("");
     setErrors({});
     setTouched({});
+    setNewNote("");
     setShowEditModal(false);
   };
 
@@ -217,7 +230,6 @@ const EditProductModal = ({
   };
 
   const handleArtisanChange = (artisanId) => {
-    console.log("Artisan selected:", artisanId);
     const filteredArtisans = getFilteredArtisans();
     const selected = filteredArtisans.find(a => a._id === artisanId);
     
@@ -328,6 +340,36 @@ const EditProductModal = ({
     return selected?.businessName || selected?.fullName || selected?.name || 'Artisan';
   };
 
+  const getApprovalStatusIcon = (status) => {
+    switch(status) {
+      case 'approved':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'rejected':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+    }
+  };
+
+  const getStatusBadgeColor = (status) => {
+    switch(status) {
+      case 'active':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'out_of_stock':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'low_stock':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'archived':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'discontinued':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
   if (!showEditModal || !editingProduct) return null;
 
   const isButtonDisabled = actionLoading || !isFormValid();
@@ -351,6 +393,94 @@ const EditProductModal = ({
           </div>
 
           <form onSubmit={handleSubmit}>
+            {/* Admin Status Controls - Only visible to admin */}
+            {isAdmin && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <Info className="w-5 h-5 text-purple-600" />
+                  <h4 className="text-lg font-semibold text-gray-900">Product Status Management</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Status Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Product Status
+                    </label>
+                    <select
+                      value={editingProduct.status || "draft"}
+                      onChange={(e) =>
+                        setEditingProduct({ ...editingProduct, status: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                      disabled={actionLoading}
+                    >
+                      <option value="active">Active</option>
+                      <option value="draft">Draft</option>
+                      <option value="out_of_stock">Out of Stock</option>
+                      <option value="low_stock">Low Stock</option>
+                      <option value="archived">Archived</option>
+                      <option value="discontinued">Discontinued</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Controls product visibility and availability
+                    </p>
+                  </div>
+
+                  {/* Approval Status Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Approval Status
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={editingProduct.approvalStatus || "pending"}
+                        onChange={(e) =>
+                          setEditingProduct({ ...editingProduct, approvalStatus: e.target.value })
+                        }
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        disabled={actionLoading}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                      <span className={`inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-medium border ${
+                        getStatusBadgeColor(editingProduct.status)
+                      }`}>
+                        {getApprovalStatusIcon(editingProduct.approvalStatus)}
+                        <span className="ml-1 capitalize">
+                          {editingProduct.approvalStatus || 'pending'}
+                        </span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Approval status for product publication
+                    </p>
+                  </div>
+                </div>
+
+                {/* Current Status Display */}
+                <div className="mt-4 flex items-center gap-3 text-sm">
+                  <span className="text-gray-600">Current Status:</span>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    getStatusBadgeColor(editingProduct.status)
+                  }`}>
+                    {editingProduct.status?.replace('_', ' ') || 'draft'}
+                  </span>
+                  <span className="text-gray-600">Approval:</span>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    editingProduct.approvalStatus === 'approved' ? 'bg-green-100 text-green-800 border-green-200' :
+                    editingProduct.approvalStatus === 'rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                    'bg-yellow-100 text-yellow-800 border-yellow-200'
+                  }`}>
+                    {getApprovalStatusIcon(editingProduct.approvalStatus)}
+                    <span className="ml-1 capitalize">{editingProduct.approvalStatus || 'pending'}</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Artisan Information Section - Only show for admin */}
             {!isArtisan && (
               <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -565,23 +695,7 @@ const EditProductModal = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Status
-                  </label>
-                  <select
-                    value={editingProduct.status || "active"}
-                    onChange={(e) =>
-                      setEditingProduct({ ...editingProduct, status: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                    disabled={actionLoading}
-                  >
-                    <option value="active">Active</option>
-                    <option value="draft">Draft</option>
-                    <option value="out_of_stock">Out of Stock</option>
-                  </select>
-                </div>
+                {/* Status field moved to admin section above */}
               </div>
 
               {/* Right Column - Images and Rating */}
@@ -751,6 +865,71 @@ const EditProductModal = ({
                 disabled={actionLoading}
               />
             </div>
+
+            {/* Notes Section - Only visible to admin */}
+            {isAdmin && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  <h4 className="text-lg font-semibold text-gray-900">Product Notes</h4>
+                </div>
+                
+                {/* Add new note */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Add Note
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                      placeholder="Enter a note about this product..."
+                      disabled={actionLoading}
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddNote())}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddNote}
+                      disabled={!newNote.trim() || actionLoading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add Note
+                    </button>
+                  </div>
+                </div>
+
+                {/* Display existing notes */}
+                {editingProduct.notes && editingProduct.notes.length > 0 ? (
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {editingProduct.notes.map((note, index) => (
+                      <div key={index} className="p-3 bg-white rounded-lg border border-gray-200">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-900">{note.text}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Added by: {note.addedBy?.name || note.addedBy || 'Unknown'} • 
+                              {note.addedAt ? new Date(note.addedAt).toLocaleString() : 'Date unknown'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveNote(index)}
+                            className="ml-2 text-gray-400 hover:text-red-500 transition-colors"
+                            disabled={actionLoading}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No notes added yet.</p>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end space-x-3">
               <button
