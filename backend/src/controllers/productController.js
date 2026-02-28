@@ -31,7 +31,7 @@ const handleMongoError = (error, res) => {
 
 // @desc    Get all products with advanced filtering
 // @route   GET /api/products
-// @access  Public/Admin/Artisan
+// @access  Public/Admin/User
 exports.getProducts = async (req, res) => {
   try {
     const {
@@ -59,94 +59,87 @@ exports.getProducts = async (req, res) => {
     // Build query based on user role
     let query = {};
 
-    // Check if user is authenticated
+    // Check if user is authenticated and get role
     const isAuthenticated = req.user && (req.user._id || req.user.id);
     const userRole = req.user?.role;
 
-    // PUBLIC USERS - Only see approved, active products
-    if (!isAuthenticated || (userRole !== 'admin' && userRole !== 'superadmin' && userRole !== 'artisan')) {
+    // ADMIN USERS - Can see ALL products (no default filters)
+    if (isAuthenticated && (userRole === 'admin' || userRole === 'superadmin')) {
+      // Only apply filters if they are explicitly provided and not 'all'
+      if (status && status !== 'all' && status !== 'undefined' && status !== 'null' && status !== '') {
+        query.status = status;
+      }
+      if (approvalStatus && approvalStatus !== 'all' && approvalStatus !== 'undefined' && approvalStatus !== 'null' && approvalStatus !== '') {
+        query.approvalStatus = approvalStatus;
+      }
+      
+      // Admin can filter by specific artisan if needed
+      if (artisan && artisan !== 'undefined' && artisan !== 'null' && artisan !== '') {
+        query.artisan = artisan;
+      }
+    } 
+    // REGULAR USERS (including public/unauthenticated) - Only see approved, active products
+    else {
       query.status = 'active';
       query.approvalStatus = 'approved';
-      console.log('Public user: showing only approved & active products');
-    } 
-    // ADMIN/SUPERADMIN - Can see ALL products (no default filters)
-    else if (userRole === 'admin' || userRole === 'superadmin') {
-      console.log('Admin user: showing ALL products');
-      // Start with empty query to show ALL products
-      // Only apply filters if they are explicitly provided and not 'all'
-      if (status && status !== 'all' && status !== 'undefined' && status !== 'null') {
-        query.status = status;
-      }
-      if (approvalStatus && approvalStatus !== 'all' && approvalStatus !== 'undefined' && approvalStatus !== 'null') {
-        query.approvalStatus = approvalStatus;
-      }
-    } 
-    // ARTISAN - Can see their own products
-    else if (userRole === 'artisan') {
-      console.log('Artisan user: showing own products');
-      // Get artisan ID from user object
-      const artisanId = req.user.artisanId || req.user._id;
-      query.artisan = artisanId;
       
-      // Apply status filter if provided
-      if (status && status !== 'all' && status !== 'undefined' && status !== 'null') {
-        query.status = status;
-      }
-      
-      // Apply approvalStatus filter if provided
-      if (approvalStatus && approvalStatus !== 'all' && approvalStatus !== 'undefined' && approvalStatus !== 'null') {
-        query.approvalStatus = approvalStatus;
-      }
+      // Regular users cannot filter by status or approvalStatus
+      // These filters are ignored for non-admin users
     }
 
-    // Filter by category
-    if (category && category !== 'all' && category !== 'undefined' && category !== 'null') {
+    // Filter by category (available to all users)
+    if (category && category !== 'all' && category !== 'undefined' && category !== 'null' && category !== '') {
       query.category = category;
     }
 
-    // Filter by specific artisan (admin only)
-    if (artisan && artisan !== 'undefined' && artisan !== 'null' && (userRole === 'admin' || userRole === 'superadmin')) {
-      query.artisan = artisan;
-    }
-
-    // Price range filter
-    if (minPrice && minPrice !== 'undefined' && minPrice !== 'null') {
+    // Price range filter (available to all users)
+    if (minPrice && minPrice !== 'undefined' && minPrice !== 'null' && minPrice !== '') {
       if (!query.price) query.price = {};
       query.price.$gte = parseFloat(minPrice);
     }
-    if (maxPrice && maxPrice !== 'undefined' && maxPrice !== 'null') {
+    if (maxPrice && maxPrice !== 'undefined' && maxPrice !== 'null' && maxPrice !== '') {
       if (!query.price) query.price = {};
       query.price.$lte = parseFloat(maxPrice);
     }
 
-    // Stock filter
+    // Stock filter (available to all users)
     if (inStock === 'true') {
       query.stock = { $gt: 0 };
     } else if (inStock === 'false') {
       query.stock = 0;
     }
 
-    // Boolean filters
+    // Handle minStock and maxStock for low stock filter
+    if (req.query.minStock) {
+      if (!query.stock) query.stock = {};
+      query.stock.$gte = parseInt(req.query.minStock);
+    }
+    if (req.query.maxStock) {
+      if (!query.stock) query.stock = {};
+      query.stock.$lt = parseInt(req.query.maxStock);
+    }
+
+    // Boolean filters (available to all users)
     if (featured === 'true') query.isFeatured = true;
     if (bestSeller === 'true') query.isBestSeller = true;
     if (newArrival === 'true') query.isNewArrival = true;
 
-    // Array filters
-    if (tags && tags !== 'undefined' && tags !== 'null') {
+    // Array filters (available to all users)
+    if (tags && tags !== 'undefined' && tags !== 'null' && tags !== '') {
       query.tags = { $in: tags.split(',').map(tag => tag.trim().toLowerCase()) };
     }
-    if (materials && materials !== 'undefined' && materials !== 'null') {
+    if (materials && materials !== 'undefined' && materials !== 'null' && materials !== '') {
       query.materials = { $in: materials.split(',').map(m => m.trim()) };
     }
-    if (colors && colors !== 'undefined' && colors !== 'null') {
+    if (colors && colors !== 'undefined' && colors !== 'null' && colors !== '') {
       query.colors = { $in: colors.split(',').map(c => c.trim()) };
     }
-    if (sizes && sizes !== 'undefined' && sizes !== 'null') {
+    if (sizes && sizes !== 'undefined' && sizes !== 'null' && sizes !== '') {
       query.sizes = { $in: sizes.split(',').map(s => s.trim()) };
     }
 
-    // Search functionality
-    if (search && search.trim() && search !== 'undefined' && search !== 'null') {
+    // Search functionality (available to all users)
+    if (search && search.trim() && search !== 'undefined' && search !== 'null' && search !== '') {
       const searchRegex = new RegExp(search.trim(), 'i');
       query.$or = [
         { name: searchRegex },
@@ -158,12 +151,9 @@ exports.getProducts = async (req, res) => {
       ];
     }
 
-    // Log the final query for debugging
-    console.log('Final MongoDB query:', JSON.stringify(query, null, 2));
-
     // Parse sort options
     let sortOptions = {};
-    if (sort && sort !== 'undefined' && sort !== 'null') {
+    if (sort && sort !== 'undefined' && sort !== 'null' && sort !== '') {
       const sortField = sort.startsWith('-') ? sort.slice(1) : sort;
       const sortOrder = sort.startsWith('-') ? -1 : 1;
       sortOptions[sortField] = sortOrder;
@@ -175,8 +165,8 @@ exports.getProducts = async (req, res) => {
     }
 
     // Pagination
-    const currentPage = parseInt(page);
-    const itemsPerPage = parseInt(limit);
+    const currentPage = parseInt(page) || 1;
+    const itemsPerPage = parseInt(limit) || 12;
     const skip = (currentPage - 1) * itemsPerPage;
 
     // Execute query with population
@@ -209,14 +199,6 @@ exports.getProducts = async (req, res) => {
       }
     ]);
 
-    // Log counts for debugging
-    console.log(`Found ${products.length} products out of ${total} total`);
-    console.log('Sample product statuses:', products.slice(0, 3).map(p => ({ 
-      name: p.name, 
-      status: p.status, 
-      approvalStatus: p.approvalStatus 
-    })));
-
     res.json({
       success: true,
       count: products.length,
@@ -229,7 +211,6 @@ exports.getProducts = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get products error:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching products',

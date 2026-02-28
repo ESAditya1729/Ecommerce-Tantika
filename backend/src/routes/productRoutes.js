@@ -18,7 +18,7 @@ const {
 const { protect, admin, artisan } = require('../middleware/authMiddleware');
 
 // ========== PUBLIC ROUTES ==========
-router.get('/', (req, res, next) => {
+router.get('/norm', (req, res, next) => {
   getProducts(req, res).catch(next);
 });
 
@@ -29,6 +29,9 @@ router.get('/categories', (req, res, next) => {
 // ========== ADMIN ONLY ROUTES ==========
 router.put('/bulk/update', protect, admin, (req, res, next) => {
   bulkUpdateProducts(req, res).catch(next);
+});
+router.get('/', protect, admin,(req, res, next) => {
+  getProducts(req, res).catch(next);
 });
 
 router.delete('/bulk/delete', protect, admin, (req, res, next) => {
