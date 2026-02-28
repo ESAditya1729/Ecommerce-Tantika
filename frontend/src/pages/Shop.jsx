@@ -280,7 +280,7 @@ const Products = () => {
       params.append("sort", sortConfig.sort);
       params.append("order", sortConfig.order);
 
-      const url = `${API_URL}/products?${params.toString()}`;
+      const url = `${API_URL}/products/norm?${params.toString()}`;
       console.log("📡 Fetching products with URL:", url);
 
       const res = await fetch(url);
