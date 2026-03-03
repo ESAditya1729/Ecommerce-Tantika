@@ -444,9 +444,9 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             <div className="text-2xl font-bold text-gray-900 mb-1">
               {formatPrice(product.price)}
             </div>
-            <div className="text-sm text-gray-500">
+            {/* <div className="text-sm text-gray-500">
               Free shipping • 14-day returns
-            </div>
+            </div> */}
           </div>
 
           {/* Action Buttons */}

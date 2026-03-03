@@ -744,7 +744,7 @@ const ProductDetails = () => {
                     <div className="font-medium text-gray-900">
                       Easy Returns
                     </div>
-                    <div className="text-xs text-gray-600">7-day policy</div>
+                    {/* <div className="text-xs text-gray-600">7-day policy</div> */}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl">

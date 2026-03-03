@@ -42,6 +42,7 @@ exports.getProducts = async (req, res) => {
       page = 1,
       limit = 12,
       search,
+      searchType,
       status,
       approvalStatus,
       artisan,
@@ -138,17 +139,75 @@ exports.getProducts = async (req, res) => {
       query.sizes = { $in: sizes.split(',').map(s => s.trim()) };
     }
 
-    // Search functionality (available to all users)
+    // ========== FIXED SEARCH FUNCTIONALITY ==========
     if (search && search.trim() && search !== 'undefined' && search !== 'null' && search !== '') {
       const searchRegex = new RegExp(search.trim(), 'i');
-      query.$or = [
-        { name: searchRegex },
-        { description: searchRegex },
-        { shortDescription: searchRegex },
-        { brand: searchRegex },
-        { 'specifications.value': searchRegex },
-        { tags: searchRegex }
-      ];
+      
+      // Handle different search types
+      if (searchType === 'artisan') {
+        // Search by artisan name
+        // Find artisans matching the search term using the imported Artisan model
+        const matchingArtisans = await Artisan.find({
+          $or: [
+            { businessName: searchRegex },
+            { fullName: searchRegex },
+            { displayName: searchRegex },
+            { name: searchRegex },
+            { username: searchRegex }
+          ]
+        }).select('_id').lean();
+        
+        const artisanIds = matchingArtisans.map(a => a._id);
+        
+        // Then search for products by these artisan IDs
+        if (artisanIds.length > 0) {
+          query.artisan = { $in: artisanIds };
+        } else {
+          // If no artisans found, return empty result by setting an impossible condition
+          query._id = null;
+        }
+      } 
+      else if (searchType === 'description') {
+        // Search only in description
+        query.$or = [
+          { description: searchRegex },
+          { shortDescription: searchRegex }
+        ];
+      }
+      else if (searchType === 'product') {
+        // Search only in product name
+        query.$or = [
+          { name: searchRegex },
+          { brand: searchRegex },
+          { tags: searchRegex }
+        ];
+      }
+      else {
+        // Default search across all relevant fields
+        const orConditions = [
+          { name: searchRegex },
+          { description: searchRegex },
+          { shortDescription: searchRegex },
+          { brand: searchRegex },
+          { tags: searchRegex }
+        ];
+        
+        // Also include artisan name search for default
+        const matchingArtisans = await Artisan.find({
+          $or: [
+            { businessName: searchRegex },
+            { fullName: searchRegex },
+            { displayName: searchRegex }
+          ]
+        }).select('_id').lean();
+        
+        if (matchingArtisans.length > 0) {
+          const artisanIds = matchingArtisans.map(a => a._id);
+          orConditions.push({ artisan: { $in: artisanIds } });
+        }
+        
+        query.$or = orConditions;
+      }
     }
 
     // Parse sort options
@@ -172,7 +231,7 @@ exports.getProducts = async (req, res) => {
     // Execute query with population
     const [products, total] = await Promise.all([
       Product.find(query)
-        .populate('artisan', 'name username profileImage businessName')
+        .populate('artisan', 'name username profileImage businessName fullName displayName')
         .populate('createdBy', 'name email')
         .sort(sortOptions)
         .skip(skip)
@@ -184,20 +243,24 @@ exports.getProducts = async (req, res) => {
     // Calculate total pages
     const totalPages = Math.ceil(total / itemsPerPage);
 
-    // Get aggregation stats
-    const stats = await Product.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: null,
-          totalStock: { $sum: '$stock' },
-          avgPrice: { $avg: '$price' },
-          minPrice: { $min: '$price' },
-          maxPrice: { $max: '$price' },
-          totalValue: { $sum: { $multiply: ['$price', '$stock'] } }
+    // Get aggregation stats (exclude from query if we're searching by artisan with no results)
+    let stats = {};
+    if (total > 0) {
+      const statsResult = await Product.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            totalStock: { $sum: '$stock' },
+            avgPrice: { $avg: '$price' },
+            minPrice: { $min: '$price' },
+            maxPrice: { $max: '$price' },
+            totalValue: { $sum: { $multiply: ['$price', '$stock'] } }
+          }
         }
-      }
-    ]);
+      ]);
+      stats = statsResult[0] || {};
+    }
 
     res.json({
       success: true,
@@ -206,11 +269,12 @@ exports.getProducts = async (req, res) => {
       totalPages,
       currentPage,
       itemsPerPage,
-      stats: stats[0] || {},
+      stats,
       data: products
     });
 
   } catch (error) {
+    console.error('Error in getProducts:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching products',
@@ -218,6 +282,7 @@ exports.getProducts = async (req, res) => {
     });
   }
 };
+
 
 // @desc    Get single product with full details
 // @route   GET /api/products/:id

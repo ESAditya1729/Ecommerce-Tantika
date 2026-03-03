@@ -184,7 +184,7 @@ const ProductCard = ({ product }) => {
 
   // Format rating
   const rating = product.rating || 0;
-  const reviewCount = product.reviewCount || 0;
+  const reviewCount = product.reviewCount || 10;
 
   // Check if in stock - FIXED: Handle stock from API response
   const inStock = product.stock > 0 && product.status === 'active';

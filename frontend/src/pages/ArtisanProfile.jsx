@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback } from "react";
+import { useParams, Link } from "react-router-dom";
+import axios from "axios";
 import {
   FaMapMarkerAlt,
   FaStar,
@@ -24,38 +24,38 @@ import {
   FaChevronLeft,
   FaChevronRight,
   FaSpinner,
-  FaImage
-} from 'react-icons/fa';
-import { motion, AnimatePresence } from 'framer-motion';
-import ProductCard from '../components/ArtisanProfile/ProductCard';
-import ArtisanStats from '../components/ArtisanProfile/ArtisanStats';
-import ProductGrid from '../components/ArtisanProfile/ProductGrid'; // New import
-import { LoadingSpinner } from '../components/LoadingSpinner';
+  FaImage,
+} from "react-icons/fa";
+import { motion, AnimatePresence } from "framer-motion";
+import ProductCard from "../components/ArtisanProfile/ProductCard";
+import ArtisanStats from "../components/ArtisanProfile/ArtisanStats";
+import ProductGrid from "../components/ArtisanProfile/ProductGrid"; // New import
+import { LoadingSpinner } from "../components/LoadingSpinner";
 
 // Animation variants
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -20 }
+  exit: { opacity: 0, y: -20 },
 };
 
 const staggerContainer = {
   animate: {
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 const scaleIn = {
   initial: { scale: 0.9, opacity: 0 },
   animate: { scale: 1, opacity: 1 },
-  exit: { scale: 0.9, opacity: 0 }
+  exit: { scale: 0.9, opacity: 0 },
 };
 
 // Error Message Component
 const ErrorMessage = ({ message }) => (
-  <motion.div 
+  <motion.div
     {...fadeInUp}
     className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto"
   >
@@ -95,28 +95,28 @@ const ImageWithFallback = ({ src, alt, className, fallback }) => {
 };
 
 // Filter and Sort Bar Component
-const FilterSortBar = ({ 
-  onSort, 
-  onCategoryChange, 
-  categories, 
-  selectedCategory, 
+const FilterSortBar = ({
+  onSort,
+  onCategoryChange,
+  categories,
+  selectedCategory,
   selectedSort,
   productCount,
-  totalProductCount
+  totalProductCount,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const sortOptions = [
-    { value: 'newest', label: 'Newest First' },
-    { value: 'oldest', label: 'Oldest First' },
-    { value: 'price_asc', label: 'Price: Low to High' },
-    { value: 'price_desc', label: 'Price: High to Low' },
-    { value: 'popular', label: 'Most Popular' },
-    { value: 'rating', label: 'Top Rated' }
+    { value: "newest", label: "Newest First" },
+    { value: "oldest", label: "Oldest First" },
+    { value: "price_asc", label: "Price: Low to High" },
+    { value: "price_desc", label: "Price: High to Low" },
+    { value: "popular", label: "Most Popular" },
+    { value: "rating", label: "Top Rated" },
   ];
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-lg shadow-sm p-4 mb-6"
@@ -130,9 +130,9 @@ const FilterSortBar = ({
               className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:border-orange-500 transition-colors"
             >
               <FaFilter className="text-gray-500" />
-              <span>{selectedCategory || 'All Categories'}</span>
+              <span>{selectedCategory || "All Categories"}</span>
             </button>
-            
+
             <AnimatePresence>
               {isOpen && (
                 <motion.div
@@ -144,16 +144,18 @@ const FilterSortBar = ({
                   <div className="py-2">
                     <button
                       onClick={() => {
-                        onCategoryChange('');
+                        onCategoryChange("");
                         setIsOpen(false);
                       }}
                       className={`w-full text-left px-4 py-2 hover:bg-orange-50 transition-colors ${
-                        !selectedCategory ? 'text-orange-500 bg-orange-50' : 'text-gray-700'
+                        !selectedCategory
+                          ? "text-orange-500 bg-orange-50"
+                          : "text-gray-700"
                       }`}
                     >
                       All Categories
                     </button>
-                    {categories.map(category => (
+                    {categories.map((category) => (
                       <button
                         key={category}
                         onClick={() => {
@@ -161,7 +163,9 @@ const FilterSortBar = ({
                           setIsOpen(false);
                         }}
                         className={`w-full text-left px-4 py-2 hover:bg-orange-50 transition-colors ${
-                          selectedCategory === category ? 'text-orange-500 bg-orange-50' : 'text-gray-700'
+                          selectedCategory === category
+                            ? "text-orange-500 bg-orange-50"
+                            : "text-gray-700"
                         }`}
                       >
                         {category}
@@ -180,7 +184,7 @@ const FilterSortBar = ({
               onChange={(e) => onSort(e.target.value)}
               className="appearance-none pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
             >
-              {sortOptions.map(option => (
+              {sortOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -203,15 +207,15 @@ const FilterSortBar = ({
 const Pagination = ({ currentPage, totalPages, onPageChange, isLoading }) => {
   const pages = Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
     if (totalPages <= 5) return i + 1;
-    
+
     if (currentPage <= 3) return i + 1;
     if (currentPage >= totalPages - 2) return totalPages - 4 + i;
-    
+
     return currentPage - 2 + i;
   });
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="flex items-center justify-center gap-2 mt-8"
@@ -226,7 +230,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, isLoading }) => {
         <FaChevronLeft className="text-gray-600" />
       </motion.button>
 
-      {pages.map(page => (
+      {pages.map((page) => (
         <motion.button
           key={page}
           whileHover={{ scale: 1.05 }}
@@ -235,8 +239,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange, isLoading }) => {
           disabled={isLoading}
           className={`w-10 h-10 rounded-lg font-medium transition-all ${
             currentPage === page
-              ? 'bg-orange-500 text-white shadow-md'
-              : 'border border-gray-300 hover:bg-orange-50 hover:border-orange-500'
+              ? "bg-orange-500 text-white shadow-md"
+              : "border border-gray-300 hover:bg-orange-50 hover:border-orange-500"
           }`}
         >
           {page}
@@ -263,44 +267,51 @@ const ArtisanProfile = () => {
   const [profileData, setProfileData] = useState(null);
   const [products, setProducts] = useState([]);
   const [stats, setStats] = useState(null);
-  const [activeTab, setActiveTab] = useState('products');
-  
+  const [activeTab, setActiveTab] = useState("products");
+
   // Pagination and filters
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalProducts, setTotalProducts] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedSort, setSelectedSort] = useState('newest');
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSort, setSelectedSort] = useState("newest");
   const [categories, setCategories] = useState([]);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  const API_BASE_URL =
+    process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
   // Extract categories from stats
   useEffect(() => {
     if (stats?.categoryBreakdown) {
-      const cats = stats.categoryBreakdown.map(item => item.category);
+      const cats = stats.categoryBreakdown.map((item) => item.category);
       setCategories(cats);
     }
   }, [stats]);
 
   useEffect(() => {
     if (!artisanId && !userId && !slug) {
-      console.log('No identifier provided in URL params');
-      setError('No artisan identifier provided');
+      console.log("No identifier provided in URL params");
+      setError("No artisan identifier provided");
       setLoading(false);
       return;
     }
-    
+
     fetchArtisanProfile();
   }, [artisanId, userId, slug]);
 
   // Fetch products when page, category, or sort changes
   useEffect(() => {
     if (profileData) {
-      const artisanIdentifier = artisanId || profileData?.artisan?.id || profileData?.id;
+      const artisanIdentifier =
+        artisanId || profileData?.artisan?.id || profileData?.id;
       if (artisanIdentifier) {
-        fetchArtisanProducts(artisanIdentifier, currentPage, selectedCategory, selectedSort);
+        fetchArtisanProducts(
+          artisanIdentifier,
+          currentPage,
+          selectedCategory,
+          selectedSort,
+        );
       }
     }
   }, [profileData, currentPage, selectedCategory, selectedSort]);
@@ -308,7 +319,8 @@ const ArtisanProfile = () => {
   // Fetch stats after profile is loaded
   useEffect(() => {
     if (profileData) {
-      const artisanIdentifier = artisanId || profileData?.artisan?.id || profileData?.id;
+      const artisanIdentifier =
+        artisanId || profileData?.artisan?.id || profileData?.id;
       if (artisanIdentifier) {
         fetchArtisanStats(artisanIdentifier);
       }
@@ -318,10 +330,10 @@ const ArtisanProfile = () => {
   const fetchArtisanProfile = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       let url = `${API_BASE_URL}/artisan-profiles`;
-      
+
       if (artisanId) {
         url += `/artisan/${artisanId}`;
       } else if (userId) {
@@ -329,21 +341,21 @@ const ArtisanProfile = () => {
       } else if (slug) {
         url += `/slug/${slug}`;
       }
-      
+
       // Add pagination params to get first page of products
       url += `?page=1&limit=12&sort=${selectedSort}`;
       if (selectedCategory) {
         url += `&category=${selectedCategory}`;
       }
-      
-      const token = localStorage.getItem('tantika_token');
-      
+
+      const token = localStorage.getItem("tantika_token");
+
       const response = await axios.get(url, {
         headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
-        }
+          Authorization: token ? `Bearer ${token}` : "",
+        },
       });
-      
+
       if (response.data.success && response.data.data) {
         setProfileData(response.data.data);
         setProducts(response.data.data.products || []);
@@ -356,31 +368,36 @@ const ArtisanProfile = () => {
         setTotalProducts(response.data.stats?.totalProducts || 0);
       }
     } catch (err) {
-      console.error('Error fetching profile:', err);
+      console.error("Error fetching profile:", err);
       handleError(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchArtisanProducts = async (artisanIdentifier, page, category, sort) => {
+  const fetchArtisanProducts = async (
+    artisanIdentifier,
+    page,
+    category,
+    sort,
+  ) => {
     try {
       setLoadingMore(true);
-      
+
       let url = `${API_BASE_URL}/artisan-profiles/artisan/${artisanIdentifier}/products`;
       url += `?page=${page}&limit=12&sort=${sort}`;
       if (category) {
         url += `&category=${category}`;
       }
-      
-      const token = localStorage.getItem('tantika_token');
-      
+
+      const token = localStorage.getItem("tantika_token");
+
       const response = await axios.get(url, {
         headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
-        }
+          Authorization: token ? `Bearer ${token}` : "",
+        },
       });
-      
+
       if (response.data.success && response.data.data) {
         setProducts(response.data.data);
         setTotalPages(response.data.pagination?.pages || 1);
@@ -392,7 +409,7 @@ const ArtisanProfile = () => {
         setTotalPages(response.data.pagination?.pages || 1);
       }
     } catch (err) {
-      console.error('Error fetching products:', err);
+      console.error("Error fetching products:", err);
     } finally {
       setLoadingMore(false);
     }
@@ -401,37 +418,39 @@ const ArtisanProfile = () => {
   const fetchArtisanStats = async (artisanIdentifier) => {
     try {
       const url = `${API_BASE_URL}/artisan-profiles/artisan/${artisanIdentifier}/stats`;
-      const token = localStorage.getItem('tantika_token');
-      
+      const token = localStorage.getItem("tantika_token");
+
       const response = await axios.get(url, {
         headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
-        }
+          Authorization: token ? `Bearer ${token}` : "",
+        },
       });
-      
+
       if (response.data.success && response.data.data) {
         setStats(response.data.data);
       } else if (response.data) {
         setStats(response.data);
       }
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      console.error("Error fetching stats:", err);
     }
   };
 
   const handleError = (err) => {
     if (err.response) {
-      setError(err.response.data?.message || `Server error: ${err.response.status}`);
+      setError(
+        err.response.data?.message || `Server error: ${err.response.status}`,
+      );
     } else if (err.request) {
-      setError('No response from server. Please check if backend is running.');
+      setError("No response from server. Please check if backend is running.");
     } else {
-      setError(err.message || 'Error loading artisan profile');
+      setError(err.message || "Error loading artisan profile");
     }
   };
 
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleCategoryChange = (category) => {
@@ -448,7 +467,7 @@ const ArtisanProfile = () => {
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 >= 0.5;
-    
+
     for (let i = 1; i <= 5; i++) {
       if (i <= fullStars) {
         stars.push(<FaStar key={i} className="text-yellow-400" />);
@@ -468,7 +487,7 @@ const ArtisanProfile = () => {
   if (error || !profileData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <ErrorMessage message={error || 'Artisan not found'} />
+        <ErrorMessage message={error || "Artisan not found"} />
       </div>
     );
   }
@@ -479,8 +498,33 @@ const ArtisanProfile = () => {
 
   const safeArtisan = {
     id: artisan.id || artisan._id,
-    displayName: artisan.displayName || artisan.businessName || 'Artisan',
-    displayInitials: artisan.displayInitials || (artisan.businessName ? artisan.businessName.charAt(0).toUpperCase() : 'A'),
+    displayName: artisan.displayName || artisan.businessName || "Artisan",
+    displayInitials:
+      (() => {
+        // Try to get initials from fullName first
+        if (artisan.fullName) {
+          const nameParts = artisan.fullName.trim().split(" ");
+          if (nameParts.length >= 2) {
+            // Get first letter of first name and first letter of last name
+            const firstNameInitial = nameParts[0].charAt(0).toUpperCase();
+            const lastNameInitial = nameParts[nameParts.length - 1]
+              .charAt(0)
+              .toUpperCase();
+            return firstNameInitial + lastNameInitial;
+          } else if (nameParts.length === 1) {
+            // Single name - just return first letter
+            return nameParts[0].charAt(0).toUpperCase();
+          }
+        }
+
+        // Fallback to businessName if fullName not available
+        if (artisan.businessName) {
+          return artisan.businessName.charAt(0).toUpperCase();
+        }
+
+        // Ultimate fallback
+        return "A";
+      })(),
     profilePicture: artisan.profilePicture,
     isVerified: artisan.isVerified || false,
     businessName: artisan.businessName,
@@ -494,28 +538,29 @@ const ArtisanProfile = () => {
     specialization: artisan.specialization || artisan.specialties || [],
     email: artisan.email,
     phone: artisan.phone,
-    fullName: artisan.fullName || artisan.name || 'Artisan',
-    yearsOfExperience: artisan.yearsOfExperience || 0
+    fullName: artisan.fullName || artisan.name || "Artisan",
+    yearsOfExperience: artisan.yearsOfExperience || 0,
   };
 
   const safeStats = {
     totalProducts: statsData.totalProducts || totalProducts || 0,
     totalSales: statsData.totalSales || 0,
     totalViews: statsData?.overview?.totalViews || 0,
-    yearsOfExperience: statsData.yearsOfExperience || safeArtisan.yearsOfExperience,
+    yearsOfExperience:
+      statsData.yearsOfExperience || safeArtisan.yearsOfExperience,
     reviewCount: statsData.reviewCount || 10,
-    averageRating: statsData.averageRating || safeArtisan.rating
+    averageRating: statsData.averageRating || safeArtisan.rating,
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="min-h-screen bg-gray-50"
     >
       {/* Artisan Header */}
-      <motion.div 
+      <motion.div
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
@@ -524,7 +569,7 @@ const ArtisanProfile = () => {
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
             {/* Artisan DP with animation */}
-            <motion.div 
+            <motion.div
               whileHover={{ scale: 1.05 }}
               transition={{ type: "spring", stiffness: 300 }}
               className="relative"
@@ -550,7 +595,7 @@ const ArtisanProfile = () => {
                 </div>
               )}
               {safeArtisan.isVerified && (
-                <motion.div 
+                <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.3, type: "spring" }}
@@ -562,25 +607,37 @@ const ArtisanProfile = () => {
             </motion.div>
 
             {/* Artisan Info with staggered animation */}
-            <motion.div 
+            <motion.div
               variants={staggerContainer}
               initial="initial"
               animate="animate"
               className="flex-1 text-center md:text-left"
             >
-              <motion.h1 variants={fadeInUp} className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+              <motion.h1
+                variants={fadeInUp}
+                className="text-3xl md:text-4xl font-bold text-gray-800 mb-2"
+              >
                 {safeArtisan.displayName}
               </motion.h1>
-              
-              {safeArtisan.businessName && safeArtisan.businessName !== safeArtisan.displayName && (
-                <motion.p variants={fadeInUp} className="text-xl text-gray-600 mb-2">
-                  {safeArtisan.businessName}
-                </motion.p>
-              )}
-              
-              <motion.div variants={fadeInUp} className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-4">
+
+              {safeArtisan.businessName &&
+                safeArtisan.businessName !== safeArtisan.displayName && (
+                  <motion.p
+                    variants={fadeInUp}
+                    className="text-xl text-gray-600 mb-2"
+                  >
+                    {safeArtisan.businessName}
+                  </motion.p>
+                )}
+
+              <motion.div
+                variants={fadeInUp}
+                className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-4"
+              >
                 <div className="flex items-center gap-2">
-                  <div className="flex">{renderRatingStars(safeArtisan.rating)}</div>
+                  <div className="flex">
+                    {renderRatingStars(safeArtisan.rating)}
+                  </div>
                   <span className="text-gray-600">
                     ({safeStats.reviewCount} reviews)
                   </span>
@@ -591,7 +648,8 @@ const ArtisanProfile = () => {
                     <FaMapMarkerAlt className="text-gray-400" />
                     <span>
                       {safeArtisan.location.city}
-                      {safeArtisan.location.state && `, ${safeArtisan.location.state}`}
+                      {safeArtisan.location.state &&
+                        `, ${safeArtisan.location.state}`}
                     </span>
                   </div>
                 )}
@@ -599,14 +657,22 @@ const ArtisanProfile = () => {
                 {safeArtisan.joinedAt && (
                   <div className="flex items-center gap-1 text-gray-600">
                     <FaCalendarAlt className="text-gray-400" />
-                    <span>Member since {new Date(safeArtisan.joinedAt).getFullYear()}</span>
+                    <span>
+                      Member since{" "}
+                      {new Date(safeArtisan.joinedAt).getFullYear()}
+                    </span>
                   </div>
                 )}
               </motion.div>
 
-              <motion.div variants={fadeInUp} className="flex flex-wrap justify-center md:justify-start gap-6 mb-4">
+              <motion.div
+                variants={fadeInUp}
+                className="flex flex-wrap justify-center md:justify-start gap-6 mb-4"
+              >
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-800">{safeStats.totalProducts}</div>
+                  <div className="text-2xl font-bold text-gray-800">
+                    {safeStats.totalProducts}
+                  </div>
                   <div className="text-sm text-gray-500">Products</div>
                 </div>
                 {/* <div className="text-center">
@@ -614,12 +680,17 @@ const ArtisanProfile = () => {
                   <div className="text-sm text-gray-500">Sales</div>
                 </div> */}
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-800">{safeStats.yearsOfExperience}+</div>
+                  <div className="text-2xl font-bold text-gray-800">
+                    {safeStats.yearsOfExperience}+
+                  </div>
                   <div className="text-sm text-gray-500">Years Experience</div>
                 </div>
               </motion.div>
 
-              <motion.div variants={fadeInUp} className="flex flex-wrap justify-center md:justify-start gap-3">
+              <motion.div
+                variants={fadeInUp}
+                className="flex flex-wrap justify-center md:justify-start gap-3"
+              >
                 {safeArtisan.website && (
                   <motion.a
                     whileHover={{ scale: 1.1, rotate: 5 }}
@@ -696,7 +767,7 @@ const ArtisanProfile = () => {
             </motion.div>
 
             {/* Contact Button with animation */}
-            <motion.div 
+            <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="md:self-center"
@@ -709,19 +780,21 @@ const ArtisanProfile = () => {
 
           {/* Artisan Description with animation */}
           {safeArtisan.description && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
               className="mt-6 p-4 bg-gray-50 rounded-lg"
             >
-              <p className="text-gray-700 leading-relaxed">{safeArtisan.description}</p>
+              <p className="text-gray-700 leading-relaxed">
+                {safeArtisan.description}
+              </p>
             </motion.div>
           )}
 
           {/* Specializations with animation */}
           {safeArtisan.specialization.length > 0 && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
@@ -742,7 +815,7 @@ const ArtisanProfile = () => {
       </motion.div>
 
       {/* Tabs Navigation with animation */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -753,16 +826,16 @@ const ArtisanProfile = () => {
             whileHover={{ y: -2 }}
             whileTap={{ y: 0 }}
             className={`px-6 py-3 font-medium text-lg transition relative ${
-              activeTab === 'products'
-                ? 'text-orange-500'
-                : 'text-gray-500 hover:text-gray-700'
+              activeTab === "products"
+                ? "text-orange-500"
+                : "text-gray-500 hover:text-gray-700"
             }`}
-            onClick={() => setActiveTab('products')}
+            onClick={() => setActiveTab("products")}
           >
             <FaShoppingBag className="inline mr-2" />
             Products ({safeStats.totalProducts})
-            {activeTab === 'products' && (
-              <motion.div 
+            {activeTab === "products" && (
+              <motion.div
                 layoutId="activeTab"
                 className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500"
               />
@@ -772,16 +845,16 @@ const ArtisanProfile = () => {
             whileHover={{ y: -2 }}
             whileTap={{ y: 0 }}
             className={`px-6 py-3 font-medium text-lg transition relative ${
-              activeTab === 'about'
-                ? 'text-orange-500'
-                : 'text-gray-500 hover:text-gray-700'
+              activeTab === "about"
+                ? "text-orange-500"
+                : "text-gray-500 hover:text-gray-700"
             }`}
-            onClick={() => setActiveTab('about')}
+            onClick={() => setActiveTab("about")}
           >
             <FaAward className="inline mr-2" />
             About Artisan
-            {activeTab === 'about' && (
-              <motion.div 
+            {activeTab === "about" && (
+              <motion.div
                 layoutId="activeTab"
                 className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500"
               />
@@ -793,7 +866,7 @@ const ArtisanProfile = () => {
       {/* Tab Content */}
       <div className="container mx-auto px-4 pb-16">
         <AnimatePresence mode="wait">
-          {activeTab === 'products' && (
+          {activeTab === "products" && (
             <motion.div
               key="products"
               initial={{ opacity: 0, x: -20 }}
@@ -815,7 +888,7 @@ const ArtisanProfile = () => {
               )}
 
               {/* Products Grid - Using the new ProductGrid component */}
-              <ProductGrid 
+              <ProductGrid
                 products={productsList}
                 loading={loadingMore}
                 emptyMessage="No products available in this category."
@@ -823,7 +896,7 @@ const ArtisanProfile = () => {
                   default: 1,
                   sm: 2,
                   lg: 3,
-                  xl: 4
+                  xl: 4,
                 }}
               />
 
@@ -839,7 +912,7 @@ const ArtisanProfile = () => {
             </motion.div>
           )}
 
-          {activeTab === 'about' && (
+          {activeTab === "about" && (
             <motion.div
               key="about"
               initial={{ opacity: 0, x: 20 }}
@@ -851,23 +924,28 @@ const ArtisanProfile = () => {
               {/* About Content */}
               <div className="lg:col-span-2">
                 <ArtisanStats stats={safeStats} artisan={safeArtisan} />
-                
+
                 {/* Contact Information */}
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
                   className="bg-white rounded-lg shadow-sm p-6 mt-6"
                 >
-                  <h3 className="text-xl font-semibold mb-4">Contact Information</h3>
+                  <h3 className="text-xl font-semibold mb-4">
+                    Contact Information
+                  </h3>
                   <div className="space-y-3">
                     {safeArtisan.email && (
-                      <motion.div 
+                      <motion.div
                         whileHover={{ x: 5 }}
                         className="flex items-center gap-3 text-gray-600"
                       >
                         <FaEnvelope className="text-gray-400" />
-                        <a href={`mailto:${safeArtisan.email}`} className="hover:text-orange-500 transition">
+                        <a
+                          href={`mailto:${safeArtisan.email}`}
+                          className="hover:text-orange-500 transition"
+                        >
                           {safeArtisan.email}
                         </a>
                       </motion.div>
@@ -887,15 +965,17 @@ const ArtisanProfile = () => {
 
               {/* Sidebar */}
               <div className="lg:col-span-1">
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                   className="bg-white rounded-lg shadow-sm p-6 sticky top-24"
                 >
-                  <h3 className="text-lg font-semibold mb-4">Artisan Details</h3>
+                  <h3 className="text-lg font-semibold mb-4">
+                    Artisan Details
+                  </h3>
                   <div className="space-y-4">
-                    <motion.div 
+                    <motion.div
                       whileHover={{ x: 5 }}
                       className="border-b border-gray-100 pb-2"
                     >
@@ -903,39 +983,46 @@ const ArtisanProfile = () => {
                       <p className="font-medium">{safeArtisan.fullName}</p>
                     </motion.div>
                     {safeArtisan.yearsOfExperience > 0 && (
-                      <motion.div 
+                      <motion.div
                         whileHover={{ x: 5 }}
                         className="border-b border-gray-100 pb-2"
                       >
                         <p className="text-sm text-gray-500">Experience</p>
-                        <p className="font-medium">{safeArtisan.yearsOfExperience} years</p>
+                        <p className="font-medium">
+                          {safeArtisan.yearsOfExperience} years
+                        </p>
                       </motion.div>
                     )}
                     {safeArtisan.location?.city && (
-                      <motion.div 
+                      <motion.div
                         whileHover={{ x: 5 }}
                         className="border-b border-gray-100 pb-2"
                       >
                         <p className="text-sm text-gray-500">Location</p>
                         <p className="font-medium">
                           {safeArtisan.location.city}
-                          {safeArtisan.location.state && `, ${safeArtisan.location.state}`}
-                          {safeArtisan.location.country && `, ${safeArtisan.location.country}`}
+                          {safeArtisan.location.state &&
+                            `, ${safeArtisan.location.state}`}
+                          {safeArtisan.location.country &&
+                            `, ${safeArtisan.location.country}`}
                         </p>
                       </motion.div>
                     )}
                     {safeArtisan.joinedAt && (
-                      <motion.div 
+                      <motion.div
                         whileHover={{ x: 5 }}
                         className="border-b border-gray-100 pb-2"
                       >
                         <p className="text-sm text-gray-500">Member Since</p>
                         <p className="font-medium">
-                          {new Date(safeArtisan.joinedAt).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
+                          {new Date(safeArtisan.joinedAt).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            },
+                          )}
                         </p>
                       </motion.div>
                     )}
