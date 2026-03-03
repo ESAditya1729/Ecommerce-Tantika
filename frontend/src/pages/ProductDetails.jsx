@@ -25,6 +25,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  ExternalLink, // Added for the button icon
 } from "lucide-react";
 import OrderModal from "../components/Modals/OrderModal";
 import { motion } from "framer-motion";
@@ -200,6 +201,47 @@ const ProductDetails = () => {
     }
   };
 
+  // NEW: Handle view artisan profile (following ProductCard pattern)
+  const handleViewArtisanProfile = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const artisanId = getArtisanId();
+    if (artisanId) {
+      navigate(`/artisan-profile/artisan/${artisanId}`);
+    } else {
+      console.log("No artisan ID found");
+      // Optional: Show a toast or alert
+      alert("Artisan profile not available");
+    }
+  };
+
+  // Helper function to get artisan ID (following ProductCard pattern)
+  const getArtisanId = () => {
+    if (!product || !product.artisan) return null;
+    
+    // Try to get artisan ID from various possible locations
+    if (product.artisan) {
+      if (typeof product.artisan === 'object' && product.artisan !== null) {
+        return product.artisan._id || product.artisan.id;
+      }
+      return product.artisan; // If it's a string ID
+    }
+    if (product.artisanId) {
+      return product.artisanId;
+    }
+    if (product.artisan_id) {
+      return product.artisan_id;
+    }
+    if (product.createdBy) {
+      if (typeof product.createdBy === 'object' && product.createdBy._id) {
+        return product.createdBy._id;
+      }
+      return product.createdBy;
+    }
+    return null;
+  };
+
   const formatPrice = (price) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -266,14 +308,13 @@ const ProductDetails = () => {
     }
   };
 
-  // SIMPLIFIED: Get artisan name - directly use businessName
+  // Get artisan name - directly use businessName
   const getArtisanName = () => {
     if (!product?.artisan) {
       return "Tantika Exclusive";
     }
 
     // Directly return businessName since that's what you want to display
-    // From your API: "businessName": "Raina's Artistry"
     if (product.artisan.businessName) {
       return product.artisan.businessName;
     }
@@ -374,10 +415,11 @@ const ProductDetails = () => {
 
   // Get artisan information
   const artisanName = getArtisanName();
-  console.log("Artisan name being displayed:", artisanName); // Should log: "Raina's Artistry"
+  console.log("Artisan name being displayed:", artisanName);
 
   const artisanLocation = getArtisanLocation();
   const artisanSpecialization = getArtisanSpecialization();
+  const artisanId = getArtisanId();
 
   // Prepare product data for OrderModal
   const productForModal = {
@@ -386,9 +428,9 @@ const ProductDetails = () => {
     price: product.price,
     images: images,
     image: product.image || images[0] || "",
-    artisanId: product.artisan?._id,
+    artisanId: artisanId,
     artisan: {
-      _id: product.artisan?._id,
+      _id: artisanId,
       businessName: artisanName,
       name: artisanName,
       phone: product.artisan?.phone,
@@ -586,7 +628,7 @@ const ProductDetails = () => {
                 </div>
               </div>
 
-              {/* Artisan Info - FIXED SECTION */}
+              {/* Artisan Info - UPDATED with View Profile Button */}
               {product.artisan && (
                 <div className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-6 border border-amber-100">
                   <div className="flex items-start gap-4">
@@ -599,9 +641,21 @@ const ProductDetails = () => {
                         <span className="text-sm font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
                           Handcrafted by
                         </span>
+                        
+                        {/* NEW: View Profile Button - following ProductCard pattern */}
+                        {artisanId && (
+                          <button
+                            onClick={handleViewArtisanProfile}
+                            className="flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1 rounded-full transition-all duration-200 ml-auto"
+                            aria-label="View artisan profile"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>View Profile</span>
+                          </button>
+                        )}
                       </div>
 
-                      {/* This will now show "Raina's Artistry" */}
+                      {/* Artisan Name */}
                       <h3 className="text-xl font-bold text-gray-900 mb-3">
                         {product.artisan.businessName ||
                           product.artisan.fullName ||
@@ -611,7 +665,7 @@ const ProductDetails = () => {
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                         <span className="flex items-center gap-1">
                           <MapPin className="w-4 h-4 text-amber-500" />
-                          {"India"}
+                          {artisanLocation}
                         </span>
 
                         {product.artisan.yearsOfExperience > 0 && (
@@ -620,11 +674,6 @@ const ProductDetails = () => {
                             {product.artisan.yearsOfExperience} years
                           </span>
                         )}
-
-                        {/* <span className="flex items-center gap-1">
-                          <Award className="w-4 h-4 text-amber-500" />
-                          Rating: {product.artisan.rating?.toFixed(1) || "4.5"}
-                        </span> */}
                       </div>
 
                       {product.artisan.specialization?.length > 0 && (
