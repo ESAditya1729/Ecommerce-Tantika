@@ -13,6 +13,8 @@ import ProductDetails from './pages/ProductDetails';
 import ArtisanStories from "./pages/ArtisiansStories";
 import ArtisanPendingApproval from './pages/ArtisanPendingApproval';
 import ArtisanDashboard from './pages/ArtisanPage'
+import SupportCenter from './components/Support/SupportCenter';
+import ArtisanProfile from './pages/ArtisanProfile';
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -57,7 +59,7 @@ function App() {
             <Home />
           </MainLayout>
         } />
-        
+        <Route path="/support" element={<SupportCenter />} />
         <Route path="/about" element={
           <MainLayout>
             <About />
@@ -111,6 +113,61 @@ function App() {
           } 
         />
         
+        {/* Artisan Profile Routes - Public Accessible with Different Identifiers */}
+        {/* Public artisan profile by ID */}
+        <Route 
+          path="/artisan-profile/artisan/:artisanId" 
+          element={
+            <MainLayout>
+              <ArtisanProfile />
+            </MainLayout>
+          } 
+        />
+        
+        {/* Public artisan profile by user ID */}
+        <Route 
+          path="/artisan-profile/user/:userId" 
+          element={
+            <MainLayout>
+              <ArtisanProfile />
+            </MainLayout>
+          } 
+        />
+        
+        {/* Public artisan profile by slug (business name) */}
+        <Route 
+          path="/artisan-profile/slug/:slug" 
+          element={
+            <MainLayout>
+              <ArtisanProfile />
+            </MainLayout>
+          } 
+        />
+        
+        {/* My Profile - Protected route for current artisan */}
+        <Route 
+          path="/artisan/my-profile" 
+          element={
+            <MainLayout>
+              <ProtectedRoute allowedRoles={['artisan']}>
+                <ArtisanProfile />
+              </ProtectedRoute>
+            </MainLayout>
+          } 
+        />
+        
+        {/* Admin view of artisan profile */}
+        <Route 
+          path="/admin/artisan/:artisanId" 
+          element={
+            <AdminLayout>
+              <ProtectedRoute allowedRoles={['admin']}>
+                <ArtisanProfile />
+              </ProtectedRoute>
+            </AdminLayout>
+          } 
+        />
+        
         {/* Artisan Pending Approval */}
         <Route 
           path="/artisan/pending-approval" 
@@ -122,12 +179,13 @@ function App() {
             </DashboardLayout>
           } 
         />
+        
         {/* Admin Dashboard */}
         <Route 
           path="/admin/Addashboard" 
           element={
             <AdminLayout>
-              <ProtectedRoute requireAdmin={true}>
+              <ProtectedRoute allowedRoles={['admin']}>
                 <AdminPage />
               </ProtectedRoute>
             </AdminLayout>

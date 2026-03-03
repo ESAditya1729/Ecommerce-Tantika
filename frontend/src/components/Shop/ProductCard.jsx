@@ -9,6 +9,7 @@ import {
   Tag,
   Sparkles,
   Zap,
+  User,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -92,6 +93,21 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     e.stopPropagation();
     e.nativeEvent.stopImmediatePropagation();
     navigate(`/product/${product._id}`);
+  };
+
+  // Handle view artisan profile
+  const handleViewArtisanProfile = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+    
+    const artisanId = getArtisanId();
+    if (artisanId) {
+      navigate(`/artisan-profile/artisan/${artisanId}`);
+    } else {
+      console.log("No artisan ID found");
+      // Optional: Show a toast or alert
+    }
   };
 
   // Image dot click
@@ -400,12 +416,26 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             )}
           </div>
 
-          {/* Artisan Info - Small */}
-          <div className="mb-3 flex items-center gap-1 text-xs text-gray-600">
-            <span>By</span>
-            <span className="font-medium text-blue-600 truncate max-w-[120px]">
-              {getArtisanDisplayName()}
-            </span>
+          {/* Artisan Info - With View Profile Button */}
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-1 text-xs text-gray-600">
+              <span>By</span>
+              <span className="font-medium text-blue-600 truncate max-w-[100px]">
+                {getArtisanDisplayName()}
+              </span>
+            </div>
+            
+            {/* View Artisan Profile Button */}
+            {getArtisanId() && (
+              <button
+                onClick={handleViewArtisanProfile}
+                className="flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-1 rounded-full transition-all duration-200"
+                aria-label="View artisan profile"
+              >
+                <User className="w-3 h-3" />
+                <span>View Profile</span>
+              </button>
+            )}
           </div>
 
           {/* Price */}
