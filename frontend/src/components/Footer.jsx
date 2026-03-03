@@ -13,13 +13,13 @@ const Footer = () => {
               Your one-stop destination for quality products at affordable prices.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-white">
+              <a href="https://www.facebook.com/share/14YVS5LRfrh/" className="text-gray-400 hover:text-white">
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="#" className="text-gray-400 hover:text-white">
+              {/* <a href="#" className="text-gray-400 hover:text-white">
                 <Twitter className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white">
+              </a> */}
+              <a href="https://www.instagram.com/shinchan121571?igsh=MTVieWYzd2FnajJibw==" className="text-gray-400 hover:text-white">
                 <Instagram className="w-5 h-5" />
               </a>
             </div>
@@ -41,7 +41,7 @@ const Footer = () => {
           <div>
             <h4 className="text-lg font-semibold mb-4">Customer Service</h4>
             <ul className="space-y-2">
-              <li><Link to="/faq" className="text-gray-400 hover:text-white">FAQ</Link></li>
+              <li><Link to="/contact" className="text-gray-400 hover:text-white">FAQ</Link></li>
               <li><Link to="/shipping" className="text-gray-400 hover:text-white">Shipping Policy</Link></li>
               <li><Link to="/returns" className="text-gray-400 hover:text-white">Returns & Refunds</Link></li>
               <li><Link to="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link></li>
@@ -55,15 +55,15 @@ const Footer = () => {
             <div className="space-y-3">
               <div className="flex items-center text-gray-400">
                 <Mail className="w-5 h-5 mr-3" />
-                <span>support@tantika.com</span>
+                <span>tantikacustomercare@outlook.com</span>
               </div>
-              <div className="flex items-center text-gray-400">
+              {/* <div className="flex items-center text-gray-400">
                 <Phone className="w-5 h-5 mr-3" />
                 <span>+1 (555) 123-4567</span>
-              </div>
+              </div> */}
               <div className="flex items-center text-gray-400">
                 <MapPin className="w-5 h-5 mr-3" />
-                <span>123 Street, New York, USA</span>
+                <span>West Bengal, India</span>
               </div>
             </div>
           </div>
@@ -75,12 +75,12 @@ const Footer = () => {
             <p className="text-gray-400 text-sm">
               &copy; {new Date().getFullYear()} Tantika. All rights reserved.
             </p>
-            <div className="flex space-x-6 mt-4 md:mt-0">
+            {/* <div className="flex space-x-6 mt-4 md:mt-0">
               <img src="https://cdn.iconscout.com/icon/free/png-256/visa-5-555662.png" alt="Visa" className="h-8" />
               <img src="https://cdn.iconscout.com/icon/free/png-256/mastercard-5-555659.png" alt="Mastercard" className="h-8" />
               <img src="https://cdn.iconscout.com/icon/free/png-256/paypal-5-555661.png" alt="PayPal" className="h-8" />
               <img src="https://cdn.iconscout.com/icon/free/png-256/stripe-2-498440.png" alt="Stripe" className="h-8" />
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

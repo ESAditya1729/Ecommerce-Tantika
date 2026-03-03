@@ -726,7 +726,7 @@ const ProductDetails = () => {
                     <div className="font-medium text-gray-900">
                       Free Shipping
                     </div>
-                    <div className="text-xs text-gray-600">Across India</div>
+                    <div className="text-xs text-gray-600">Free shipping over ₹999</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">

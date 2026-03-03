@@ -152,7 +152,7 @@ const FeaturedProducts = () => {
             </div>
           ))}
         </div>
-        {/* Traditional Crafts of Bengal */}
+        {/* Traditional Crafts of Bengal
         <div className="mb-16">
           <div className="text-center mb-8">
             <h3 className="text-2xl font-bold mb-2">Traditional Crafts of Bengal</h3>
@@ -179,7 +179,7 @@ const FeaturedProducts = () => {
               </div>
             ))}
           </div>
-        </div>
+        </div> */}
 
         {/* Mission Banner */}
         <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-3xl p-8 md:p-12 text-white text-center relative overflow-hidden">

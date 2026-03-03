@@ -37,11 +37,11 @@ const MapLocation = () => {
                 </div>
                 
                 {/* Map Coordinates */}
-                <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg">
+                {/* <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg">
                   <div className="text-sm text-gray-700">
                     <div>22.5726° N, 88.3639° E</div>
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
 
@@ -57,34 +57,9 @@ const MapLocation = () => {
                     <div>
                       <h4 className="font-bold mb-2">Address</h4>
                       <p className="text-gray-700">
-                        123 Craft Street,<br/>
-                        Ballygunge,<br/>
-                        Kolkata - 700001<br/>
+                        Kolkata<br/>
                         West Bengal, India
                       </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Transportation */}
-                <div className="mb-8">
-                  <h4 className="font-bold mb-4">How to Reach</h4>
-                  
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <Train className="w-5 h-5 text-purple-600 mr-3" />
-                      <div>
-                        <div className="font-medium">Metro Railway</div>
-                        <div className="text-sm text-gray-600">Ballygunge Station (5 min walk)</div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <Bus className="w-5 h-5 text-green-600 mr-3" />
-                      <div>
-                        <div className="font-medium">Bus Station</div>
-                        <div className="text-sm text-gray-600">Gariahat Bus Stand (10 min walk)</div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -113,14 +88,6 @@ const MapLocation = () => {
                       </p>
                     </div>
                   </div>
-                </div>
-
-                {/* Parking Information */}
-                <div className="mt-8 p-4 bg-blue-100 rounded-xl">
-                  <h5 className="font-bold mb-2 text-blue-800">Parking Information</h5>
-                  <p className="text-sm text-blue-700">
-                    Limited parking available on premises. Public parking available at Gariahat Market (2 min walk).
-                  </p>
                 </div>
               </div>
             </div>
