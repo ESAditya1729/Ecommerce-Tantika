@@ -95,6 +95,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     navigate(`/product/${product._id}`);
   };
 
+  const BASE_URL = process.env.REACT_APP_BASE_URL || "http://localhost:5000/api";
   // Handle view artisan profile
   const handleViewArtisanProfile = (e) => {
     e.preventDefault();

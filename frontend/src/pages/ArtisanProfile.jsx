@@ -274,7 +274,7 @@ const ArtisanProfile = () => {
   const [categories, setCategories] = useState([]);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   // Extract categories from stats
   useEffect(() => {
