@@ -266,35 +266,39 @@ const SettingsTab = () => {
     setTimeout(() => setErrorMessage(''), 3000);
   };
 
-  const handleProfileUpdate = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/artisan/profile`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(profileForm)
-      });
+const handleProfileUpdate = async (e) => {
+  e.preventDefault();
+  setSaving(true);
+  try {
+    const token = getToken();
+    
+    // Create a copy without settings
+    const { settings, ...profileData } = profileForm;
+    
+    const response = await fetch(`${API_BASE_URL}/artisan/profile`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(profileData) // Send without settings
+    });
 
-      const result = await response.json();
+    const result = await response.json();
 
-      if (result.success) {
-        showSuccess('Profile updated successfully');
-        fetchProfile();
-      } else {
-        showError(result.message || 'Failed to update profile');
-      }
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      showError('Failed to update profile');
-    } finally {
-      setSaving(false);
+    if (result.success) {
+      showSuccess('Profile updated successfully');
+      fetchProfile();
+    } else {
+      showError(result.message || 'Failed to update profile');
     }
-  };
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    showError('Failed to update profile');
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleBankUpdate = async (e) => {
     e.preventDefault();
