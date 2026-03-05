@@ -25,11 +25,13 @@ import {
   FaChevronRight,
   FaSpinner,
   FaImage,
+  FaTimes,
+  FaCheck,
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import ProductCard from "../components/ArtisanProfile/ProductCard";
 import ArtisanStats from "../components/ArtisanProfile/ArtisanStats";
-import ProductGrid from "../components/ArtisanProfile/ProductGrid"; // New import
+import ProductGrid from "../components/ArtisanProfile/ProductGrid";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 
 // Animation variants
@@ -51,6 +53,34 @@ const scaleIn = {
   initial: { scale: 0.9, opacity: 0 },
   animate: { scale: 1, opacity: 1 },
   exit: { scale: 0.9, opacity: 0 },
+};
+
+// Toast Component
+const Toast = ({ message, type, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 50 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 50 }}
+      className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg ${
+        type === "success" ? "bg-green-500" : "bg-red-500"
+      } text-white`}
+    >
+      {type === "success" ? <FaCheck /> : <FaExclamationCircle />}
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-4 hover:text-gray-200">
+        <FaTimes />
+      </button>
+    </motion.div>
+  );
 };
 
 // Error Message Component
@@ -268,6 +298,7 @@ const ArtisanProfile = () => {
   const [products, setProducts] = useState([]);
   const [stats, setStats] = useState(null);
   const [activeTab, setActiveTab] = useState("products");
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   // Pagination and filters
   const [currentPage, setCurrentPage] = useState(1);
@@ -280,6 +311,15 @@ const ArtisanProfile = () => {
 
   const API_BASE_URL =
     process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+  // Show toast function
+  const showToast = (message, type = "success") => {
+    setToast({ show: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast({ show: false, message: "", type: "success" });
+  };
 
   // Extract categories from stats
   useEffect(() => {
@@ -480,6 +520,20 @@ const ArtisanProfile = () => {
     return stars;
   };
 
+  // Function to copy profile link
+  const copyProfileLink = () => {
+    const profileUrl = window.location.href;
+    navigator.clipboard
+      .writeText(profileUrl)
+      .then(() => {
+        showToast("Profile link copied to clipboard!", "success");
+      })
+      .catch((err) => {
+        console.error("Failed to copy: ", err);
+        showToast("Failed to copy link", "error");
+      });
+  };
+
   if (loading) {
     return <LoadingSpinner size="large" message="Loading artisan profile..." />;
   }
@@ -499,32 +553,31 @@ const ArtisanProfile = () => {
   const safeArtisan = {
     id: artisan.id || artisan._id,
     displayName: artisan.displayName || artisan.businessName || "Artisan",
-    displayInitials:
-      (() => {
-        // Try to get initials from fullName first
-        if (artisan.fullName) {
-          const nameParts = artisan.fullName.trim().split(" ");
-          if (nameParts.length >= 2) {
-            // Get first letter of first name and first letter of last name
-            const firstNameInitial = nameParts[0].charAt(0).toUpperCase();
-            const lastNameInitial = nameParts[nameParts.length - 1]
-              .charAt(0)
-              .toUpperCase();
-            return firstNameInitial + lastNameInitial;
-          } else if (nameParts.length === 1) {
-            // Single name - just return first letter
-            return nameParts[0].charAt(0).toUpperCase();
-          }
+    displayInitials: (() => {
+      // Try to get initials from fullName first
+      if (artisan.fullName) {
+        const nameParts = artisan.fullName.trim().split(" ");
+        if (nameParts.length >= 2) {
+          // Get first letter of first name and first letter of last name
+          const firstNameInitial = nameParts[0].charAt(0).toUpperCase();
+          const lastNameInitial = nameParts[nameParts.length - 1]
+            .charAt(0)
+            .toUpperCase();
+          return firstNameInitial + lastNameInitial;
+        } else if (nameParts.length === 1) {
+          // Single name - just return first letter
+          return nameParts[0].charAt(0).toUpperCase();
         }
+      }
 
-        // Fallback to businessName if fullName not available
-        if (artisan.businessName) {
-          return artisan.businessName.charAt(0).toUpperCase();
-        }
+      // Fallback to businessName if fullName not available
+      if (artisan.businessName) {
+        return artisan.businessName.charAt(0).toUpperCase();
+      }
 
-        // Ultimate fallback
-        return "A";
-      })(),
+      // Ultimate fallback
+      return "A";
+    })(),
     profilePicture: artisan.profilePicture,
     isVerified: artisan.isVerified || false,
     businessName: artisan.businessName,
@@ -559,6 +612,17 @@ const ArtisanProfile = () => {
       exit={{ opacity: 0 }}
       className="min-h-screen bg-gray-50"
     >
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast.show && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={hideToast}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Artisan Header */}
       <motion.div
         initial={{ y: -20, opacity: 0 }}
@@ -766,14 +830,18 @@ const ArtisanProfile = () => {
               </motion.div>
             </motion.div>
 
-            {/* Contact Button with animation */}
+            {/* Share Profile Button with animation */}
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="md:self-center"
             >
-              <button className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold shadow-lg hover:shadow-xl">
-                Contact Artisan
+              <button
+                onClick={copyProfileLink}
+                className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold shadow-lg hover:shadow-xl flex items-center gap-2"
+              >
+                <FaLink className="text-lg" />
+                Share Profile
               </button>
             </motion.div>
           </div>
@@ -961,6 +1029,73 @@ const ArtisanProfile = () => {
                     )} */}
                   </div>
                 </motion.div>
+
+                {/* Social Links Section */}
+                {Object.values(safeArtisan.socialLinks).some(link => link) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="bg-white rounded-lg shadow-sm p-6 mt-6"
+                  >
+                    <h3 className="text-xl font-semibold mb-4">
+                      Connect on Social Media
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {safeArtisan.socialLinks?.instagram && (
+                        <motion.a
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          href={safeArtisan.socialLinks.instagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-shadow"
+                        >
+                          <FaInstagram className="text-xl" />
+                          <span className="font-medium">Instagram</span>
+                        </motion.a>
+                      )}
+                      
+                      {safeArtisan.socialLinks?.facebook && (
+                        <motion.a
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          href={safeArtisan.socialLinks.facebook}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 bg-blue-600 text-white rounded-lg hover:shadow-lg transition-shadow"
+                        >
+                          <FaFacebook className="text-xl" />
+                          <span className="font-medium">Facebook</span>
+                        </motion.a>
+                      )}
+                      
+                      {safeArtisan.socialLinks?.youtube && (
+                        <motion.a
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          href={safeArtisan.socialLinks.youtube}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 bg-red-600 text-white rounded-lg hover:shadow-lg transition-shadow"
+                        >
+                          <FaYoutube className="text-xl" />
+                          <span className="font-medium">YouTube</span>
+                        </motion.a>
+                      )}
+                      
+                      {safeArtisan.socialLinks?.twitter && (
+                        <motion.a
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          href={safeArtisan.socialLinks.twitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-3 bg-blue-400 text-white rounded-lg hover:shadow-lg transition-shadow"
+                        >
+                          <FaTwitter className="text-xl" />
+                          <span className="font-medium">Twitter</span>
+                        </motion.a>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Sidebar */}

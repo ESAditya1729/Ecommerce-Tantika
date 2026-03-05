@@ -8,13 +8,14 @@ import Home from "./pages/Home";
 import Register from "./pages/Register"; 
 import AdminPage from "./pages/AdminPage";
 import ProtectedRoute from "./components/ProtectedRoute";
-// import { ArtisanProvider } from './context/ArtisanContext';
 import ProductDetails from './pages/ProductDetails';
 import ArtisanStories from "./pages/ArtisiansStories";
 import ArtisanPendingApproval from './pages/ArtisanPendingApproval';
 import ArtisanDashboard from './pages/ArtisanPage'
 import SupportCenter from './components/Support/SupportCenter';
 import ArtisanProfile from './pages/ArtisanProfile';
+import Shipping from './pages/Policies/ShippingPolicy';
+import ReturnRefundPolicy from "./pages/Policies/ReturnRefundPolicy";
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -63,6 +64,17 @@ function App() {
         <Route path="/about" element={
           <MainLayout>
             <About />
+          </MainLayout>
+        } />
+        <Route path="/shipping" element={
+          <MainLayout>
+            <Shipping />
+          </MainLayout>
+        } />
+        
+        <Route path="/return-refund" element={
+          <MainLayout>
+            <ReturnRefundPolicy />
           </MainLayout>
         } />
         
