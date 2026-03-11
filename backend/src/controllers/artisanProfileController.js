@@ -14,11 +14,11 @@ const getArtisanProfile = async (req, res) => {
     // Find artisan either by artisan ID or user ID
     if (artisanId && mongoose.Types.ObjectId.isValid(artisanId)) {
       artisan = await Artisan.findById(artisanId)
-        .populate('userId', 'username email role isActive artisanId profilePicture avatar')
+        .populate('userId', 'username email role isActive artisanId')
         .lean();
     } else if (userId && mongoose.Types.ObjectId.isValid(userId)) {
       artisan = await Artisan.findOne({ userId })
-        .populate('userId', 'username email role isActive artisanId profilePicture avatar')
+        .populate('userId', 'username email role isActive artisanId')
         .lean();
     } else {
       return res.status(400).json({
@@ -106,9 +106,14 @@ const getArtisanProfile = async (req, res) => {
     let displayInitials = '';
     let profilePicture = null;
     
-    // Try to get profile picture from user first
-    if (artisan.userId) {
-      profilePicture = artisan.userId.profilePicture || artisan.userId.avatar || null;
+    // Get profile picture from Artisan model directly
+    if (artisan.profilePicture) {
+      // Check if profilePicture is a string (URL) or an object with url property
+      if (typeof artisan.profilePicture === 'string') {
+        profilePicture = artisan.profilePicture;
+      } else if (artisan.profilePicture.url) {
+        profilePicture = artisan.profilePicture.url;
+      }
     }
     
     if (artisan.fullName) {
@@ -157,12 +162,12 @@ const getArtisanProfile = async (req, res) => {
         businessName: artisan.businessName,
         displayName: displayName,
         displayInitials: displayInitials,
-        profilePicture: profilePicture,
+        profilePicture: profilePicture, // Now coming from Artisan model
         description: artisan.description,
         specialization: artisan.specialization,
         yearsOfExperience: artisan.yearsOfExperience,
         rating: artisan.rating || parseFloat(averageRating),
-        totalProducts: totalProducts, // This is the TOTAL count
+        totalProducts: totalProducts,
         totalSales: artisan.totalSales || totalSales,
         email: artisan.email,
         phone: artisan.phone ? artisan.phone.replace(/(\d{2})\d{5}(\d{3})/, '$1*****$2') : null,
