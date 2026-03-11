@@ -10,7 +10,6 @@ const Payout = require('../models/Payout');
 // @access  Private (Artisan only)
 exports.getProfile = async (req, res) => {
   try {
-    // Get artisan profile
     const artisan = await Artisan.findOne({ userId: req.user.id });
 
     if (!artisan) {
@@ -63,6 +62,9 @@ exports.updateProfile = async (req, res) => {
       description: req.body.description,
       yearsOfExperience: req.body.yearsOfExperience,
       
+      // Profile Picture - NEW FIELD
+      profilePicture: req.body.profilePicture,
+      
       // Address
       'address.street': req.body.address?.street,
       'address.city': req.body.address?.city,
@@ -88,6 +90,29 @@ exports.updateProfile = async (req, res) => {
       'settings.payoutMethod': req.body.settings?.payoutMethod,
       'settings.payoutSchedule': req.body.settings?.payoutSchedule
     };
+
+    // Handle profile picture specially if it's just a URL string
+    if (req.body.profilePictureUrl) {
+      allowedUpdates['profilePicture.url'] = req.body.profilePictureUrl;
+    }
+    
+    // If profile picture object is provided with more details
+    if (req.body.profilePicture && typeof req.body.profilePicture === 'object') {
+      if (req.body.profilePicture.url) {
+        allowedUpdates['profilePicture.url'] = req.body.profilePicture.url;
+      }
+      if (req.body.profilePicture.publicId) {
+        allowedUpdates['profilePicture.publicId'] = req.body.profilePicture.publicId;
+      }
+      if (req.body.profilePicture.thumb) {
+        allowedUpdates['profilePicture.thumb'] = req.body.profilePicture.thumb;
+      }
+      if (req.body.profilePicture.medium) {
+        allowedUpdates['profilePicture.medium'] = req.body.profilePicture.medium;
+      }
+      // Always update uploadedAt when profile picture changes
+      allowedUpdates['profilePicture.uploadedAt'] = new Date();
+    }
 
     // Remove undefined values
     Object.keys(allowedUpdates).forEach(key => 

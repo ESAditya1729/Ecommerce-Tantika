@@ -24,6 +24,31 @@ const ArtisanSchema = new mongoose.Schema({
     trim: true
   },
   
+  // Profile Picture - NEW FIELD (optional)
+  profilePicture: {
+    url: {
+      type: String,
+      default: ''
+    },
+    publicId: {
+      type: String,
+      default: ''
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    },
+    // Optional: store different sizes for optimization
+    thumb: {
+      type: String,
+      default: ''
+    },
+    medium: {
+      type: String,
+      default: ''
+    }
+  },
+  
   // Contact Information
   email: {
     type: String,
@@ -326,6 +351,20 @@ ArtisanSchema.methods.getStatusBadge = function() {
     suspended: { color: 'gray', text: 'Account Suspended' }
   };
   return badges[this.status] || { color: 'gray', text: 'Unknown' };
+};
+
+// Helper method to get profile picture URL with fallback
+ArtisanSchema.methods.getProfilePicture = function(size = 'medium') {
+  // If profile picture exists and has the requested size, return that
+  if (this.profilePicture && this.profilePicture[size]) {
+    return this.profilePicture[size];
+  }
+  // If profile picture exists but doesn't have the requested size, return main URL
+  if (this.profilePicture && this.profilePicture.url) {
+    return this.profilePicture.url;
+  }
+  // Return null or a default avatar URL
+  return null;
 };
 
 module.exports = mongoose.model('Artisan', ArtisanSchema);
