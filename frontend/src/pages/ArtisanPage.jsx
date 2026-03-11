@@ -174,6 +174,7 @@ const ArtisanDashboard = () => {
         stats={stats}
         onCollapse={setSidebarCollapsed}
         userName={artisan?.username}
+        artisanId={artisan?.artisanId || artisan?.id}
       />
 
       {/* Main Content */}
@@ -199,7 +200,7 @@ const ArtisanDashboard = () => {
           <div className="content-container">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
               <p className="text-center sm:text-left">
-                © 2024 Tantika Artisan Dashboard. 
+                © 2026 Tantika Artisan Dashboard. 
                 <span className="hidden sm:inline"> All rights reserved.</span>
               </p>
               <div className="flex items-center gap-4 flex-wrap justify-center">

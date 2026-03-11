@@ -14,10 +14,11 @@ import {
   Award,
   Moon,
   Sun,
-  UserCircle
+  UserCircle,
+  Eye // Added for view profile icon
 } from 'lucide-react';
 
-const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCollapse, userName = "Artisan" }) => {
+const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCollapse, userName = "Artisan", artisanId }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [hoveredItem, setHoveredItem] = useState(null);
@@ -103,6 +104,13 @@ const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCol
     if (onClose) onClose();
   };
 
+  // Function to open public profile in new tab
+  const handleViewPublicProfile = () => {
+    if (artisanId) {
+      window.open(`/artisan-profile/artisan/${artisanId}`, '_blank');
+    }
+  };
+
   return (
     <>
       {/* Mobile Sidebar */}
@@ -127,6 +135,8 @@ const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCol
             userName={userName}
             toggleDarkMode={toggleDarkMode}
             isDarkMode={isDarkMode}
+            onViewPublicProfile={handleViewPublicProfile}
+            artisanId={artisanId}
           />
         </div>
       </div>
@@ -169,6 +179,8 @@ const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCol
             userName={userName}
             toggleDarkMode={toggleDarkMode}
             isDarkMode={isDarkMode}
+            onViewPublicProfile={handleViewPublicProfile}
+            artisanId={artisanId}
           />
         </div>
       </div>
@@ -190,7 +202,9 @@ const SidebarContent = ({
   setShowTooltip,
   userName,
   toggleDarkMode,
-  isDarkMode
+  isDarkMode,
+  onViewPublicProfile,
+  artisanId
 }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -265,6 +279,45 @@ const SidebarContent = ({
           </>
         )}
       </div>
+
+      {/* View Public Profile Button - MOVED TO TOP */}
+      {artisanId && (
+        <div className="px-3 py-2 border-b border-amber-100/50">
+          <button
+            onClick={onViewPublicProfile}
+            className={`group relative flex items-center w-full rounded-xl transition-all duration-300 overflow-hidden ${
+              isCollapsed ? 'justify-center px-2 py-3' : 'px-4 py-3'
+            }`}
+            title={isCollapsed ? 'View Public Profile' : ''}
+            aria-label="View Public Profile"
+          >
+            {/* Animated gradient background */}
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 opacity-90 group-hover:opacity-100 transition-opacity duration-300" />
+            
+            {/* Shine effect */}
+            <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            
+            {/* Icon */}
+            <Eye className={`relative z-10 flex-shrink-0 transition-all duration-300 ${
+              isCollapsed ? 'h-6 w-6' : 'h-5 w-5 mr-3'
+            } text-white group-hover:scale-110`} />
+            
+            {/* Text */}
+            {!isCollapsed && (
+              <span className="relative z-10 text-sm font-medium text-white group-hover:text-white">
+                View Public Profile
+              </span>
+            )}
+            
+            {/* Badge */}
+            {!isCollapsed && (
+              <span className="relative z-10 ml-auto px-2 py-0.5 text-xs font-semibold bg-white/20 text-white rounded-full backdrop-blur-sm border border-white/30">
+                New
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* User Profile Summary */}
       {!isCollapsed && (
@@ -368,30 +421,6 @@ const SidebarContent = ({
           {!isCollapsed && <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900">Theme</span>}
         </button>
 
-        {/* Notifications
-        <button
-          className={`group relative flex items-center w-full rounded-xl transition-all duration-300 hover:bg-amber-100 ${
-            isCollapsed ? 'justify-center px-2 py-3' : 'px-4 py-3'
-          }`}
-          title={isCollapsed ? 'Notifications' : ''}
-          aria-label="Notifications"
-        >
-          <Bell className={`flex-shrink-0 transition-all duration-300 ${
-            isCollapsed ? 'h-6 w-6' : 'h-5 w-5 mr-3'
-          } text-gray-400 group-hover:text-amber-500 group-hover:scale-110`} />
-          {!isCollapsed && (
-            <>
-              <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900">Notifications</span>
-              <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold text-white bg-red-500 rounded-full">
-                3
-              </span>
-            </>
-          )}
-          {isCollapsed && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-          )}
-        </button> */}
-
         {/* Logout Button */}
         <button
           onClick={handleLogoutClick}
@@ -419,7 +448,7 @@ const SidebarContent = ({
         {!isCollapsed && (
           <div className="px-4 py-2">
             <p className="text-xs text-gray-400">Version 2.0.0</p>
-            <p className="text-xs text-gray-300">© 2024 Artisan's Studio</p>
+            <p className="text-xs text-gray-300">© 2026 Artisan's Studio</p>
           </div>
         )}
       </div>

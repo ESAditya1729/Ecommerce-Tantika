@@ -16,7 +16,12 @@ const ProductFilters = ({
   const [isPriceOpen, setIsPriceOpen] = useState(true);
   const [isSortOpen, setIsSortOpen] = useState(true);
   const [localPriceRange, setLocalPriceRange] = useState(priceRange);
+  const [isUpdating, setIsUpdating] = useState(false);
   const debounceTimeout = useRef(null);
+  
+  // Define global price limits
+  const GLOBAL_MIN_PRICE = 0;
+  const GLOBAL_MAX_PRICE = 20000; // Make this dynamic based on your products
 
   const sortOptions = [
     { value: 'featured', label: 'Featured', icon: Sparkles },
@@ -27,12 +32,21 @@ const ProductFilters = ({
   ];
 
   // Ensure "All" is included and remove duplicates
-  const allCategories = ['All', ...new Set(categories.filter(cat => cat !== 'All'))];
+  const allCategories = ['All', ...new Set(categories.filter(cat => cat !== 'All' && cat))];
 
   // Sync local price range with prop
   useEffect(() => {
     setLocalPriceRange(priceRange);
   }, [priceRange]);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+    };
+  }, []);
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('en-IN', {
@@ -44,6 +58,7 @@ const ProductFilters = ({
 
   const handlePriceChange = (newRange) => {
     setLocalPriceRange(newRange);
+    setIsUpdating(true);
     
     // Debounce API calls
     if (debounceTimeout.current) {
@@ -52,29 +67,37 @@ const ProductFilters = ({
     
     debounceTimeout.current = setTimeout(() => {
       onPriceChange(newRange);
-    }, 300);
+      setIsUpdating(false);
+    }, 500); // Increased debounce time for better UX
   };
 
   const handleMinPriceChange = (e) => {
-    const value = parseInt(e.target.value) || 0;
-    const newMin = Math.min(value, localPriceRange.max);
+    const value = parseInt(e.target.value) || GLOBAL_MIN_PRICE;
+    const newMin = Math.min(value, localPriceRange.max - 100); // Ensure at least 100 difference
     handlePriceChange({ ...localPriceRange, min: newMin });
   };
 
   const handleMaxPriceChange = (e) => {
-    const value = parseInt(e.target.value) || 10000;
-    const newMax = Math.max(value, localPriceRange.min);
+    const value = parseInt(e.target.value) || GLOBAL_MAX_PRICE;
+    const newMax = Math.max(value, localPriceRange.min + 100); // Ensure at least 100 difference
     handlePriceChange({ ...localPriceRange, max: newMax });
   };
 
   const handleResetFilters = () => {
     onCategoryChange('All');
-    onPriceChange({ min: 0, max: 10000 });
+    onPriceChange({ min: GLOBAL_MIN_PRICE, max: GLOBAL_MAX_PRICE });
     onSortChange('featured');
-    setLocalPriceRange({ min: 0, max: 10000 });
+    setLocalPriceRange({ min: GLOBAL_MIN_PRICE, max: GLOBAL_MAX_PRICE });
   };
 
-  const hasActiveFilters = selectedCategory !== 'All' || priceRange.min > 0 || priceRange.max < 10000;
+  const hasActiveFilters = 
+    selectedCategory !== 'All' || 
+    priceRange.min > GLOBAL_MIN_PRICE || 
+    priceRange.max < GLOBAL_MAX_PRICE;
+
+  // Calculate slider percentages for visual feedback
+  const minPercent = (localPriceRange.min / GLOBAL_MAX_PRICE) * 100;
+  const maxPercent = (localPriceRange.max / GLOBAL_MAX_PRICE) * 100;
 
   return (
     <>
@@ -244,6 +267,9 @@ const ProductFilters = ({
                 <DollarSign className="w-3 h-3 text-emerald-600" />
               </div>
               <span className="text-sm font-semibold text-gray-800">Price Range</span>
+              {isUpdating && (
+                <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin ml-2"></div>
+              )}
             </div>
             {isPriceOpen ? (
               <ChevronUp className="w-4 h-4 text-gray-500" />
@@ -267,12 +293,23 @@ const ProductFilters = ({
                 <input
                   id="min-price"
                   type="range"
-                  min="0"
-                  max={priceRange.max}
+                  min={GLOBAL_MIN_PRICE}
+                  max={GLOBAL_MAX_PRICE}
                   value={localPriceRange.min}
                   onChange={handleMinPriceChange}
+                  step="100"
                   className="w-full h-2 bg-gradient-to-r from-emerald-100 to-emerald-300 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-500 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-lg"
                 />
+                {/* Visual range indicator */}
+                <div className="relative h-1 mt-2">
+                  <div 
+                    className="absolute h-1 bg-emerald-300 rounded-full"
+                    style={{ 
+                      left: `${minPercent}%`, 
+                      width: `${maxPercent - minPercent}%` 
+                    }}
+                  ></div>
+                </div>
               </div>
               
               {/* Max Price Slider */}
@@ -288,10 +325,11 @@ const ProductFilters = ({
                 <input
                   id="max-price"
                   type="range"
-                  min={priceRange.min}
-                  max="20000"
+                  min={GLOBAL_MIN_PRICE}
+                  max={GLOBAL_MAX_PRICE}
                   value={localPriceRange.max}
                   onChange={handleMaxPriceChange}
+                  step="100"
                   className="w-full h-2 bg-gradient-to-r from-emerald-100 to-emerald-300 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-500 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-lg"
                 />
               </div>

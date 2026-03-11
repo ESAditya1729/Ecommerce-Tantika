@@ -268,17 +268,17 @@ const Products = () => {
 
       // Sorting logic
       const sortMap = {
-        featured: { sort: "createdAt", order: "desc" },
-        "price-low": { sort: "price", order: "asc" },
-        "price-high": { sort: "price", order: "desc" },
-        newest: { sort: "createdAt", order: "desc" },
-        popular: { sort: "sales", order: "desc" },
-        rating: { sort: "rating", order: "desc" },
+        featured: { sort: "-createdAt", order: "" },
+        "price-low": { sort: "price", order: "" },
+        "price-high": { sort: "-price", order: "" },
+        newest: { sort: "-createdAt", order: "" },        
+        popular: { sort: "-sales", order: "" }, 
+        rating: { sort: "-rating", order: "" }, 
       };
 
       const sortConfig = sortMap[sortBy] || sortMap.featured;
       params.append("sort", sortConfig.sort);
-      params.append("order", sortConfig.order);
+      // params.append("order", sortConfig.order);
 
       const url = `${API_URL}/products/norm?${params.toString()}`;
       console.log("📡 Fetching products with URL:", url);
