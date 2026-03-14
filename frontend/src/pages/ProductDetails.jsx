@@ -1,6 +1,7 @@
 // src/pages/ProductDetails.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import ReviewButton from "../components/ReviewButton";
 import {
   ArrowLeft,
   ShoppingBag,
@@ -205,7 +206,7 @@ const ProductDetails = () => {
   const handleViewArtisanProfile = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const artisanId = getArtisanId();
     if (artisanId) {
       navigate(`/artisan-profile/artisan/${artisanId}`);
@@ -219,10 +220,10 @@ const ProductDetails = () => {
   // Helper function to get artisan ID (following ProductCard pattern)
   const getArtisanId = () => {
     if (!product || !product.artisan) return null;
-    
+
     // Try to get artisan ID from various possible locations
     if (product.artisan) {
-      if (typeof product.artisan === 'object' && product.artisan !== null) {
+      if (typeof product.artisan === "object" && product.artisan !== null) {
         return product.artisan._id || product.artisan.id;
       }
       return product.artisan; // If it's a string ID
@@ -234,7 +235,7 @@ const ProductDetails = () => {
       return product.artisan_id;
     }
     if (product.createdBy) {
-      if (typeof product.createdBy === 'object' && product.createdBy._id) {
+      if (typeof product.createdBy === "object" && product.createdBy._id) {
         return product.createdBy._id;
       }
       return product.createdBy;
@@ -594,28 +595,13 @@ const ProductDetails = () => {
               </h1>
 
               {/* Rating */}
-              <div className="flex items-center gap-3">
-                <div className="flex">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`w-5 h-5 ${
-                        i < Math.floor(product.rating || 0)
-                          ? "text-amber-400 fill-amber-400"
-                          : "text-gray-300"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <span className="text-gray-700 font-medium">
-                  {product.rating?.toFixed(1) || "0.0"}
-                </span>
-                {product.reviewCount > 0 && (
-                  <span className="text-gray-500 text-sm">
-                    ({product.reviewCount} review
-                    {product.reviewCount !== 1 ? "s" : ""})
-                  </span>
-                )}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <ReviewButton
+                  targetId={product._id}
+                  targetType="Product"
+                  reviewCount={product.reviewCount || 0}
+                  averageRating={product.rating || 0}
+                />
               </div>
 
               {/* Price */}
@@ -641,7 +627,7 @@ const ProductDetails = () => {
                         <span className="text-sm font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
                           Handcrafted by
                         </span>
-                        
+
                         {/* NEW: View Profile Button - following ProductCard pattern */}
                         {artisanId && (
                           <button
@@ -726,7 +712,9 @@ const ProductDetails = () => {
                     <div className="font-medium text-gray-900">
                       Free Shipping
                     </div>
-                    <div className="text-xs text-gray-600">Free shipping over ₹999</div>
+                    <div className="text-xs text-gray-600">
+                      Free shipping over ₹999
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">

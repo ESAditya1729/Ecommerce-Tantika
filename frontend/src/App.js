@@ -16,6 +16,7 @@ import SupportCenter from './components/Support/SupportCenter';
 import ArtisanProfile from './pages/ArtisanProfile';
 import Shipping from './pages/Policies/ShippingPolicy';
 import ReturnRefundPolicy from "./pages/Policies/ReturnRefundPolicy";
+import WriteReview from "./pages/WriteReview";
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -122,6 +123,16 @@ function App() {
                <ArtisanDashboard />
               </ProtectedRoute>
             </DashboardLayout>
+          } 
+        />
+        <Route 
+          path="/review/:targetType/:targetId" 
+          element={
+            <MainLayout >
+              <ProtectedRoute>
+                <WriteReview />
+              </ProtectedRoute>
+            </MainLayout>
           } 
         />
         
