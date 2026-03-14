@@ -15,6 +15,7 @@ const userNormRoutes = require('./routes/userNormRoutes');
 const artisanRoutes = require('./routes/artisanNormRoutes');
 const adminArtisanRoutes = require('./routes/artisanRoutes');
 const artisanProfileRoutes = require('./routes/artisanProfileRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
 
 const app = express();
 
@@ -291,6 +292,7 @@ app.use('/api/usernorms', userNormRoutes);
 app.use('/api/artisan', artisanRoutes);
 app.use('/api/admin/artisans', adminArtisanRoutes);
 app.use('/api/artisan-profiles', artisanProfileRoutes);
+app.use('/api/myreviews', reviewRoutes);
 // Add a test upload route
 app.get('/api/upload/test', (req, res) => {
   res.json({

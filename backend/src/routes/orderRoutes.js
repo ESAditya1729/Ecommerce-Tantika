@@ -257,16 +257,4 @@ router.delete('/admin/:id', protect, superAdmin, async (req, res) => {
   }
 });
 
-// Debug route info
-if (process.env.NODE_ENV !== 'production') {
-  console.log('\n=== Order Routes Registered ===');
-  router.stack.forEach(layer => {
-    if (layer.route) {
-      const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
-      console.log(`${methods} /api/orders${layer.route.path}`);
-    }
-  });
-  console.log('================================\n');
-}
-
 module.exports = router;
