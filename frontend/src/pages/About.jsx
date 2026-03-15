@@ -11,7 +11,7 @@ const About = () => {
     <div>
       <HeroAbout />
       <OurStory />
-      <ArtisansSection />
+      {/* <ArtisansSection /> */}
       <ProcessSection />
       <ValuesSection />
       <LeadershipTeam />
