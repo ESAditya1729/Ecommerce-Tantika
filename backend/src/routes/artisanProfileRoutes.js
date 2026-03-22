@@ -5,7 +5,8 @@ const {
   getArtisanProfileBySlug,
   getArtisans,
   getArtisanProducts,
-  getArtisanStats
+  getArtisanStats,
+  updateArtisanStock
 } = require('../controllers/artisanProfileController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -59,6 +60,17 @@ router.get('/my-products', protect, authorize('artisan'), (req, res) => {
   });
 });
 
+// PUT /api/artisan-profiles/products/:id/stock - Update stock for a product (only for artisans)
+router.put('/products/:id/stock', protect, authorize('artisan'), (req, res) => {
+  if (req.user && req.user.artisanId) {
+    return updateArtisanStock(req, res);
+  }
+  return res.status(400).json({
+    success: false,
+    message: 'Artisan ID not found for this user'
+  });
+});
+
 // GET /api/artisan-profiles/my-profile - Get current artisan's profile (only for artisans)
 router.get('/my-profile', protect, authorize('artisan'), (req, res) => {
   if (req.user && req.user.artisanId) {
@@ -70,6 +82,7 @@ router.get('/my-profile', protect, authorize('artisan'), (req, res) => {
     message: 'Artisan ID not found for this user'
   });
 });
+
 
 // ==================== ADMIN ROUTES ====================
 // These routes require admin privileges

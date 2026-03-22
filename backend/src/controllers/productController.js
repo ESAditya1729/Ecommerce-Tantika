@@ -835,7 +835,7 @@ exports.bulkDeleteProducts = async (req, res) => {
 // @desc    Update product stock
 // @route   PUT /api/products/:id/stock
 // @access  Private (Admin/Artisan)
-exports.updateStock = async (req, res) => {
+ exports.updateStock = async (req, res) => {
   try {
     const { id } = req.params;
     const { stock, variantId, operation } = req.body;

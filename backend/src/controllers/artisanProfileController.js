@@ -738,10 +738,236 @@ const getArtisanStats = async (req, res) => {
   }
 };
 
+// @desc    Update product stock (Artisan only)
+// @route   PUT /api/artisan/products/:id/stock
+// @access  Private (Artisan only)
+const updateArtisanStock  = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stock, variantId, operation, notes } = req.body;
+
+    // Verify user is an artisan
+    if (req.user.role !== 'artisan') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Artisan privileges required.'
+      });
+    }
+
+    // Validate input
+    if (typeof stock !== 'number' || isNaN(stock)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid stock quantity is required'
+      });
+    }
+
+    if (stock < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Stock quantity cannot be negative'
+      });
+    }
+
+    // Find product and ensure it belongs to this artisan
+    const product = await Product.findOne({
+      _id: id,
+      artisan: req.user.artisanId || req.user._id
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found or you do not have permission to update it'
+      });
+    }
+
+    // Check if product is approved (optional - can allow stock updates for pending products)
+    if (product.approvalStatus === 'rejected') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot update stock for a rejected product. Please contact admin.'
+      });
+    }
+
+    // Track previous stock for audit/logging
+    let previousStock;
+    let newStock;
+
+    // Handle variant stock update
+    if (variantId && product.variants && product.variants.length > 0) {
+      const variantIndex = product.variants.findIndex(
+        v => v._id.toString() === variantId
+      );
+      
+      if (variantIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: 'Variant not found'
+        });
+      }
+
+      previousStock = product.variants[variantIndex].stock;
+
+      // Apply operation if specified
+      if (operation === 'increment') {
+        newStock = previousStock + stock;
+      } else if (operation === 'decrement') {
+        newStock = previousStock - stock;
+        if (newStock < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Insufficient stock. Current stock: ' + previousStock
+          });
+        }
+      } else {
+        newStock = stock;
+      }
+
+      // Update variant stock
+      product.variants[variantIndex].stock = newStock;
+      
+      // Update overall product stock if this is the only variant
+      if (product.variants.length === 1) {
+        product.stock = newStock;
+      } else {
+        // Recalculate total stock from all variants
+        product.stock = product.variants.reduce((total, variant) => total + variant.stock, 0);
+      }
+
+      // Add stock update record to variant history
+      if (!product.variants[variantIndex].stockHistory) {
+        product.variants[variantIndex].stockHistory = [];
+      }
+      
+      product.variants[variantIndex].stockHistory.push({
+        previousStock,
+        newStock,
+        change: newStock - previousStock,
+        updatedBy: req.user._id,
+        updatedAt: new Date(),
+        notes: notes || 'Stock updated by artisan',
+        operation: operation || 'set'
+      });
+
+    } else {
+      // Update main product stock
+      previousStock = product.stock;
+
+      // Apply operation if specified
+      if (operation === 'increment') {
+        newStock = previousStock + stock;
+      } else if (operation === 'decrement') {
+        newStock = previousStock - stock;
+        if (newStock < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Insufficient stock. Current stock: ' + previousStock
+          });
+        }
+      } else {
+        newStock = stock;
+      }
+
+      product.stock = newStock;
+
+      // Add stock update record
+      if (!product.stockHistory) {
+        product.stockHistory = [];
+      }
+      
+      product.stockHistory.push({
+        previousStock,
+        newStock,
+        change: newStock - previousStock,
+        updatedBy: req.user._id,
+        updatedAt: new Date(),
+        notes: notes || 'Stock updated by artisan',
+        operation: operation || 'set'
+      });
+    }
+
+    // Update product status based on stock levels
+    const totalStock = variantId && product.variants.length > 1 
+      ? product.variants.reduce((total, variant) => total + variant.stock, 0)
+      : product.stock;
+
+    if (totalStock === 0) {
+      product.status = 'out_of_stock';
+    } else if (totalStock < 5) {
+      product.status = 'low_stock';
+    } else if (product.approvalStatus === 'approved') {
+      product.status = 'active';
+    }
+
+    // Set last modified timestamp and user
+    product.lastModifiedBy = req.user._id;
+    product.lastStockUpdate = new Date();
+    
+    await product.save();
+
+    // Prepare response data
+    const responseData = {
+      stock: product.stock,
+      status: product.status,
+      lastStockUpdate: product.lastStockUpdate,
+      totalStock: totalStock
+    };
+
+    // Include variant info if updating a variant
+    if (variantId && product.variants) {
+      const updatedVariant = product.variants.find(v => v._id.toString() === variantId);
+      responseData.variant = {
+        id: variantId,
+        name: updatedVariant.name,
+        stock: updatedVariant.stock
+      };
+      responseData.variantsCount = product.variants.length;
+      responseData.variants = product.variants.map(v => ({
+        id: v._id,
+        name: v.name,
+        stock: v.stock
+      }));
+    }
+
+    res.json({
+      success: true,
+      message: 'Stock updated successfully',
+      data: responseData
+    });
+
+  } catch (error) {
+    console.error('Artisan update stock error:', error);
+    
+    // Handle specific error types
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID or variant ID format'
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: Object.values(error.errors).map(e => e.message)
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error updating stock. Please try again.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 module.exports = {
   getArtisanProfile,
   getArtisanProfileBySlug,
   getArtisans,
   getArtisanProducts,
-  getArtisanStats
+  getArtisanStats,
+  updateArtisanStock
 };
