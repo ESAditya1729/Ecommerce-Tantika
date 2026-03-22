@@ -34,8 +34,8 @@ import {
   Award,
   Sparkles,
   Gem,
-  Palette,
   Feather,
+  Palette,
   Camera
 } from "lucide-react";
 import AddProductModal from "./AddProductModal";
@@ -368,7 +368,8 @@ const ProductsTab = () => {
     }
   };
 
-  const handleQuickStockUpdate = async (productId, newStock) => {
+  // Updated stock update function for artisan endpoint
+  const handleQuickStockUpdate = async (productId, newStock, variantId = null, operation = null, notes = '') => {
     setActionLoading(true);
     try {
       const token = getToken();
@@ -378,20 +379,49 @@ const ProductsTab = () => {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/products/${productId}/stock`, {
-        method: 'PATCH',
+      // Prepare request body
+      const requestBody = {
+        stock: newStock
+      };
+      
+      // Add optional parameters if provided
+      if (variantId) {
+        requestBody.variantId = variantId;
+      }
+      
+      if (operation) {
+        requestBody.operation = operation;
+      }
+      
+      if (notes) {
+        requestBody.notes = notes;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/artisan-profiles/products/${productId}/stock`, {
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ stock: newStock })
+        body: JSON.stringify(requestBody)
       });
 
       const result = await response.json();
 
       if (result.success) {
         fetchProducts();
-        alert('Stock updated successfully!');
+        
+        // Show detailed success message
+        let message = 'Stock updated successfully!';
+        if (result.data.variant) {
+          message = `${result.data.variant.name} stock updated to ${result.data.variant.stock}`;
+        } else if (operation === 'increment') {
+          message = `Stock increased by ${newStock} units`;
+        } else if (operation === 'decrement') {
+          message = `Stock decreased by ${newStock} units`;
+        }
+        
+        alert(message);
       } else {
         alert(result.message || 'Failed to update stock');
       }
@@ -439,7 +469,8 @@ const ProductsTab = () => {
       _id: product._id || product.id,
       name: product.name,
       stock: Number(product.stock) || 0,
-      approvalStatus: product.approvalStatus
+      approvalStatus: product.approvalStatus,
+      variants: product.variants || [] // Include variants if available
     };
     
     setEditingProduct(stockEditProduct);
