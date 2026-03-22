@@ -189,7 +189,8 @@ const productSchema = new mongoose.Schema({
       'Textiles',
       'Art',
       'Furniture',
-      'Stationery'
+      'Stationery',
+      'Crochet Fashion'
     ],
     default: 'Clothing'
   },
