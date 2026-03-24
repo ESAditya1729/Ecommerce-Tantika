@@ -26,7 +26,8 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
-  ExternalLink, // Added for the button icon
+  ExternalLink,
+  MessageSquare, // Add this import
 } from "lucide-react";
 import OrderModal from "../components/Modals/OrderModal";
 import { motion } from "framer-motion";
@@ -46,6 +47,13 @@ const ProductDetails = () => {
   const API_URL =
     process.env.REACT_APP_API_URL ||
     "https://ecommerce-tantika.onrender.com/api";
+
+  // Add this function to navigate to reviews page
+  const handleViewAllReviews = () => {
+    navigate(`/reviews/Product/${product._id}`, {
+      state: { targetName: product.name }
+    });
+  };
 
   useEffect(() => {
     if (id) {
@@ -538,7 +546,7 @@ const ProductDetails = () => {
                 </div>
               </div>
 
-              {/* Thumbnails */}
+              {/* Thumbnails
               {images.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {images.map((img, idx) => (
@@ -564,7 +572,7 @@ const ProductDetails = () => {
                     </button>
                   ))}
                 </div>
-              )}
+              )} */}
             </div>
 
             {/* Right Column - Product Info */}
@@ -594,7 +602,7 @@ const ProductDetails = () => {
                 {product.name}
               </h1>
 
-              {/* Rating */}
+              {/* Rating - UPDATED with View All Reviews Button */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <ReviewButton
                   targetId={product._id}
@@ -602,6 +610,17 @@ const ProductDetails = () => {
                   reviewCount={product.reviewCount || 0}
                   averageRating={product.rating || 0}
                 />
+                
+                {/* Add View All Reviews Button - Only show if there are reviews */}
+                {(product.reviewCount > 0) && (
+                  <button
+                    onClick={handleViewAllReviews}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-gray-700 font-medium"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Read all {product.reviewCount} {product.reviewCount === 1 ? 'review' : 'reviews'}</span>
+                  </button>
+                )}
               </div>
 
               {/* Price */}

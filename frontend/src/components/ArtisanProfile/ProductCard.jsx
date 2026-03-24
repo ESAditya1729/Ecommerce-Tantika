@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaHeart, FaRegHeart, FaStar, FaShoppingBag, FaImage } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaStar, FaShoppingBag, FaImage, FaComment } from 'react-icons/fa';
 import OrderModal from '../Modals/OrderModal';
 
 const ProductCard = ({ product }) => {
@@ -130,6 +130,15 @@ const ProductCard = ({ product }) => {
     setIsWishlisted(!isWishlisted);
   };
 
+  // Handle view all reviews
+  const handleViewAllReviews = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(`/reviews/Product/${product.id}`, {
+      state: { targetName: product.name }
+    });
+  };
+
   // UPDATED: Using sessionStorage instead of state
   const handleExpressInterest = (e) => {
     e.preventDefault();
@@ -184,7 +193,7 @@ const ProductCard = ({ product }) => {
 
   // Format rating
   const rating = product.rating || 0;
-  const reviewCount = product.reviewCount || 10;
+  const reviewCount = product.reviewCount || 0;
 
   // Check if in stock - FIXED: Handle stock from API response
   const inStock = product.stock > 0 && product.status === 'active';
@@ -370,36 +379,60 @@ const ProductCard = ({ product }) => {
               {product.name}
             </h3>
 
-            {/* Rating */}
-            {rating > 0 && (
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex items-center">
-                  {[...Array(5)].map((_, i) => {
-                    const starValue = i + 1;
-                    return (
-                      <motion.div
-                        key={i}
-                        whileHover={{ scale: 1.2 }}
-                        className="cursor-default"
-                      >
-                        <FaStar
-                          className={`text-sm ${
-                            starValue <= Math.floor(rating)
-                              ? 'text-yellow-400'
-                              : starValue <= Math.ceil(rating) && rating % 1 >= 0.5
-                              ? 'text-yellow-400'
-                              : 'text-gray-300'
-                          }`}
-                        />
-                      </motion.div>
-                    );
-                  })}
+            {/* Rating and Reviews Section */}
+            <div className="flex items-center justify-between mb-2">
+              {rating > 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center">
+                    {[...Array(5)].map((_, i) => {
+                      const starValue = i + 1;
+                      return (
+                        <motion.div
+                          key={i}
+                          whileHover={{ scale: 1.2 }}
+                          className="cursor-default"
+                        >
+                          <FaStar
+                            className={`text-sm ${
+                              starValue <= Math.floor(rating)
+                                ? 'text-yellow-400'
+                                : starValue <= Math.ceil(rating) && rating % 1 >= 0.5
+                                ? 'text-yellow-400'
+                                : 'text-gray-300'
+                            }`}
+                          />
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    ({reviewCount})
+                  </span>
                 </div>
-                <span className="text-sm text-gray-500">
-                  ({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})
-                </span>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center">
+                    {[...Array(5)].map((_, i) => (
+                      <FaStar key={i} className="text-sm text-gray-300" />
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-400">No reviews yet</span>
+                </div>
+              )}
+              
+              {/* View All Reviews Button - Only show if there are reviews */}
+              {reviewCount > 0 && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleViewAllReviews}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  <FaComment className="text-xs" />
+                  <span>Read reviews</span>
+                </motion.button>
+              )}
+            </div>
 
             {/* Price */}
             <div className="flex items-center gap-2 mb-3">

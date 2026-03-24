@@ -17,6 +17,7 @@ import ArtisanProfile from './pages/ArtisanProfile';
 import Shipping from './pages/Policies/ShippingPolicy';
 import ReturnRefundPolicy from "./pages/Policies/ReturnRefundPolicy";
 import WriteReview from "./pages/WriteReview";
+import ReviewsPage from "./pages/ReviewsPage";
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -131,6 +132,16 @@ function App() {
             <MainLayout >
               <ProtectedRoute>
                 <WriteReview />
+              </ProtectedRoute>
+            </MainLayout>
+          } 
+        />
+        <Route 
+          path="/reviews/:targetType/:targetId" 
+          element={
+            <MainLayout >
+              <ProtectedRoute>
+                <ReviewsPage />
               </ProtectedRoute>
             </MainLayout>
           } 
