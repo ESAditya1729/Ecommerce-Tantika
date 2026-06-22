@@ -20,8 +20,8 @@ const ArtisanDashboard = () => {
   // Memoized stats to prevent unnecessary re-renders
   const [stats] = useState({
     totalProducts: 24,
-    pendingApproval: 3,
-    activeOrders: 8,
+    // pendingApproval: 3,
+    // activeOrders: 8,
     completedOrders: 156,
     totalEarnings: 45890,
     averageRating: 4.8
