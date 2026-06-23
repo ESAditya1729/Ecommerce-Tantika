@@ -1148,3 +1148,289 @@ exports.bulkCreateOffers = async (req, res) => {
     });
   }
 };
+
+/** New category level discount APIs*/
+/**
+ * @desc    Apply discount to all products in a category
+ * @route   POST /api/offers/category
+ * @access  Private (Admin only)
+ */
+exports.applyCategoryDiscount = async (req, res) => {
+  try {
+    const { category, discount } = req.body;
+
+    // Verify admin access
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role required.'
+      });
+    }
+
+    // Validate category
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        message: 'Category is required'
+      });
+    }
+
+    // Validate discount data
+    if (!discount || typeof discount !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount data is required'
+      });
+    }
+
+    // Validate discount type
+    if (discount.type && !['percentage', 'fixed', 'none'].includes(discount.type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount type must be percentage, fixed, or none'
+      });
+    }
+
+    // Validate discount value
+    if (discount.value !== undefined && discount.value < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount value cannot be negative'
+      });
+    }
+
+    if (discount.type === 'percentage' && discount.value > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Percentage discount cannot exceed 100%'
+      });
+    }
+
+    // Find all products in the category
+    const products = await Product.find({
+      category: category,
+      approvalStatus: 'approved',
+      status: 'active'
+    });
+
+    if (products.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No products found in category: ${category}`
+      });
+    }
+
+    // Prepare discount data
+    const discountData = {
+      type: discount.type || 'percentage',
+      value: discount.value || 0,
+      originalPrice: 0, // Will be set per product
+      isActive: discount.isActive !== undefined ? discount.isActive : true
+    };
+
+    if (discount.startDate) {
+      discountData.startDate = new Date(discount.startDate);
+    }
+    if (discount.endDate) {
+      discountData.endDate = new Date(discount.endDate);
+    }
+
+    // Validate dates
+    if (discountData.startDate && discountData.endDate) {
+      if (discountData.startDate >= discountData.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'End date must be after start date'
+        });
+      }
+    }
+
+    // Apply discount to all products
+    const updatedProducts = [];
+    for (const product of products) {
+      discountData.originalPrice = product.price;
+      product.discount = { ...discountData };
+      product.lastModifiedBy = req.user._id;
+      await product.save();
+      updatedProducts.push({
+        id: product._id,
+        name: product.name,
+        price: product.price,
+        discount: product.discount
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Discount applied to ${updatedProducts.length} products in category: ${category}`,
+      data: {
+        category: category,
+        totalProducts: updatedProducts.length,
+        discount: discountData,
+        products: updatedProducts
+      }
+    });
+
+  } catch (error) {
+    console.error('Apply category discount error:', error);
+    
+    if (error.name === 'ValidationError') {
+      return handleValidationError(error, res);
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error applying category discount',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * @desc    Remove discount from all products in a category
+ * @route   DELETE /api/offers/category/:category
+ * @access  Private (Admin only)
+ */
+exports.removeCategoryDiscount = async (req, res) => {
+  try {
+    const { category } = req.params;
+
+    // Verify admin access
+    if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role required.'
+      });
+    }
+
+    // Find all products in the category with discounts
+    const products = await Product.find({
+      category: category,
+      'discount.isActive': true,
+      'discount.value': { $gt: 0 }
+    });
+
+    if (products.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No products with discounts found in category: ${category}`
+      });
+    }
+
+    // Remove discounts
+    const updatedProducts = [];
+    for (const product of products) {
+      product.discount = {
+        type: 'none',
+        value: 0,
+        originalPrice: product.price,
+        isActive: false
+      };
+      product.lastModifiedBy = req.user._id;
+      await product.save();
+      updatedProducts.push({
+        id: product._id,
+        name: product.name
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Discounts removed from ${updatedProducts.length} products in category: ${category}`,
+      data: {
+        category: category,
+        totalProducts: updatedProducts.length,
+        products: updatedProducts
+      }
+    });
+
+  } catch (error) {
+    console.error('Remove category discount error:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid category'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error removing category discounts',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * @desc    Get products by category with discount info
+ * @route   GET /api/offers/category/:category
+ * @access  Public/Admin
+ */
+exports.getCategoryOffers = async (req, res) => {
+  try {
+    const { category } = req.params;
+
+    // Build query
+    let query = { category: category };
+    
+    // Check if user is admin
+    const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'superadmin');
+    
+    if (!isAdmin) {
+      query.status = 'active';
+      query.approvalStatus = 'approved';
+      query['discount.isActive'] = true;
+      query['discount.value'] = { $gt: 0 };
+    }
+
+    const products = await Product.find(query)
+      .populate('artisan', 'businessName fullName displayName')
+      .select('name price discount image category stock sales rating')
+      .sort({ 'discount.value': -1 })
+      .lean();
+
+    // Calculate discount stats for the category
+    let stats = {
+      totalProducts: products.length,
+      productsWithDiscount: 0,
+      avgDiscount: 0,
+      totalDiscountValue: 0,
+      categories: []
+    };
+
+    if (products.length > 0) {
+      const productsWithDiscount = products.filter(p => p.discount && p.discount.isActive && p.discount.value > 0);
+      stats.productsWithDiscount = productsWithDiscount.length;
+      
+      if (productsWithDiscount.length > 0) {
+        const totalDiscount = productsWithDiscount.reduce((sum, p) => sum + p.discount.value, 0);
+        stats.avgDiscount = totalDiscount / productsWithDiscount.length;
+        stats.totalDiscountValue = productsWithDiscount.reduce((sum, p) => {
+          let discountAmount = 0;
+          if (p.discount.type === 'percentage') {
+            discountAmount = p.price * p.discount.value / 100;
+          } else if (p.discount.type === 'fixed') {
+            discountAmount = Math.min(p.discount.value, p.price);
+          }
+          return sum + discountAmount;
+        }, 0);
+      }
+    }
+
+    res.json({
+      success: true,
+      count: products.length,
+      stats: stats,
+      data: products
+    });
+
+  } catch (error) {
+    console.error('Get category offers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching category discounts',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};

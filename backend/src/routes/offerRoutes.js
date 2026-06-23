@@ -12,13 +12,17 @@ const {
     getOffersByType,
     bulkCreateOffers,
     getOffersByProduct,
-    getCheckoutOffers
+    getCheckoutOffers,
+    // Category discount methods
+    applyCategoryDiscount,
+    removeCategoryDiscount,
+    getCategoryOffers
 } = require('../controllers/offerController');
 
 // Middleware for admin authentication
 const { protect, admin } = require('../middleware/authMiddleware');
 
-// ========== PUBLIC ROUTES ==========
+// ==================== PUBLIC ROUTES ====================
 
 /**
  * @route   GET /api/offers
@@ -56,7 +60,38 @@ router.post('/checkout', protect, (req, res, next) => {
     getCheckoutOffers(req, res).catch(next);
 });
 
-// ========== ADMIN ONLY ROUTES ==========
+// ==================== CATEGORY DISCOUNT ROUTES ====================
+
+/**
+ * @route   GET /api/offers/category/:category
+ * @desc    Get products by category with discount info
+ * @access  Public/Admin
+ * @note    This must come BEFORE the /category POST and DELETE routes
+ *          because it's a GET with a parameter
+ */
+router.get('/category/:category', (req, res, next) => {
+    getCategoryOffers(req, res).catch(next);
+});
+
+/**
+ * @route   POST /api/offers/category
+ * @desc    Apply discount to all products in a category
+ * @access  Private (Admin only)
+ */
+router.post('/category', protect, admin, (req, res, next) => {
+    applyCategoryDiscount(req, res).catch(next);
+});
+
+/**
+ * @route   DELETE /api/offers/category/:category
+ * @desc    Remove discount from all products in a category
+ * @access  Private (Admin only)
+ */
+router.delete('/category/:category', protect, admin, (req, res, next) => {
+    removeCategoryDiscount(req, res).catch(next);
+});
+
+// ==================== ADMIN ONLY ROUTES ====================
 
 /**
  * @route   POST /api/offers
@@ -112,13 +147,14 @@ router.delete('/:id', protect, admin, (req, res, next) => {
     deleteOffer(req, res).catch(next);
 });
 
-// ========== SINGLE OFFER ROUTE (MUST BE LAST) ==========
+// ==================== SINGLE OFFER ROUTE (MUST BE LAST) ====================
 
 /**
  * @route   GET /api/offers/:id
  * @desc    Get single product discount details
  * @access  Public/Admin
  * @note    This route must be placed after all specific routes to avoid conflicts
+ *          with /category/:category and /product/:productId
  */
 router.get('/:id', (req, res, next) => {
     getOfferById(req, res).catch(next);
