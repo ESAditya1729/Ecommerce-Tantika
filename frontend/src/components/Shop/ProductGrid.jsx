@@ -1,6 +1,55 @@
-import ProductCard from './ProductCard'; 
+// src/components/Product/ProductGrid.jsx
+import { useState, useEffect } from 'react';
+import ProductCard from './ProductCard';
+import axios from 'axios';
 
-const ProductGrid = ({ products, isLoading, viewMode }) => { // Remove onExpressInterest and onShare
+const ProductGrid = ({ products, isLoading, viewMode }) => {
+  const [productsWithDiscounts, setProductsWithDiscounts] = useState([]);
+
+  useEffect(() => {
+    // If products already have discount data from API, use it
+    if (products && products.length > 0) {
+      // Check if products already have discount data
+      const hasDiscountData = products.some(p => p.discount !== undefined);
+      
+      if (hasDiscountData) {
+        setProductsWithDiscounts(products);
+      } else {
+        // Fetch discount data for products
+        fetchDiscountsForProducts(products);
+      }
+    }
+  }, [products]);
+
+  const fetchDiscountsForProducts = async (productList) => {
+    try {
+      // Fetch all active offers/discounts
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/offers`);
+      
+      if (response.data.success) {
+        const discountedProducts = response.data.data;
+        
+        // Merge discount data with products
+        const mergedProducts = productList.map(product => {
+          const discountedProduct = discountedProducts.find(
+            dp => dp._id === product._id
+          );
+          return {
+            ...product,
+            discount: discountedProduct?.discount || null
+          };
+        });
+        
+        setProductsWithDiscounts(mergedProducts);
+      } else {
+        setProductsWithDiscounts(productList);
+      }
+    } catch (error) {
+      console.error('Error fetching discounts:', error);
+      setProductsWithDiscounts(productList);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -21,7 +70,7 @@ const ProductGrid = ({ products, isLoading, viewMode }) => { // Remove onExpress
     );
   }
 
-  if (products.length === 0) {
+  if (productsWithDiscounts.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="text-gray-400 text-lg mb-2">No products available</div>
@@ -34,7 +83,7 @@ const ProductGrid = ({ products, isLoading, viewMode }) => { // Remove onExpress
   if (viewMode === 'list') {
     return (
       <div className="space-y-4">
-        {products.map((product) => (
+        {productsWithDiscounts.map((product) => (
           <div key={product._id} className="flex gap-4 bg-white rounded-xl border border-gray-200 p-4">
             <div className="w-32 h-32 flex-shrink-0">
               <img
@@ -47,7 +96,14 @@ const ProductGrid = ({ products, isLoading, viewMode }) => { // Remove onExpress
               <h3 className="font-bold text-lg mb-1">{product.name}</h3>
               <p className="text-gray-600 text-sm mb-2 line-clamp-2">{product.description}</p>
               <div className="flex items-center justify-between">
-                <span className="text-xl font-bold">{product.price} ₹</span>
+                <span className="text-xl font-bold">
+                  {product.discount?.isActive 
+                    ? `₹${(product.price - (product.discount.type === 'percentage' 
+                        ? product.price * product.discount.value / 100 
+                        : product.discount.value)).toFixed(0)}`
+                    : `₹${product.price}`
+                  }
+                </span>
                 <ProductCard product={product} />
               </div>
             </div>
@@ -60,7 +116,7 @@ const ProductGrid = ({ products, isLoading, viewMode }) => { // Remove onExpress
   // Grid view mode (default)
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {products.map((product) => (
+      {productsWithDiscounts.map((product) => (
         <ProductCard 
           key={product._id} 
           product={product}

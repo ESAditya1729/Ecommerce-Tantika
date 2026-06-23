@@ -12,6 +12,7 @@ import UserManagement from '../components/Admin/UserManagement';
 import AnalyticsDashboard from '../components/Admin/AnalyticsDashboard';
 import SettingsPanel from '../components/Admin/SettingsPanel';
 import ArtisanManagement from '../components/Admin/ArtisanManagement';
+import OfferManagement from '../components/Admin/OfferManagement';
 
 const AdminPage = () => {
   const navigate = useNavigate();
@@ -131,6 +132,8 @@ const AdminPage = () => {
         return <SettingsPanel />;
       case 'artisans':
         return <ArtisanManagement />;
+      case 'offers':
+        return <OfferManagement />;
       default:
         return (
           <div className="space-y-8">

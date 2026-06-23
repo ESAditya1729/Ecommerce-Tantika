@@ -30,6 +30,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, isOpen, onClose }) => {
     { id: 'inventory', label: 'Inventory', icon: <Database className="w-5 h-5" /> },
     { id: 'reports', label: 'Reports', icon: <FileText className="w-5 h-5" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
+    { id: 'offers', label: 'Offers', icon: <BarChart3 className="w-5 h-5" /> },
   ];
 
   const supportItems = [

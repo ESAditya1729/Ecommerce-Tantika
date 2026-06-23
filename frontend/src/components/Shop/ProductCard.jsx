@@ -10,6 +10,10 @@ import {
   Sparkles,
   Zap,
   User,
+  Clock,
+  Percent,
+  TrendingDown,
+  Gift,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +24,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [user, setUser] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(null);
   const navigate = useNavigate();
 
   // Get user info on mount
@@ -28,6 +33,30 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     setUser(userInfo);
   }, []);
 
+  // Calculate discount and time remaining
+  useEffect(() => {
+    if (product?.discount?.isActive && product?.discount?.endDate) {
+      const updateTimeRemaining = () => {
+        const now = new Date();
+        const endDate = new Date(product.discount.endDate);
+        const diff = endDate - now;
+        
+        if (diff > 0) {
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          setTimeRemaining({ days, hours, minutes, total: diff });
+        } else {
+          setTimeRemaining(null);
+        }
+      };
+
+      updateTimeRemaining();
+      const interval = setInterval(updateTimeRemaining, 60000); // Update every minute
+      return () => clearInterval(interval);
+    }
+  }, [product?.discount]);
+
   // Get user info from localStorage
   const getUserInfo = () => {
     try {
@@ -35,6 +64,50 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
       return userStr ? JSON.parse(userStr) : null;
     } catch (err) {
       return null;
+    }
+  };
+
+  // Calculate discounted price
+  const getDiscountedPrice = () => {
+    if (!product?.discount?.isActive || !product?.discount?.value) {
+      return null;
+    }
+
+    const { type, value } = product.discount;
+    if (type === 'percentage') {
+      return product.price - (product.price * value / 100);
+    } else if (type === 'fixed') {
+      return Math.max(0, product.price - value);
+    }
+    return null;
+  };
+
+  // Calculate savings
+  const getSavings = () => {
+    if (!product?.discount?.isActive || !product?.discount?.value) {
+      return null;
+    }
+
+    const discountedPrice = getDiscountedPrice();
+    if (discountedPrice === null) return null;
+
+    return {
+      amount: product.price - discountedPrice,
+      percentage: ((product.price - discountedPrice) / product.price * 100).toFixed(0)
+    };
+  };
+
+  // Format time remaining
+  const formatTimeRemaining = () => {
+    if (!timeRemaining) return null;
+    const { days, hours, minutes } = timeRemaining;
+    
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
     }
   };
 
@@ -96,6 +169,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
   };
 
   const BASE_URL = process.env.REACT_APP_BASE_URL || "http://localhost:5000/api";
+  
   // Handle view artisan profile
   const handleViewArtisanProfile = (e) => {
     e.preventDefault();
@@ -107,7 +181,6 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
       navigate(`/artisan-profile/artisan/${artisanId}`);
     } else {
       console.log("No artisan ID found");
-      // Optional: Show a toast or alert
     }
   };
 
@@ -149,6 +222,9 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
 
   const productImage = product.images?.[currentImageIndex] || product.image || null;
   const stockStatus = getStockStatus(product.stock || 0);
+  const discountedPrice = getDiscountedPrice();
+  const savings = getSavings();
+  const hasDiscount = product?.discount?.isActive && product?.discount?.value > 0 && product?.discount?.type !== 'none';
 
   // Product rating stars
   const renderStars = (rating) => {
@@ -171,12 +247,11 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
   const getArtisanId = () => {
     if (!product) return null;
     
-    // Try to get artisan ID from various possible locations
     if (product.artisan) {
       if (typeof product.artisan === 'object' && product.artisan !== null) {
         return product.artisan._id || product.artisan.id;
       }
-      return product.artisan; // If it's a string ID
+      return product.artisan;
     }
     if (product.artisanId) {
       return product.artisanId;
@@ -217,7 +292,6 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     if (product.origin) return product.origin;
     if (product.artisanLocation) return product.artisanLocation;
     
-    // If artisan is an object with address
     if (product.artisan && typeof product.artisan === 'object' && product.artisan.address) {
       const addr = product.artisan.address;
       if (addr.city && addr.state) {
@@ -232,12 +306,13 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     return "India";
   };
 
-  // Prepare product data for OrderModal - FIXED STRUCTURE
+  // Prepare product data for OrderModal
   const productForModal = {
-    _id: product._id,  // MongoDB ID
-    id: product._id,    // For compatibility
+    _id: product._id,
+    id: product._id,
     name: product.name || product.title,
-    price: product.price || 0,
+    price: discountedPrice || product.price || 0,
+    originalPrice: product.price,
     images: (product.images && product.images.length > 0) ? product.images : 
             (product.image ? [product.image] : []),
     image: product.image || (product.images?.[0] || ''),
@@ -253,7 +328,8 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
     category: product.category || 'Uncategorized',
     description: product.description || '',
     stock: product.stock || 0,
-    sku: product.sku || ''
+    sku: product.sku || '',
+    discount: product.discount || null
   };
 
   // Navigate to product details
@@ -269,7 +345,7 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Image Container - Make clickable for product details */}
+        {/* Image Container */}
         <div 
           className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden cursor-pointer"
           onClick={handleProductClick}
@@ -298,6 +374,18 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
 
           {/* Top Badges */}
           <div className="absolute top-4 left-4 flex flex-col gap-2">
+            {/* Discount Badge - Priority display */}
+            {hasDiscount && (
+              <div className="flex items-center gap-1 bg-gradient-to-r from-red-600 to-orange-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-md animate-pulse">
+                <Percent className="w-3 h-3" />
+                <span>
+                  {product.discount.type === 'percentage' 
+                    ? `${product.discount.value}% OFF` 
+                    : `₹${product.discount.value} OFF`}
+                </span>
+              </div>
+            )}
+
             {product.isFeatured && (
               <div className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-md">
                 <Sparkles className="w-3 h-3" />
@@ -320,6 +408,14 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             <span className="mr-1">{stockStatus.icon}</span>
             {stockStatus.text}
           </div>
+
+          {/* Time Remaining Badge for Discounts */}
+          {hasDiscount && timeRemaining && (
+            <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-black/70 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5">
+              <Clock className="w-3 h-3" />
+              <span>Ends in: {formatTimeRemaining()}</span>
+            </div>
+          )}
 
           {/* Quick Action Buttons */}
           <div
@@ -439,14 +535,35 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
             )}
           </div>
 
-          {/* Price */}
+          {/* Price Section with Discount */}
           <div className="mb-5">
-            <div className="text-2xl font-bold text-gray-900 mb-1">
-              {formatPrice(product.price)}
-            </div>
-            {/* <div className="text-sm text-gray-500">
-              Free shipping • 14-day returns
-            </div> */}
+            {hasDiscount && discountedPrice !== null ? (
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl font-bold text-red-600">
+                    {formatPrice(discountedPrice)}
+                  </span>
+                  <span className="text-sm text-gray-400 line-through">
+                    {formatPrice(product.price)}
+                  </span>
+                  {savings && (
+                    <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                      Save {savings.percentage}%
+                    </span>
+                  )}
+                </div>
+                {savings && (
+                  <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <TrendingDown className="w-3 h-3" />
+                    <span>You save {formatPrice(savings.amount)}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-2xl font-bold text-gray-900">
+                {formatPrice(product.price)}
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -457,7 +574,9 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
               className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center transition-all ${
                 product.stock === 0
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg hover:shadow-blue-200 active:scale-[0.98]"
+                  : hasDiscount
+                    ? "bg-gradient-to-r from-red-600 to-orange-500 text-white hover:shadow-lg hover:shadow-red-200 active:scale-[0.98]"
+                    : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg hover:shadow-blue-200 active:scale-[0.98]"
               }`}
             >
               <ShoppingBag className="w-5 h-5 mr-2" />
@@ -471,10 +590,26 @@ const ProductCard = ({ product, onOrderClick, onShare }) => {
               <Info className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Discount Indicator Bar */}
+          {hasDiscount && (
+            <div className="mt-3 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 pt-3">
+              <div className="flex items-center gap-1">
+                <Gift className="w-3 h-3 text-red-500" />
+                <span>Special offer</span>
+              </div>
+              {timeRemaining && (
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>{formatTimeRemaining()} left</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Order Modal - Pass the properly formatted product */}
+      {/* Order Modal */}
       <OrderModal
         isOpen={showOrderModal}
         onClose={() => {
