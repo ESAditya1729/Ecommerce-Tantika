@@ -315,125 +315,175 @@ exports.createOffer = async (req, res) => {
       });
     }
 
-    const { productId, discount } = req.body;
+    // Check if we're creating a product-specific discount or a general offer
+    const { productId, discount, ...offerData } = req.body;
 
-    // Validate productId
-    if (!productId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Product ID is required'
+    // If productId is provided, create a product-specific discount
+    if (productId) {
+      // Validate productId
+      if (!productId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Product ID is required'
+        });
+      }
+
+      // Validate discount data
+      if (!discount || typeof discount !== 'object') {
+        return res.status(400).json({
+          success: false,
+          message: 'Discount data is required'
+        });
+      }
+
+      // Find product
+      const product = await Product.findById(productId);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found'
+        });
+      }
+
+      // Store original price before discount
+      const originalPrice = product.price;
+
+      // Prepare discount data
+      const discountData = {
+        type: discount.type || 'percentage',
+        value: discount.value || 0,
+        originalPrice: originalPrice,
+        isActive: discount.isActive !== undefined ? discount.isActive : true
+      };
+
+      // Add dates if provided
+      if (discount.startDate) {
+        discountData.startDate = new Date(discount.startDate);
+      }
+      if (discount.endDate) {
+        discountData.endDate = new Date(discount.endDate);
+      }
+
+      // Validate dates
+      if (discountData.startDate && discountData.endDate) {
+        if (discountData.startDate >= discountData.endDate) {
+          return res.status(400).json({
+            success: false,
+            message: 'End date must be after start date'
+          });
+        }
+      }
+
+      // Update product with discount
+      product.discount = discountData;
+      product.lastModifiedBy = req.user._id;
+
+      // Auto-activate discount if dates are valid
+      if (discountData.isActive && discountData.value > 0) {
+        const now = new Date();
+        if ((!discountData.startDate || discountData.startDate <= now) && 
+            (!discountData.endDate || discountData.endDate >= now)) {
+          product.discount.isActive = true;
+        }
+      }
+
+      await product.save();
+
+      // Calculate discounted price for response
+      let discountedPrice = product.price;
+      if (product.discount && product.discount.isActive) {
+        if (product.discount.type === 'percentage') {
+          discountedPrice = product.price - (product.price * product.discount.value / 100);
+        } else if (product.discount.type === 'fixed') {
+          discountedPrice = product.price - product.discount.value;
+        }
+        discountedPrice = Math.max(0, discountedPrice);
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: 'Discount created successfully',
+        data: {
+          product: product,
+          discount: {
+            ...product.discount.toObject(),
+            originalPrice: originalPrice,
+            discountedPrice,
+            savings: originalPrice - discountedPrice,
+            savingsPercentage: originalPrice > 0 ? ((originalPrice - discountedPrice) / originalPrice) * 100 : 0
+          }
+        }
       });
-    }
+    } 
+    // If no productId, create a general offer (using the Offer schema)
+    else {
+      // Validate required fields for general offer
+      const requiredFields = ['name', 'offerType', 'startDate', 'endDate'];
+      const missingFields = requiredFields.filter(field => !req.body[field]);
+      
+      if (missingFields.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing required fields: ${missingFields.join(', ')}`
+        });
+      }
 
-    // Validate discount data
-    if (!discount || typeof discount !== 'object') {
-      return res.status(400).json({
-        success: false,
-        message: 'Discount data is required'
-      });
-    }
-
-    // Validate discount type
-    if (discount.type && !['percentage', 'fixed', 'none'].includes(discount.type)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Discount type must be percentage, fixed, or none'
-      });
-    }
-
-    // Validate discount value
-    if (discount.value !== undefined && discount.value < 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Discount value cannot be negative'
-      });
-    }
-
-    if (discount.type === 'percentage' && discount.value > 100) {
-      return res.status(400).json({
-        success: false,
-        message: 'Percentage discount cannot exceed 100%'
-      });
-    }
-
-    // Find product
-    const product = await Product.findById(productId);
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    // Store original price before discount
-    const originalPrice = product.price;
-
-    // Prepare discount data
-    const discountData = {
-      type: discount.type || 'percentage',
-      value: discount.value || 0,
-      originalPrice: originalPrice,
-      isActive: discount.isActive !== undefined ? discount.isActive : true
-    };
-
-    // Add dates if provided
-    if (discount.startDate) {
-      discountData.startDate = new Date(discount.startDate);
-    }
-    if (discount.endDate) {
-      discountData.endDate = new Date(discount.endDate);
-    }
-
-    // Validate dates
-    if (discountData.startDate && discountData.endDate) {
-      if (discountData.startDate >= discountData.endDate) {
+      // Validate dates
+      if (new Date(req.body.startDate) >= new Date(req.body.endDate)) {
         return res.status(400).json({
           success: false,
           message: 'End date must be after start date'
         });
       }
-    }
 
-    // Update product with discount
-    product.discount = discountData;
-    product.lastModifiedBy = req.user._id;
-
-    // Auto-activate discount if dates are valid
-    if (discountData.isActive && discountData.value > 0) {
-      const now = new Date();
-      if ((!discountData.startDate || discountData.startDate <= now) && 
-          (!discountData.endDate || discountData.endDate >= now)) {
-        product.discount.isActive = true;
-      }
-    }
-
-    await product.save();
-
-    // Calculate discounted price for response
-    let discountedPrice = product.price;
-    if (product.discount && product.discount.isActive) {
-      if (product.discount.type === 'percentage') {
-        discountedPrice = product.price - (product.price * product.discount.value / 100);
-      } else if (product.discount.type === 'fixed') {
-        discountedPrice = product.price - product.discount.value;
-      }
-      discountedPrice = Math.max(0, discountedPrice);
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Discount created successfully',
-      data: {
-        product: product,
-        discount: {
-          ...product.discount.toObject(),
-          originalPrice: originalPrice,
-          discountedPrice,
-          savings: originalPrice - discountedPrice,
-          savingsPercentage: originalPrice > 0 ? ((originalPrice - discountedPrice) / originalPrice) * 100 : 0
+      // Validate discount rules
+      if (req.body.rules && req.body.rules.discountType) {
+        if (['percentage', 'fixed_amount'].includes(req.body.rules.discountType)) {
+          if (!req.body.rules.discountValue || req.body.rules.discountValue <= 0) {
+            return res.status(400).json({
+              success: false,
+              message: 'Discount value is required and must be greater than 0'
+            });
+          }
+          if (req.body.rules.discountType === 'percentage' && req.body.rules.discountValue > 100) {
+            return res.status(400).json({
+              success: false,
+              message: 'Percentage discount cannot exceed 100%'
+            });
+          }
         }
       }
-    });
+
+      // Prepare offer data
+      const offerData = { ...req.body };
+      offerData.createdBy = req.user._id;
+      offerData.updatedBy = req.user._id;
+
+      // Generate offer code if not provided
+      if (!offerData.offerCode) {
+        offerData.offerCode = Offer.generateOfferCode();
+      }
+
+      // Set default status
+      if (!offerData.status) {
+        offerData.status = 'draft';
+      }
+      if (offerData.isActive === undefined) {
+        offerData.isActive = false;
+      }
+
+      // Create offer
+      const offer = await Offer.create(offerData);
+
+      // Populate references for response
+      await offer.populate('createdBy', 'name email role');
+
+      return res.status(201).json({
+        success: true,
+        message: 'Offer created successfully',
+        data: offer
+      });
+    }
 
   } catch (error) {
     console.error('CREATE OFFER ERROR:', error);
@@ -442,16 +492,13 @@ exports.createOffer = async (req, res) => {
       return handleValidationError(error, res);
     }
     
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid product ID'
-      });
+    if (error.code === 11000) {
+      return handleMongoError(error, res);
     }
     
     res.status(500).json({
       success: false,
-      message: 'Error creating discount',
+      message: 'Error creating offer',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
