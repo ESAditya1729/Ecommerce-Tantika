@@ -467,6 +467,7 @@ exports.createOffer = async (req, res) => {
 exports.updateOffer = async (req, res) => {
   try {
     const { id } = req.params;
+    const updateData = { ...req.body };
 
     // Verify admin access
     if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
@@ -475,8 +476,6 @@ exports.updateOffer = async (req, res) => {
         message: 'Access denied. Admin role required.'
       });
     }
-
-    const updateData = { ...req.body };
 
     // Find product
     const product = await Product.findById(id);
@@ -488,53 +487,104 @@ exports.updateOffer = async (req, res) => {
     }
 
     // Check if product has a discount
-    if (!product.discount || !product.discount.type || product.discount.type === 'none') {
+    if (!product.discount || product.discount.type === 'none' || product.discount.value === 0) {
       return res.status(400).json({
         success: false,
-        message: 'This product does not have an active discount. Use create endpoint instead.'
+        message: 'This product does not have a valid discount to update'
       });
     }
 
     // Store original price
     const originalPrice = product.price;
 
-    // Update discount fields
-    if (updateData.type !== undefined) {
-      if (!['percentage', 'fixed', 'none'].includes(updateData.type)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Discount type must be percentage, fixed, or none'
-        });
+    // If the request has a discount object, use it (from EditOfferModal)
+    if (updateData.discount) {
+      const discountData = updateData.discount;
+      
+      // Update all discount fields
+      if (discountData.type !== undefined) {
+        if (!['percentage', 'fixed', 'none'].includes(discountData.type)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Discount type must be percentage, fixed, or none'
+          });
+        }
+        product.discount.type = discountData.type;
       }
-      product.discount.type = updateData.type;
-    }
 
-    if (updateData.value !== undefined) {
-      if (updateData.value < 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Discount value cannot be negative'
-        });
+      if (discountData.value !== undefined) {
+        if (discountData.value < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Discount value cannot be negative'
+          });
+        }
+        if (product.discount.type === 'percentage' && discountData.value > 100) {
+          return res.status(400).json({
+            success: false,
+            message: 'Percentage discount cannot exceed 100%'
+          });
+        }
+        product.discount.value = discountData.value;
       }
-      if (product.discount.type === 'percentage' && updateData.value > 100) {
-        return res.status(400).json({
-          success: false,
-          message: 'Percentage discount cannot exceed 100%'
-        });
+
+      if (discountData.isActive !== undefined) {
+        product.discount.isActive = discountData.isActive;
       }
-      product.discount.value = updateData.value;
-    }
 
-    if (updateData.isActive !== undefined) {
-      product.discount.isActive = updateData.isActive;
-    }
+      if (discountData.startDate !== undefined) {
+        product.discount.startDate = discountData.startDate ? new Date(discountData.startDate) : undefined;
+      }
 
-    if (updateData.startDate !== undefined) {
-      product.discount.startDate = updateData.startDate ? new Date(updateData.startDate) : undefined;
-    }
+      if (discountData.endDate !== undefined) {
+        product.discount.endDate = discountData.endDate ? new Date(discountData.endDate) : undefined;
+      }
 
-    if (updateData.endDate !== undefined) {
-      product.discount.endDate = updateData.endDate ? new Date(updateData.endDate) : undefined;
+      // Keep original price
+      product.discount.originalPrice = originalPrice;
+
+    } else {
+      // Legacy: Direct field updates (if not using nested discount object)
+      if (updateData.type !== undefined) {
+        if (!['percentage', 'fixed', 'none'].includes(updateData.type)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Discount type must be percentage, fixed, or none'
+          });
+        }
+        product.discount.type = updateData.type;
+      }
+
+      if (updateData.value !== undefined) {
+        if (updateData.value < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Discount value cannot be negative'
+          });
+        }
+        if (product.discount.type === 'percentage' && updateData.value > 100) {
+          return res.status(400).json({
+            success: false,
+            message: 'Percentage discount cannot exceed 100%'
+          });
+        }
+        product.discount.value = updateData.value;
+      }
+
+      if (updateData.isActive !== undefined) {
+        product.discount.isActive = updateData.isActive;
+      }
+
+      if (updateData.startDate !== undefined) {
+        product.discount.startDate = updateData.startDate ? new Date(updateData.startDate) : undefined;
+      }
+
+      if (updateData.endDate !== undefined) {
+        product.discount.endDate = updateData.endDate ? new Date(updateData.endDate) : undefined;
+      }
+
+      // Keep original price
+      product.discount.originalPrice = originalPrice;
     }
 
     // Validate dates
@@ -547,7 +597,7 @@ exports.updateOffer = async (req, res) => {
       }
     }
 
-    // Auto-update active status based on dates
+    // Auto-update active status based on dates if the discount is supposed to be active
     if (product.discount.isActive && product.discount.value > 0) {
       const now = new Date();
       if ((!product.discount.startDate || product.discount.startDate <= now) && 
@@ -567,21 +617,26 @@ exports.updateOffer = async (req, res) => {
       if (product.discount.type === 'percentage') {
         discountedPrice = product.price - (product.price * product.discount.value / 100);
       } else if (product.discount.type === 'fixed') {
-        discountedPrice = product.price - product.discount.value;
+        discountedPrice = Math.max(0, product.price - product.discount.value);
       }
       discountedPrice = Math.max(0, discountedPrice);
     }
+
+    // Get populated product for response
+    const updatedProduct = await Product.findById(id)
+      .populate('artisan', 'businessName fullName displayName profileImage')
+      .populate('createdBy', 'name email');
 
     res.json({
       success: true,
       message: 'Discount updated successfully',
       data: {
-        product: product,
+        product: updatedProduct,
         discount: {
           ...product.discount.toObject(),
           originalPrice: originalPrice,
           discountedPrice,
-          savings: originalPrice - discountedPrice,
+          savings: Math.max(0, originalPrice - discountedPrice),
           savingsPercentage: originalPrice > 0 ? ((originalPrice - discountedPrice) / originalPrice) * 100 : 0
         }
       }
