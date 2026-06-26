@@ -1,22 +1,140 @@
 import React, { useState } from 'react';
 import { 
   CheckCircle, MessageSquare, Mail, Phone, Printer, 
-  MapPin, ExternalLink, Package, User, Clock, FileText,
-  AlertCircle
+  MapPin, Package, User, Clock, FileText,
+  AlertCircle, X
 } from 'lucide-react';
 import StatusBadge from '../Admin/Order-Management/StatusBadge';
 import PaymentBadge from '../Admin/Order-Management/PaymentBadge';
 
-// Status configuration
+// ========== Status configuration matching backend model ==========
 const STATUS_CONFIG = {
-  pending: { label: 'Pending', bgColor: 'bg-yellow-100', textColor: 'text-yellow-800', next: ['contacted', 'confirmed', 'cancelled'] },
-  contacted: { label: 'Contacted', bgColor: 'bg-blue-100', textColor: 'text-blue-800', next: ['confirmed', 'processing', 'cancelled'] },
-  confirmed: { label: 'Confirmed', bgColor: 'bg-indigo-100', textColor: 'text-indigo-800', next: ['processing', 'cancelled'] },
-  processing: { label: 'Processing', bgColor: 'bg-purple-100', textColor: 'text-purple-800', next: ['shipped', 'cancelled'] },
-  shipped: { label: 'Shipped', bgColor: 'bg-cyan-100', textColor: 'text-cyan-800', next: ['delivered', 'cancelled'] },
-  delivered: { label: 'Delivered', bgColor: 'bg-green-100', textColor: 'text-green-800', next: [] },
-  cancelled: { label: 'Cancelled', bgColor: 'bg-red-100', textColor: 'text-red-800', next: [] },
-  refunded: { label: 'Refunded', bgColor: 'bg-orange-100', textColor: 'text-orange-800', next: [] },
+  pending: { 
+    label: 'Pending', 
+    bgColor: 'bg-yellow-100', 
+    textColor: 'text-yellow-800',
+    borderColor: 'border-yellow-300',
+    buttonColor: 'bg-yellow-600 hover:bg-yellow-700',
+    next: ['confirmed', 'cancelled'] 
+  },
+  confirmed: { 
+    label: 'Confirmed', 
+    bgColor: 'bg-indigo-100', 
+    textColor: 'text-indigo-800',
+    borderColor: 'border-indigo-300',
+    buttonColor: 'bg-indigo-600 hover:bg-indigo-700',
+    next: ['processing', 'cancelled'] 
+  },
+  processing: { 
+    label: 'Processing', 
+    bgColor: 'bg-purple-100', 
+    textColor: 'text-purple-800',
+    borderColor: 'border-purple-300',
+    buttonColor: 'bg-purple-600 hover:bg-purple-700',
+    next: ['ready_to_ship', 'cancelled'] 
+  },
+  ready_to_ship: { 
+    label: 'Ready to Ship', 
+    bgColor: 'bg-cyan-100', 
+    textColor: 'text-cyan-800',
+    borderColor: 'border-cyan-300',
+    buttonColor: 'bg-cyan-600 hover:bg-cyan-700',
+    next: ['shipped', 'cancelled'] 
+  },
+  shipped: { 
+    label: 'Shipped', 
+    bgColor: 'bg-blue-100', 
+    textColor: 'text-blue-800',
+    borderColor: 'border-blue-300',
+    buttonColor: 'bg-blue-600 hover:bg-blue-700',
+    next: ['out_for_delivery', 'cancelled'] 
+  },
+  out_for_delivery: { 
+    label: 'Out for Delivery', 
+    bgColor: 'bg-teal-100', 
+    textColor: 'text-teal-800',
+    borderColor: 'border-teal-300',
+    buttonColor: 'bg-teal-600 hover:bg-teal-700',
+    next: ['delivered', 'cancelled'] 
+  },
+  delivered: { 
+    label: 'Delivered', 
+    bgColor: 'bg-green-100', 
+    textColor: 'text-green-800',
+    borderColor: 'border-green-300',
+    buttonColor: 'bg-green-600 hover:bg-green-700',
+    next: [] 
+  },
+  cancelled: { 
+    label: 'Cancelled', 
+    bgColor: 'bg-red-100', 
+    textColor: 'text-red-800',
+    borderColor: 'border-red-300',
+    buttonColor: 'bg-red-600 hover:bg-red-700',
+    next: [] 
+  },
+  refunded: { 
+    label: 'Refunded', 
+    bgColor: 'bg-orange-100', 
+    textColor: 'text-orange-800',
+    borderColor: 'border-orange-300',
+    buttonColor: 'bg-orange-600 hover:bg-orange-700',
+    next: [] 
+  },
+  on_hold: { 
+    label: 'On Hold', 
+    bgColor: 'bg-amber-100', 
+    textColor: 'text-amber-800',
+    borderColor: 'border-amber-300',
+    buttonColor: 'bg-amber-600 hover:bg-amber-700',
+    next: ['confirmed', 'processing', 'cancelled'] 
+  },
+  failed: { 
+    label: 'Failed', 
+    bgColor: 'bg-gray-100', 
+    textColor: 'text-gray-800',
+    borderColor: 'border-gray-300',
+    buttonColor: 'bg-gray-600 hover:bg-gray-700',
+    next: ['pending', 'cancelled'] 
+  }
+};
+
+// StatusBadge Component
+const StatusBadgeComponent = ({ status }) => {
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  return (
+    <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bgColor} ${config.textColor}`}>
+      {config.label}
+    </span>
+  );
+};
+
+// Payment Badge Component
+const PaymentBadgeComponent = ({ method, status }) => {
+  const getColor = () => {
+    if (status === 'completed' || status === 'paid') return 'bg-green-100 text-green-800';
+    if (status === 'pending' || status === 'processing') return 'bg-yellow-100 text-yellow-800';
+    if (status === 'failed' || status === 'cancelled') return 'bg-red-100 text-red-800';
+    if (status === 'refunded') return 'bg-orange-100 text-orange-800';
+    return 'bg-gray-100 text-gray-800';
+  };
+
+  const getLabel = () => {
+    const methods = {
+      cod: 'Cash on Delivery',
+      online: 'Online Payment',
+      bank_transfer: 'Bank Transfer',
+      upi: 'UPI',
+      card: 'Credit/Debit Card'
+    };
+    return methods[method] || method || 'Unknown';
+  };
+
+  return (
+    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getColor()}`}>
+      {getLabel()}
+    </span>
+  );
 };
 
 const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCancel }) => {
@@ -26,6 +144,8 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
   const [contactMethod, setContactMethod] = useState('whatsapp');
   const [contactNote, setContactNote] = useState('');
   const [cancellationReason, setCancellationReason] = useState('');
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   if (!order) return null;
 
@@ -61,10 +181,15 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
     
     if (typeof address === 'string') return address;
     
-    return `${address.street || ''}, ${address.city || ''}, ${address.state || ''} - ${address.postalCode || ''}, ${address.country || 'India'}`
-      .replace(/, ,/g, ',')
-      .replace(/^, |, $/g, '')
-      .trim() || 'No address provided';
+    const parts = [
+      address.street || '',
+      address.city || '',
+      address.state || '',
+      address.postalCode || '',
+      address.country || 'India'
+    ].filter(Boolean);
+    
+    return parts.join(', ') || 'No address provided';
   };
 
   const getCustomerMessage = () => {
@@ -125,65 +250,107 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
     return `₹${(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  // Status update handler
   const handleStatusUpdate = async (newStatus) => {
+    setError(null);
+    setSuccessMessage(null);
+    
     try {
       setLoading(true);
+      
       await onStatusUpdate(order._id, newStatus, notes);
+      
+      setSuccessMessage(`Order status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
       setNotes('');
-      alert(`Order status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
+      
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+      
     } catch (error) {
-      alert('Failed to update status');
+      console.error('Status update error:', error);
+      setError(error.message || 'Failed to update status');
     } finally {
       setLoading(false);
     }
   };
 
+  // Contact history handler
   const handleAddContact = async () => {
     if (!contactNote) {
-      alert('Please add a contact note');
+      setError('Please add a contact note');
+      setTimeout(() => setError(null), 3000);
       return;
     }
 
+    setError(null);
+    setSuccessMessage(null);
+    
     try {
       setLoading(true);
+      
       await onAddContact(order._id, {
         method: contactMethod,
         notes: contactNote,
         contactedAt: new Date().toISOString()
       });
+      
+      setSuccessMessage('Contact record added successfully');
       setContactNote('');
-      alert('Contact record added successfully');
+      
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
     } catch (error) {
-      alert('Failed to add contact record');
+      console.error('Add contact error:', error);
+      setError(error.message || 'Failed to add contact record');
+      setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
     }
   };
 
+  // Cancel order handler
   const handleCancelOrder = async () => {
     if (!cancellationReason) {
-      alert('Please provide a cancellation reason');
+      setError('Please provide a cancellation reason');
+      setTimeout(() => setError(null), 3000);
       return;
     }
 
-    if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    if (!window.confirm('Are you sure you want to cancel this order?')) {
+      return;
+    }
 
+    setError(null);
+    setSuccessMessage(null);
+    
     try {
       setLoading(true);
+      
       await onCancel(order._id, cancellationReason);
-      onClose();
+      
+      setSuccessMessage('Order cancelled successfully');
+      
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+      
     } catch (error) {
-      alert('Failed to cancel order');
+      console.error('Cancel order error:', error);
+      setError(error.message || 'Failed to cancel order');
+      setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
     }
   };
 
+  // Quick contact methods
   const handleContactWhatsApp = () => {
     const phone = getCustomerPhone();
     const name = getCustomerName();
     if (!phone || phone === 'N/A') {
-      alert('Customer phone number not available');
+      setError('Customer phone number not available');
+      setTimeout(() => setError(null), 3000);
       return;
     }
     
@@ -191,7 +358,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
     const phoneNumber = phone.replace(/\D/g, '');
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
     
-    // Auto-add contact record
     onAddContact(order._id, {
       method: 'whatsapp',
       notes: 'Contacted via WhatsApp',
@@ -202,7 +368,8 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
     const email = getCustomerEmail();
     const name = getCustomerName();
     if (!email || email === 'N/A') {
-      alert('Customer email not available');
+      setError('Customer email not available');
+      setTimeout(() => setError(null), 3000);
       return;
     }
 
@@ -210,7 +377,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
     const body = `Hello ${name},\n\nThis is regarding your order ${order.orderNumber}.\n\nBest regards,\nতন্তিকা Team`;
     window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
     
-    // Auto-add contact record
     onAddContact(order._id, {
       method: 'email',
       notes: 'Contacted via Email',
@@ -220,12 +386,12 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
   const handleCallCustomer = () => {
     const phone = getCustomerPhone();
     if (!phone || phone === 'N/A') {
-      alert('Customer phone number not available');
+      setError('Customer phone number not available');
+      setTimeout(() => setError(null), 3000);
       return;
     }
     window.open(`tel:${phone}`);
     
-    // Auto-add contact record
     onAddContact(order._id, {
       method: 'phone',
       notes: 'Called customer',
@@ -252,11 +418,11 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Status:</span>
-              <StatusBadge status={order.status || 'pending'} />
+              <StatusBadgeComponent status={order.status || 'pending'} />
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Payment Method:</span>
-              <PaymentBadge method={getPaymentMethod()} status={getPaymentStatus()} />
+              <PaymentBadgeComponent method={getPaymentMethod()} status={getPaymentStatus()} />
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Payment Status:</span>
@@ -320,22 +486,38 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
           )}
         </div>
 
-        {/* Status Update Section */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        {/* ========== FIXED: Status Update Section with proper button styling ========== */}
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
           <h4 className="font-medium text-gray-700 mb-3">Update Order Status</h4>
+          
+          {/* Error/Success Messages */}
+          {error && (
+            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+              {error}
+            </div>
+          )}
+          {successMessage && (
+            <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded text-green-600 text-sm">
+              {successMessage}
+            </div>
+          )}
+
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              {STATUS_CONFIG[order.status]?.next?.map((nextStatus) => (
-                <button
-                  key={nextStatus}
-                  onClick={() => handleStatusUpdate(nextStatus)}
-                  disabled={loading}
-                  className={`px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center ${STATUS_CONFIG[nextStatus]?.bgColor.replace('bg-', 'bg-').replace('-100', '-600') || 'bg-blue-600'}`}
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Mark as {STATUS_CONFIG[nextStatus]?.label || nextStatus}
-                </button>
-              ))}
+              {STATUS_CONFIG[order.status]?.next?.map((nextStatus) => {
+                const config = STATUS_CONFIG[nextStatus];
+                return (
+                  <button
+                    key={nextStatus}
+                    onClick={() => handleStatusUpdate(nextStatus)}
+                    disabled={loading}
+                    className={`px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center transition-all ${config.buttonColor || 'bg-blue-600 hover:bg-blue-700'}`}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Mark as {config?.label || nextStatus}
+                  </button>
+                );
+              })}
               {(!STATUS_CONFIG[order.status]?.next || STATUS_CONFIG[order.status].next.length === 0) && (
                 <p className="text-sm text-gray-500">No further status updates available</p>
               )}
@@ -352,12 +534,13 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
                 placeholder="Add any notes about this status update..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows="2"
+                disabled={loading}
               />
             </div>
           </div>
         </div>
 
-        {/* Cancellation Section - Only for non-cancelled orders */}
+        {/* Cancellation Section */}
         {order.status !== 'cancelled' && order.status !== 'delivered' && (
           <div className="bg-red-50 p-4 rounded-lg border border-red-200">
             <h4 className="font-medium text-red-700 mb-3 flex items-center">
@@ -371,6 +554,7 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
                 placeholder="Reason for cancellation..."
                 className="w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 rows="2"
+                disabled={loading}
               />
               <button
                 onClick={handleCancelOrder}
@@ -452,11 +636,24 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
       {/* Add Contact Record */}
       <div className="bg-gray-50 p-4 rounded-lg">
         <h4 className="font-medium text-gray-700 mb-3">Add Contact Record</h4>
+        
+        {error && (
+          <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+            {error}
+          </div>
+        )}
+        {successMessage && (
+          <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded text-green-600 text-sm">
+            {successMessage}
+          </div>
+        )}
+
         <div className="space-y-3">
           <select
             value={contactMethod}
             onChange={(e) => setContactMethod(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            disabled={loading}
           >
             <option value="whatsapp">WhatsApp</option>
             <option value="phone">Phone Call</option>
@@ -470,11 +667,12 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
             placeholder="Contact notes..."
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             rows="2"
+            disabled={loading}
           />
           <button
             onClick={handleAddContact}
             disabled={loading || !contactNote}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             Add Contact Record
           </button>
@@ -501,7 +699,7 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
                   <p className="text-gray-700">{contact.notes || 'No notes'}</p>
                 </div>
                 <div className="text-right text-sm text-gray-500">
-                  <p>{contact.createdAt ? formatDate(contact.createdAt) : 'N/A'}</p>
+                  <p>{contact.contactedAt ? formatDate(contact.contactedAt) : formatDate(contact.createdAt)}</p>
                   {contact.contactedBy && (
                     <p className="text-xs">By: {contact.contactedBy}</p>
                   )}
@@ -600,12 +798,16 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
             <h3 className="text-xl font-bold text-gray-900">Order Details</h3>
             <p className="text-gray-600">{order.orderNumber || 'N/A'}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            ✕
-          </button>
+          <div className="flex items-center space-x-2">
+            <StatusBadgeComponent status={order.status || 'pending'} />
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg ml-2"
+              disabled={loading}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -613,25 +815,41 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
           <div className="flex space-x-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab('details')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'details' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'details' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
             >
               Order Details
             </button>
             <button
               onClick={() => setActiveTab('customer')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'customer' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'customer' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
             >
               Customer Info
             </button>
             <button
               onClick={() => setActiveTab('items')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'items' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'items' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
             >
               Items
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === 'history' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'history' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
             >
               Contact History
             </button>

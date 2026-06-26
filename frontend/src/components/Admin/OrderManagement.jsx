@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Download,
   Printer,
@@ -15,10 +15,30 @@ import QuickStats from "./Order-Management/QuickStats";
 import OrderFilters from "./Order-Management/OrderFilters";
 import OrderTable from "./Order-Management/OrderTable";
 
-// API Base URL - Make it configurable
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+// API Base URL
+const API_BASE_URL = process.env.REACT_APP_API_URL || "https://ecommerce-tantika.onrender.com/api";
 
-const OrderManagement = () => {
+// Axios instance
+const apiClient = axios.create({
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor for auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('tantika_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+const OrderManagement = ({ refreshTrigger }) => {
   // State
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -44,18 +64,15 @@ const OrderManagement = () => {
   const [itemsPerPage] = useState(20);
 
   // Refs
-  const filterStatusRef = useRef(filterStatus);
-  const searchTermRef = useRef(searchTerm);
-  const dateRangeRef = useRef(dateRange);
   const isMounted = useRef(true);
   const fetchInProgress = useRef(false);
-  // const initialFetchDone = useRef(false);
-  const loadingTimeoutRef = useRef(null);
+  const initialFetchDone = useRef(false);
+  const abortControllerRef = useRef(null);
 
   // Auth helpers
-  const getAuthToken = () => localStorage.getItem("tantika_token");
-
-  const getCurrentUser = () => {
+  const getAuthToken = useCallback(() => localStorage.getItem("tantika_token"), []);
+  
+  const getCurrentUser = useCallback(() => {
     try {
       const userStr = localStorage.getItem("tantika_user");
       return userStr ? JSON.parse(userStr) : null;
@@ -63,54 +80,22 @@ const OrderManagement = () => {
       console.error("Error parsing user data:", error);
       return null;
     }
-  };
+  }, []);
 
-  const isCurrentUserAdmin = () => {
+  const isCurrentUserAdmin = useCallback(() => {
     const user = getCurrentUser();
     return user?.role === "admin" || user?.role === "superAdmin";
-  };
-
-  // Update refs
-  useEffect(() => {
-    filterStatusRef.current = filterStatus;
-    searchTermRef.current = searchTerm;
-    dateRangeRef.current = dateRange;
-  }, [filterStatus, searchTerm, dateRange]);
+  }, [getCurrentUser]);
 
   // Cleanup
   useEffect(() => {
     return () => {
       isMounted.current = false;
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, []);
-
-  // Safety timeout to prevent infinite loading
-  useEffect(() => {
-    if (loading && initialLoad) {
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
-      
-      loadingTimeoutRef.current = setTimeout(() => {
-        if (isMounted.current && loading) {
-          console.warn('Loading timeout - forcing reset');
-          setLoading(false);
-          setInitialLoad(false);
-          setError('Loading timeout. Please refresh the page.');
-          fetchInProgress.current = false;
-        }
-      }, 15000);
-    }
-    
-    return () => {
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
-    };
-  }, [loading, initialLoad]);
 
   // Verify admin access
   useEffect(() => {
@@ -122,37 +107,10 @@ const OrderManagement = () => {
       setLoading(false);
       setInitialLoad(false);
     }
-  }, []);
-
-  // Fetch dashboard summary
-  const fetchDashboardSummary = useCallback(async () => {
-    if (!isCurrentUserAdmin()) return;
-
-    try {
-      const token = getAuthToken();
-      if (!token) return;
-
-      const response = await axios.get(
-        `${API_BASE_URL}/orders/admin/summary/dashboard`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 10000
-        }
-      );
-
-      if (isMounted.current && response.data?.success) {
-        setDashboardStats(response.data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard summary:", error);
-    }
-  }, []);
+  }, [getAuthToken, getCurrentUser, isCurrentUserAdmin]);
 
   // Transform backend order to frontend format
-  const transformOrder = (backendOrder) => {
+  const transformOrder = useCallback((backendOrder) => {
     if (!backendOrder) return null;
 
     const firstItem = backendOrder.items && backendOrder.items.length > 0 
@@ -240,24 +198,59 @@ const OrderManagement = () => {
         }) : 'N/A'),
       estimatedDeliveryDate: backendOrder.estimatedDeliveryDate || 'Not available'
     };
-  };
+  }, []);
 
-  // Fetch orders - FIXED VERSION
+  // Fetch dashboard summary
+  const fetchDashboardSummary = useCallback(async () => {
+    if (!isCurrentUserAdmin()) return;
+
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+
+      const response = await apiClient.get(
+        `${API_BASE_URL}/orders/admin/summary/dashboard`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (isMounted.current && response.data?.success) {
+        setDashboardStats(response.data.data);
+      }
+    } catch (error) {
+      // Silent fail
+    }
+  }, [getAuthToken, isCurrentUserAdmin]);
+
+  // ========== FIXED: Fetch orders with proper error handling ==========
   const fetchOrders = useCallback(async (skipLoadingState = false) => {
     // Prevent concurrent fetches
-    if (fetchInProgress.current) return;
-fetchInProgress.current = true;
-
+    if (fetchInProgress.current) {
+      console.log('⏳ Fetch already in progress');
+      return;
+    }
+    
     if (!isCurrentUserAdmin()) {
+      console.log('❌ Not admin');
       setError("Admin access required. Please log in with an admin account.");
       setLoading(false);
       setInitialLoad(false);
       return;
     }
 
-    // Set loading only if not skipped AND not already loading
-    if (!skipLoadingState && !loading) {
+    // Cancel previous request if any
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    // Set loading only if not skipped
+    if (!skipLoadingState) {
       setLoading(true);
+      setInitialLoad(true);
     }
     
     setError(null);
@@ -266,7 +259,10 @@ fetchInProgress.current = true;
     try {
       const token = getAuthToken();
       if (!token) {
+        console.log('❌ No token');
         setError("Authentication required. Please log in.");
+        setLoading(false);
+        setInitialLoad(false);
         return;
       }
 
@@ -275,21 +271,26 @@ fetchInProgress.current = true;
         limit: itemsPerPage,
       };
 
-      if (filterStatusRef.current !== "all") {
-        params.status = filterStatusRef.current;
+      if (filterStatus !== "all") {
+        params.status = filterStatus;
       }
-      if (searchTermRef.current) {
-        params.search = searchTermRef.current;
+      if (searchTerm) {
+        params.search = searchTerm;
       }
 
-      const response = await axios.get(`${API_BASE_URL}/orders/admin/all`, {
-        params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 15000
-      });
+      console.log('📡 Fetching orders from:', `${API_BASE_URL}/orders/admin/all`);
+      console.log('📦 Params:', params);
+
+      const response = await apiClient.get(
+        `${API_BASE_URL}/orders/admin/all`,
+        {
+          params,
+          signal: abortControllerRef.current.signal
+        }
+      );
+
+      console.log('📦 Response status:', response.status);
+      console.log('📦 Response success:', response.data?.success);
 
       if (!isMounted.current) return;
 
@@ -297,6 +298,8 @@ fetchInProgress.current = true;
         const responseData = response.data.data || {};
         const ordersData = responseData.orders || [];
         const pagination = responseData.pagination;
+
+        console.log(`✅ Received ${ordersData.length} orders`);
 
         const transformedOrders = ordersData.map(transformOrder).filter(Boolean);
         
@@ -311,15 +314,24 @@ fetchInProgress.current = true;
           setTotalOrders(transformedOrders.length);
         }
 
-        // Don't await this - let it run in background
-        fetchDashboardSummary().catch(console.error);
+        // Fetch dashboard summary in background
+        if (!skipLoadingState) {
+          fetchDashboardSummary();
+        }
       } else {
+        console.log('❌ API returned error:', response.data?.error);
         setError(response.data?.error || 'Failed to fetch orders');
         setOrders([]);
         setFilteredOrders([]);
       }
     } catch (error) {
-      console.error("Error fetching orders:", error);
+      // Ignore aborted requests
+      if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
+        console.log('🔄 Request cancelled');
+        return;
+      }
+
+      console.error("❌ Error fetching orders:", error);
 
       if (!isMounted.current) return;
 
@@ -328,7 +340,7 @@ fetchInProgress.current = true;
       if (error.code === "ECONNABORTED") {
         errorMessage = "Connection timeout. Server took too long to respond.";
       } else if (error.code === "ERR_NETWORK") {
-        errorMessage = "Network error. Please check if the backend server is running.";
+        errorMessage = `Cannot connect to backend. Please check your internet connection.`;
       } else if (error.response) {
         if (error.response.status === 401) {
           errorMessage = "Session expired. Please log in again.";
@@ -346,35 +358,66 @@ fetchInProgress.current = true;
       setFilteredOrders([]);
     } finally {
       if (isMounted.current) {
+        console.log('✅ Setting loading to false');
         setLoading(false);
         setInitialLoad(false);
+        initialFetchDone.current = true;
       }
       fetchInProgress.current = false;
-      
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = null;
-      }
     }
-  }, [currentPage, itemsPerPage, fetchDashboardSummary]);
+  }, [currentPage, itemsPerPage, filterStatus, searchTerm, transformOrder, fetchDashboardSummary, getAuthToken, isCurrentUserAdmin]);
 
-  // Initial fetch - run only once
-useEffect(() => {
-  if (!isCurrentUserAdmin()) {
-    setLoading(false);
-    setInitialLoad(false);
-    return;
-  }
+  // ========== FIXED: Initial fetch with immediate execution ==========
+  useEffect(() => {
+    console.log('🔄 Initial fetch useEffect triggered');
+    
+    // Force fetch immediately
+    const doFetch = async () => {
+      if (!initialFetchDone.current && !fetchInProgress.current) {
+        console.log('🚀 Starting initial fetch');
+        await fetchOrders(false);
+      }
+    };
+    
+    doFetch();
+    
+    // Cleanup
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []); // Empty dependency - run once on mount
 
-  fetchOrders(false);
-}, [currentPage, fetchOrders]);
+  // Handle refreshTrigger changes
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0 && initialFetchDone.current) {
+      console.log('🔄 Refreshing orders due to refreshTrigger');
+      fetchOrders(true);
+    }
+  }, [refreshTrigger, fetchOrders]);
 
-  // // Separate effect for page changes - ONLY trigger when currentPage changes
-  // useEffect(() => {
-  //   if (initialFetchDone.current && isCurrentUserAdmin() && !fetchInProgress.current) {
-  //     fetchOrders(true);
-  //   }
-  // }, [currentPage, fetchOrders]);
+  // Handle filter changes with debounce
+  useEffect(() => {
+    if (!initialFetchDone.current) return;
+
+    const timer = setTimeout(() => {
+      if (isMounted.current && !fetchInProgress.current) {
+        fetchOrders(true);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [filterStatus, searchTerm, dateRange, sortBy, fetchOrders]);
+
+  // Handle page changes
+  useEffect(() => {
+    if (!initialFetchDone.current) return;
+
+    if (isMounted.current && !fetchInProgress.current) {
+      fetchOrders(true);
+    }
+  }, [currentPage, fetchOrders]);
 
   // Auto-refresh every 60 seconds
   useEffect(() => {
@@ -387,14 +430,11 @@ useEffect(() => {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [fetchOrders, error, loading]);
+  }, [fetchOrders, error, loading, isCurrentUserAdmin]);
 
-  // Filter orders locally
-  useEffect(() => {
-    if (!orders.length) {
-      setFilteredOrders([]);
-      return;
-    }
+  // Filter orders locally with useMemo
+  const filteredData = useMemo(() => {
+    if (!orders.length) return [];
 
     let result = [...orders];
 
@@ -454,38 +494,70 @@ useEffect(() => {
       }
     });
 
-    setFilteredOrders(result);
+    return result;
   }, [orders, searchTerm, filterStatus, dateRange, sortBy]);
 
-  // Handlers - FIXED: Only update state, don't call fetchOrders directly
-  const handlePageChange = (newPage) => {
+  // Update filtered orders when filter results change
+  useEffect(() => {
+    setFilteredOrders(filteredData);
+  }, [filteredData]);
+
+  // Memoized stats
+  const stats = useMemo(() => {
+    const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
+    
+    return {
+      totalOrders: orders.length,
+      pending: orders.filter((o) => o.status === "pending").length,
+      contacted: orders.filter((o) => o.status === "contacted").length,
+      confirmed: orders.filter((o) => o.status === "confirmed").length,
+      processing: orders.filter((o) => o.status === "processing").length,
+      shipped: orders.filter((o) => o.status === "shipped").length,
+      delivered: orders.filter((o) => o.status === "delivered").length,
+      cancelled: orders.filter((o) => o.status === "cancelled").length,
+      totalRevenue,
+      avgOrderValue,
+      todayOrders: dashboardStats?.todayOrders || 0
+    };
+  }, [orders, dashboardStats]);
+
+  // Handlers
+  const handlePageChange = useCallback((newPage) => {
     setCurrentPage(newPage);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  }, []);
 
-  const handleRetry = () => {
+  const handleRetry = useCallback(() => {
     setCurrentPage(1);
     setError(null);
-  };
+    initialFetchDone.current = false;
+    fetchOrders(false);
+  }, [fetchOrders]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setCurrentPage(1);
-  };
+    initialFetchDone.current = false;
+    fetchOrders(false);
+  }, [fetchOrders]);
 
-  const handleFilterChange = (setter) => (value) => {
+  const handleFilterChange = useCallback((setter) => (value) => {
     setter(value);
     setCurrentPage(1);
-  };
+  }, []);
 
-  const handleUpdateStatus = async (orderId, newStatus, notes = "") => {
+  const handleUpdateStatus = useCallback(async (orderId, newStatus, notes = "") => {
     try {
       const token = getAuthToken();
       if (!token) throw new Error("Authentication required");
 
-      const response = await axios.put(
+      const response = await apiClient.put(
         `${API_BASE_URL}/orders/admin/${orderId}/status`,
         { status: newStatus, reason: notes },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 5000
+        }
       );
 
       if (response.data?.success) {
@@ -496,24 +568,27 @@ useEffect(() => {
               : order
           )
         );
-        await fetchDashboardSummary();
+        fetchDashboardSummary();
         return response.data;
       }
     } catch (error) {
       console.error("Error updating order status:", error);
       alert(`Failed to update status: ${error.response?.data?.error || error.message}`);
     }
-  };
+  }, [getAuthToken, fetchDashboardSummary]);
 
-  const handleAddContact = async (orderId, contactData) => {
+  const handleAddContact = useCallback(async (orderId, contactData) => {
     try {
       const token = getAuthToken();
       if (!token) throw new Error("Authentication required");
 
-      const response = await axios.post(
+      const response = await apiClient.post(
         `${API_BASE_URL}/orders/admin/${orderId}/contact`,
         contactData,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 5000
+        }
       );
 
       if (response.data?.success) {
@@ -524,19 +599,22 @@ useEffect(() => {
       console.error("Error adding contact:", error);
       alert(`Failed to add contact: ${error.response?.data?.error || error.message}`);
     }
-  };
+  }, [getAuthToken, fetchOrders]);
 
-  const handleCancelOrder = async (orderId, reason = "Cancelled by admin") => {
+  const handleCancelOrder = useCallback(async (orderId, reason = "Cancelled by admin") => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;
 
     try {
       const token = getAuthToken();
       if (!token) throw new Error("Authentication required");
 
-      const response = await axios.put(
+      const response = await apiClient.put(
         `${API_BASE_URL}/orders/${orderId}/cancel`,
         { cancellationReason: reason },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 5000
+        }
       );
 
       if (response.data?.success) {
@@ -547,30 +625,33 @@ useEffect(() => {
               : order
           )
         );
-        await fetchDashboardSummary();
+        fetchDashboardSummary();
         alert("Order cancelled successfully");
       }
     } catch (error) {
       console.error("Error cancelling order:", error);
       alert(`Failed to cancel order: ${error.response?.data?.error || error.message}`);
     }
-  };
+  }, [getAuthToken, fetchDashboardSummary]);
 
-  const handleBulkUpdate = async () => {
+  const handleBulkUpdate = useCallback(async () => {
     if (!selectedOrders.length || !bulkAction) return;
 
     try {
       const token = getAuthToken();
       if (!token) throw new Error("Authentication required");
 
-      const response = await axios.post(
+      const response = await apiClient.post(
         `${API_BASE_URL}/orders/admin/bulk/update`,
         {
           orderIds: selectedOrders,
           action: "status",
           value: bulkAction,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 10000
+        }
       );
 
       if (response.data?.success) {
@@ -583,9 +664,9 @@ useEffect(() => {
       console.error("Error in bulk update:", error);
       alert(`Failed to update orders: ${error.response?.data?.error || error.message}`);
     }
-  };
+  }, [selectedOrders, bulkAction, getAuthToken, fetchOrders]);
 
-  const handleExportOrders = async () => {
+  const handleExportOrders = useCallback(async () => {
     try {
       const token = getAuthToken();
       if (!token) throw new Error("Authentication required");
@@ -594,11 +675,12 @@ useEffect(() => {
       if (filterStatus !== "all") params.append("status", filterStatus);
       if (searchTerm) params.append("search", searchTerm);
 
-      const response = await axios.get(
+      const response = await apiClient.get(
         `${API_BASE_URL}/orders/admin/export/all?${params.toString()}`,
         {
           headers: { Authorization: `Bearer ${token}` },
           responseType: exportFormat === "csv" ? "blob" : "json",
+          timeout: 15000
         }
       );
 
@@ -627,9 +709,9 @@ useEffect(() => {
       console.error("Error exporting orders:", error);
       alert("Failed to export orders");
     }
-  };
+  }, [getAuthToken, exportFormat, filterStatus, searchTerm]);
 
-  const handleContactCustomer = (order) => {
+  const handleContactCustomer = useCallback((order) => {
     const phone = order.customerPhone || order.customerDetails?.phone;
     const name = order.customerName || order.customerDetails?.name;
     
@@ -646,9 +728,9 @@ useEffect(() => {
       method: "whatsapp",
       notes: "Contacted via WhatsApp",
     }).catch(() => {});
-  };
+  }, [handleAddContact]);
 
-  const handlePrintOrders = () => {
+  const handlePrintOrders = useCallback(() => {
     if (!filteredOrders.length) {
       alert("No orders to print");
       return;
@@ -732,25 +814,25 @@ useEffect(() => {
     `);
     printWindow.document.close();
     printWindow.print();
-  };
+  }, [filteredOrders]);
 
-  const handleClearFilters = () => {
+  const handleClearFilters = useCallback(() => {
     setSearchTerm("");
     setFilterStatus("all");
     setDateRange("all");
     setSortBy("newest");
     setCurrentPage(1);
-  };
+  }, []);
 
-  const handleSelectAll = () => {
+  const handleSelectAll = useCallback(() => {
     if (selectedOrders.length === filteredOrders.length) {
       setSelectedOrders([]);
     } else {
       setSelectedOrders(filteredOrders.map((order) => order._id));
     }
-  };
+  }, [selectedOrders, filteredOrders]);
 
-  const handleToggleSelect = (orderId) => {
+  const handleToggleSelect = useCallback((orderId) => {
     if (orderId === 'all') {
       if (selectedOrders.length === filteredOrders.length) {
         setSelectedOrders([]);
@@ -762,20 +844,9 @@ useEffect(() => {
         prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId]
       );
     }
-  };
+  }, [selectedOrders, filteredOrders]);
 
-  // Calculate metrics
-  const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
-  const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
-  const pendingOrders = orders.filter((o) => o.status === "pending").length;
-  const contactedOrders = orders.filter((o) => o.status === "contacted").length;
-  const confirmedOrders = orders.filter((o) => o.status === "confirmed").length;
-  const processingOrders = orders.filter((o) => o.status === "processing").length;
-  const shippedOrders = orders.filter((o) => o.status === "shipped").length;
-  const deliveredOrders = orders.filter((o) => o.status === "delivered").length;
-  const cancelledOrders = orders.filter((o) => o.status === "cancelled").length;
-
-  // Loading state
+  // ========== FIXED: Loading state with debug info ==========
   if (initialLoad && loading) {
     return (
       <div className="p-6">
@@ -783,12 +854,36 @@ useEffect(() => {
           <RefreshCw className="w-12 h-12 animate-spin text-blue-600 mb-4" />
           <p className="text-gray-600">Loading orders...</p>
           {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+          
+          {/* Debug Info */}
+          <div className="mt-6 p-4 bg-gray-100 rounded-lg text-xs text-left w-full max-w-md">
+            {/* <p className="font-semibold mb-2">🔍 Debug Info:</p>
+            <p>Loading: {loading ? 'true' : 'false'}</p>
+            <p>InitialLoad: {initialLoad ? 'true' : 'false'}</p>
+            <p>Orders: {orders.length}</p>
+            <p>API URL: {API_BASE_URL}</p>
+            <p>Token: {getAuthToken() ? '✅ Present' : '❌ Missing'}</p>
+            <p>User Role: {getCurrentUser()?.role || 'None'}</p>
+            <p>Is Admin: {isCurrentUserAdmin() ? '✅ Yes' : '❌ No'}</p>
+            <p>Fetch In Progress: {fetchInProgress.current ? 'true' : 'false'}</p>
+            <p>Initial Fetch Done: {initialFetchDone.current ? 'true' : 'false'}</p> */}
+            <button 
+              onClick={() => {
+                console.log('🔄 Manual retry');
+                initialFetchDone.current = false;
+                fetchOrders(false);
+              }}
+              className="mt-2 px-3 py-1 bg-blue-600 text-white rounded text-xs"
+            >
+              Retry Fetch
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Error state without loading
+  // Error state
   if (error && !loading) {
     return (
       <div className="p-6">
@@ -800,6 +895,7 @@ useEffect(() => {
             onClick={handleRetry}
             className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
+            <RefreshCw className="w-4 h-4 inline mr-2" />
             Retry
           </button>
         </div>
@@ -807,6 +903,7 @@ useEffect(() => {
     );
   }
 
+  // ========== Main Render ==========
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       {/* Header */}
@@ -831,7 +928,7 @@ useEffect(() => {
           <p className="text-gray-600">Manage customer orders and track status</p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-wrap gap-2">
           {selectedOrders.length > 0 && (
             <div className="relative">
               <button
@@ -851,10 +948,11 @@ useEffect(() => {
                   <div className="p-2">
                     {[
                       "pending",
-                      "contacted",
                       "confirmed",
                       "processing",
+                      "ready_to_ship",
                       "shipped",
+                      "out_for_delivery",
                       "delivered",
                       "cancelled",
                     ].map((status) => (
@@ -866,7 +964,7 @@ useEffect(() => {
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
                       >
-                        Mark as {status}
+                        Mark as {status.replace(/_/g, ' ')}
                       </button>
                     ))}
                   </div>
@@ -948,19 +1046,7 @@ useEffect(() => {
           orders={orders}
           onStatusFilter={setFilterStatus}
           loading={loading}
-          stats={{
-            totalOrders: orders.length,
-            pending: pendingOrders,
-            contacted: contactedOrders,
-            confirmed: confirmedOrders,
-            processing: processingOrders,
-            shipped: shippedOrders,
-            delivered: deliveredOrders,
-            cancelled: cancelledOrders,
-            totalRevenue,
-            avgOrderValue,
-            todayOrders: dashboardStats?.todayOrders || 0
-          }}
+          stats={stats}
         />
 
         <OrderTable

@@ -122,8 +122,8 @@ const AdminPage = () => {
       case 'products':
         return <ProductManagement onUpdate={handleOrderUpdate} />;
       case 'orders':
-        // Pass refresh trigger to OrderManagement
-        return <OrderManagement key={`orders-${refreshOrders}`} refreshTrigger={refreshOrders} />;
+        // ========== FIXED: Don't use key prop for refreshing, use a ref instead ==========
+        return <OrderManagement refreshTrigger={refreshOrders} />;
       case 'users':
         return <UserManagement />;
       case 'analytics':
@@ -193,10 +193,16 @@ const AdminPage = () => {
             </div>
           </div>
 
-          {/* Content Area - Remove the white background wrapper to allow OrderManagement to have its own styling */}
-          <div className={activeTab === 'orders' ? '' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6'}>
-            {renderContent()}
-          </div>
+          {/* ========== FIXED: Don't wrap OrderManagement in background div ========== */}
+          {activeTab === 'orders' ? (
+            // OrderManagement renders with its own full-width styling
+            renderContent()
+          ) : (
+            // Other tabs get the white background wrapper
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+              {renderContent()}
+            </div>
+          )}
 
           {/* Footer Stats - Only show on dashboard */}
           {activeTab === 'dashboard' && (
