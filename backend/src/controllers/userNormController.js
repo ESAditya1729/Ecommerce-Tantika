@@ -163,8 +163,13 @@ exports.getDashboardStats = asyncHandler(async (req, res) => {
         });
     }
 
-    // Get order statistics
-    const orders = await Order.find({ 'customerDetails.email': userEmail });
+    // ========== FIXED: Check both possible email field locations ==========
+    const orders = await Order.find({
+        $or: [
+            { 'customer.email': userEmail },
+            { 'customerDetails.email': userEmail }
+        ]
+    });
     
     const totalOrders = orders.length;
     const completedOrders = orders.filter(order => order.status === 'delivered').length;
@@ -173,10 +178,10 @@ exports.getDashboardStats = asyncHandler(async (req, res) => {
     ).length;
     
     const totalSpent = orders
-        .filter(order => order.paymentStatus === 'paid')
-        .reduce((sum, order) => sum + order.productPrice, 0);
+        .filter(order => order.payment?.status === 'completed' || order.paymentStatus === 'paid')
+        .reduce((sum, order) => sum + (order.total || 0), 0);
 
-    // Get REAL wishlist count - FIXED
+    // Get REAL wishlist count
     const wishlist = await Wishlist.findOne({ userId });
     const wishlistCount = wishlist ? wishlist.getTotalItems() : 0;
 
@@ -190,7 +195,7 @@ exports.getDashboardStats = asyncHandler(async (req, res) => {
         success: true,
         data: {
             totalOrders,
-            wishlistCount, // NOW REAL COUNT!
+            wishlistCount,
             cartCount,
             totalSpent,
             points,
@@ -216,8 +221,14 @@ exports.getUserOrders = asyncHandler(async (req, res) => {
         sortOrder = 'desc' 
     } = req.query;
 
-    // Build filter
-    let filter = { 'customerDetails.email': userEmail };
+    // ========== FIXED: Check both possible email field locations ==========
+    // Build filter to check both 'customer.email' and 'customerDetails.email'
+    let filter = {
+        $or: [
+            { 'customer.email': userEmail },
+            { 'customerDetails.email': userEmail }
+        ]
+    };
     
     if (status && status !== 'all') {
         filter.status = status;
@@ -232,35 +243,76 @@ exports.getUserOrders = asyncHandler(async (req, res) => {
     const orders = await Order.find(filter)
         .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
         .skip(skip)
-        .limit(limitInt);
+        .limit(limitInt)
+        .lean(); // Use lean() for better performance
 
     // Get total count
     const total = await Order.countDocuments(filter);
 
-    // Transform orders for frontend
-    const transformedOrders = orders.map(order => ({
-        id: order._id,
-        orderNumber: order.orderNumber,
-        productName: order.productName,
-        productImage: order.productImage,
-        artisan: order.artisan,
-        price: order.productPrice,
-        status: order.status,
-        paymentStatus: order.paymentStatus,
-        paymentMethod: order.paymentMethod,
-        customerName: order.customerDetails.name,
-        customerAddress: `${order.customerDetails.address}, ${order.customerDetails.city}, ${order.customerDetails.state} - ${order.customerDetails.pincode}`,
-        customerPhone: order.customerDetails.phone,
-        customerMessage: order.customerDetails.message,
-        createdAt: order.createdAt,
-        formattedDate: order.createdAt.toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        }),
-        trackingInfo: order.contactHistory || [],
-        adminNotes: order.adminNotes || []
-    }));
+    // ========== FIXED: Transform orders with proper field mapping ==========
+    const transformedOrders = orders.map(order => {
+        // Get customer data from either location
+        const customerData = order.customer || order.customerDetails || {};
+        
+        // Get first item for product info
+        const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
+        
+        // Calculate total items
+        const totalItems = order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+
+        return {
+            id: order._id,
+            _id: order._id,
+            orderNumber: order.orderNumber || 'N/A',
+            productName: firstItem?.name || 'Product',
+            productImage: firstItem?.image || order.productImage || null,
+            artisan: firstItem?.artisanName || order.artisan || 'Unknown Artisan',
+            price: order.total || order.productPrice || 0,
+            total: order.total || 0,
+            status: order.status || 'pending',
+            paymentStatus: order.payment?.status || order.paymentStatus || 'pending',
+            paymentMethod: order.payment?.method || order.paymentMethod || 'cod',
+            customerName: customerData.name || 'Customer',
+            customerDetails: {
+                name: customerData.name || 'Customer',
+                email: customerData.email || '',
+                phone: customerData.phone || '',
+                address: customerData.shippingAddress?.street || customerData.address || '',
+                city: customerData.shippingAddress?.city || customerData.city || '',
+                state: customerData.shippingAddress?.state || customerData.state || '',
+                pincode: customerData.shippingAddress?.postalCode || customerData.pincode || '',
+                message: customerData.message || ''
+            },
+            customerFullAddress: customerData.shippingAddress ? 
+                `${customerData.shippingAddress.street || ''}, ${customerData.shippingAddress.city || ''}, ${customerData.shippingAddress.state || ''} - ${customerData.shippingAddress.postalCode || ''}` :
+                customerData.address || 'No address provided',
+            customerPhone: customerData.phone || '',
+            customerEmail: customerData.email || '',
+            customerMessage: customerData.message || '',
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
+            formattedDate: order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            }) : 'N/A',
+            trackingInfo: order.contactHistory || [],
+            adminNotes: order.notes || order.adminNotes || [],
+            items: order.items || [],
+            subtotal: order.subtotal || 0,
+            shippingCost: order.shippingCost || order.shipping?.shippingCost || 0,
+            tax: order.tax || 0,
+            discount: order.discount || 0,
+            totalItems: totalItems,
+            summary: {
+                subtotal: order.subtotal || 0,
+                shipping: order.shippingCost || order.shipping?.shippingCost || 0,
+                tax: order.tax || 0,
+                discount: order.discount || 0,
+                total: order.total || 0
+            }
+        };
+    });
 
     res.json({
         success: true,
@@ -282,9 +334,13 @@ exports.getOrderById = asyncHandler(async (req, res) => {
     const orderId = req.params.id;
     const userEmail = req.user.email;
 
+    // ========== FIXED: Check both possible email field locations ==========
     const order = await Order.findOne({
         _id: orderId,
-        'customerDetails.email': userEmail
+        $or: [
+            { 'customer.email': userEmail },
+            { 'customerDetails.email': userEmail }
+        ]
     });
 
     if (!order) {
@@ -294,37 +350,64 @@ exports.getOrderById = asyncHandler(async (req, res) => {
         });
     }
 
-    // Get order summary
-    const summary = order.getSummary();
+    // Get customer data
+    const customerData = order.customer || order.customerDetails || {};
+    const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
+
+    // Build response
+    const responseData = {
+        id: order._id,
+        _id: order._id,
+        orderNumber: order.orderNumber || 'N/A',
+        productName: firstItem?.name || 'Product',
+        productImage: firstItem?.image || order.productImage || null,
+        productPrice: order.total || order.productPrice || 0,
+        artisan: firstItem?.artisanName || order.artisan || 'Unknown Artisan',
+        productLocation: firstItem?.artisan?.location || order.productLocation || 'Not specified',
+        status: order.status || 'pending',
+        paymentStatus: order.payment?.status || order.paymentStatus || 'pending',
+        paymentMethod: order.payment?.method || order.paymentMethod || 'cod',
+        customerDetails: {
+            name: customerData.name || 'Customer',
+            email: customerData.email || '',
+            phone: customerData.phone || '',
+            address: customerData.shippingAddress?.street || customerData.address || '',
+            city: customerData.shippingAddress?.city || customerData.city || '',
+            state: customerData.shippingAddress?.state || customerData.state || '',
+            pincode: customerData.shippingAddress?.postalCode || customerData.pincode || '',
+            message: customerData.message || ''
+        },
+        customerFullAddress: customerData.shippingAddress ? 
+            `${customerData.shippingAddress.street || ''}, ${customerData.shippingAddress.city || ''}, ${customerData.shippingAddress.state || ''} - ${customerData.shippingAddress.postalCode || ''}` :
+            customerData.address || 'No address provided',
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        formattedDate: order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        }) : 'N/A',
+        adminNotes: order.notes || order.adminNotes || [],
+        contactHistory: order.contactHistory || [],
+        items: order.items || [],
+        subtotal: order.subtotal || 0,
+        shippingCost: order.shippingCost || order.shipping?.shippingCost || 0,
+        tax: order.tax || 0,
+        discount: order.discount || 0,
+        summary: {
+            subtotal: order.subtotal || 0,
+            shipping: order.shippingCost || order.shipping?.shippingCost || 0,
+            tax: order.tax || 0,
+            discount: order.discount || 0,
+            total: order.total || 0
+        }
+    };
 
     res.json({
         success: true,
-        data: {
-            id: order._id,
-            orderNumber: order.orderNumber,
-            productName: order.productName,
-            productImage: order.productImage,
-            productPrice: order.productPrice,
-            artisan: order.artisan,
-            productLocation: order.productLocation,
-            status: order.status,
-            paymentStatus: order.paymentStatus,
-            paymentMethod: order.paymentMethod,
-            customerDetails: order.customerDetails,
-            customerFullAddress: `${order.customerDetails.address}, ${order.customerDetails.city}, ${order.customerDetails.state} - ${order.customerDetails.pincode}`,
-            createdAt: order.createdAt,
-            updatedAt: order.updatedAt,
-            formattedDate: order.createdAt.toLocaleDateString('en-IN', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            }),
-            adminNotes: order.adminNotes || [],
-            contactHistory: order.contactHistory || [],
-            summary
-        }
+        data: responseData
     });
 });
 
@@ -336,9 +419,13 @@ exports.cancelOrder = asyncHandler(async (req, res) => {
     const userEmail = req.user.email;
     const { reason } = req.body;
 
+    // ========== FIXED: Check both possible email field locations ==========
     const order = await Order.findOne({
         _id: orderId,
-        'customerDetails.email': userEmail
+        $or: [
+            { 'customer.email': userEmail },
+            { 'customerDetails.email': userEmail }
+        ]
     });
 
     if (!order) {
@@ -362,7 +449,11 @@ exports.cancelOrder = asyncHandler(async (req, res) => {
     order.updatedAt = Date.now();
     
     // Add admin note about cancellation
-    order.adminNotes.push({
+    if (!order.notes) {
+        order.notes = [];
+    }
+    
+    order.notes.push({
         note: `Order cancelled by customer. Reason: ${reason || 'Not specified'}`,
         addedBy: req.user.username || 'Customer',
         createdAt: new Date()
