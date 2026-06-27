@@ -296,7 +296,7 @@ exports.getOrders = async (req, res) => {
       .select('orderNumber status createdAt customer items payment shipping')
       .populate({
         path: 'items.product',
-        select: 'name images price sku' // Include images field
+        select: 'name image images price sku' // Include both image and images fields
       })
       .lean();
 
@@ -307,14 +307,20 @@ exports.getOrders = async (req, res) => {
           item.artisan && item.artisan.toString() === artisan._id.toString()
         )
         .map(item => {
-          // Get product image from populated product or fallback
+          // Get product image - check multiple sources
           let productImage = null;
-          if (item.product && item.product.images && item.product.images.length > 0) {
-            productImage = item.product.images[0];
-          }
-          // If item has its own image, use that
-          if (item.image) {
+          
+          // 1. Check if item has its own image
+          if (item.image && item.image !== '') {
             productImage = item.image;
+          }
+          // 2. Check populated product's image field (singular)
+          else if (item.product && item.product.image && item.product.image !== '') {
+            productImage = item.product.image;
+          }
+          // 3. Check populated product's images array
+          else if (item.product && item.product.images && item.product.images.length > 0) {
+            productImage = item.product.images[0];
           }
 
           return {
@@ -324,6 +330,7 @@ exports.getOrders = async (req, res) => {
               name: item.product.name,
               price: item.product.price,
               sku: item.product.sku,
+              image: item.product.image,
               images: item.product.images
             } : null
           };
