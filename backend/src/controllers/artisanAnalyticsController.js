@@ -477,11 +477,11 @@ exports.updateOrderStatus = async (req, res) => {
     console.log('Artisan ID:', artisan._id.toString());
 
     // Validate status - allowed statuses for artisans
-    const artisanAllowedStatuses = ['confirmed', 'processing', 'ready_to_ship', 'cancelled'];
+    const artisanAllowedStatuses = ['confirmed', 'processing', 'ready_to_ship', 'cancelled', 'shipped', 'delivered'];
     if (!artisanAllowedStatuses.includes(status)) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Invalid status. Allowed: confirmed, processing, ready_to_ship, cancelled' 
+        message: 'Invalid status. Allowed: confirmed, processing, ready_to_ship, cancelled, shipped, delivered' 
       });
     }
 
@@ -519,7 +519,7 @@ exports.updateOrderStatus = async (req, res) => {
       'processing': ['ready_to_ship', 'cancelled'],
       'ready_for_shipment': ['shipped', 'cancelled'],
       'ready_to_ship': ['shipped', 'cancelled'],
-      'shipped': ['delivered'],
+      'shipped': ['delivered', 'cancelled'],
       'delivered': [],
       'cancelled': []
     };
