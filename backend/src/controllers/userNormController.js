@@ -419,7 +419,7 @@ exports.cancelOrder = asyncHandler(async (req, res) => {
     const userEmail = req.user.email;
     const { reason } = req.body;
 
-    // ========== FIXED: Check both possible email field locations ==========
+    // Find the order
     const order = await Order.findOne({
         _id: orderId,
         $or: [
@@ -448,15 +448,35 @@ exports.cancelOrder = asyncHandler(async (req, res) => {
     order.status = 'cancelled';
     order.updatedAt = Date.now();
     
-    // Add admin note about cancellation
+    // ========== FIXED: Use ObjectId for addedBy ==========
+    // Get the user's ObjectId from the request
+    const userId = req.user._id;
+    
+    // Initialize notes array if it doesn't exist
     if (!order.notes) {
         order.notes = [];
     }
     
+    // Add admin note about cancellation with proper ObjectId
     order.notes.push({
         note: `Order cancelled by customer. Reason: ${reason || 'Not specified'}`,
-        addedBy: req.user.username || 'Customer',
-        createdAt: new Date()
+        addedBy: userId, // This is now a valid ObjectId
+        type: 'customer_note',
+        createdAt: new Date(),
+        updatedAt: new Date()
+    });
+
+    // Also add to status history
+    if (!order.statusHistory) {
+        order.statusHistory = [];
+    }
+    
+    order.statusHistory.push({
+        status: 'cancelled',
+        changedBy: userId,
+        reason: reason || 'Cancelled by customer',
+        notes: `Order cancelled by customer from dashboard`,
+        changedAt: new Date()
     });
 
     await order.save();
