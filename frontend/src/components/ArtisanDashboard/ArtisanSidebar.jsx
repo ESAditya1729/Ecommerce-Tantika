@@ -15,7 +15,7 @@ import {
   Moon,
   Sun,
   UserCircle,
-  Eye // Added for view profile icon
+  Eye 
 } from 'lucide-react';
 
 const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCollapse, userName = "Artisan", artisanId }) => {
@@ -23,6 +23,7 @@ const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCol
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [showTooltip, setShowTooltip] = useState(null);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   // Load saved preference
   useEffect(() => {
@@ -30,6 +31,36 @@ const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCol
     if (saved !== null) {
       setIsCollapsed(JSON.parse(saved));
     }
+  }, []);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const token = localStorage.getItem('tantika_token');
+        if (!token) return;
+        
+        const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+        const response = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          setUnreadNotificationCount(data.count || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching unread count:', error);
+      }
+    };
+    
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const toggleCollapse = () => {
@@ -76,6 +107,15 @@ const ArtisanSidebar = ({ isOpen, onClose, currentTab, onTabChange, stats, onCol
       badge: stats?.activeOrders,
       description: 'Track & manage orders',
       gradient: 'from-amber-500 to-orange-500'
+    },
+    // ========== NEW: Notifications Tab ==========
+    { 
+      name: 'Notifications', 
+      icon: Bell, 
+      id: 'notifications', 
+      badge: unreadNotificationCount,
+      description: 'View all notifications',
+      gradient: 'from-rose-500 to-pink-500'
     },
     { 
       name: 'Analytics', 
@@ -238,6 +278,14 @@ const SidebarContent = ({
     onLogout();
   };
 
+  // Get badge color based on count
+  const getBadgeColor = (count) => {
+    if (count > 10) return 'bg-red-500';
+    if (count > 5) return 'bg-orange-500';
+    if (count > 0) return 'bg-amber-500';
+    return 'bg-gray-400';
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full relative">
       {/* Logo Section with Glass Effect */}
@@ -280,7 +328,7 @@ const SidebarContent = ({
         )}
       </div>
 
-      {/* View Public Profile Button - MOVED TO TOP */}
+      {/* View Public Profile Button */}
       {artisanId && (
         <div className="px-3 py-2 border-b border-amber-100/50">
           <button
@@ -291,28 +339,14 @@ const SidebarContent = ({
             title={isCollapsed ? 'View Public Profile' : ''}
             aria-label="View Public Profile"
           >
-            {/* Animated gradient background */}
             <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 opacity-90 group-hover:opacity-100 transition-opacity duration-300" />
-            
-            {/* Shine effect */}
             <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-            
-            {/* Icon */}
             <Eye className={`relative z-10 flex-shrink-0 transition-all duration-300 ${
               isCollapsed ? 'h-6 w-6' : 'h-5 w-5 mr-3'
             } text-white group-hover:scale-110`} />
-            
-            {/* Text */}
             {!isCollapsed && (
               <span className="relative z-10 text-sm font-medium text-white group-hover:text-white">
                 View Public Profile
-              </span>
-            )}
-            
-            {/* Badge */}
-            {!isCollapsed && (
-              <span className="relative z-10 ml-auto px-2 py-0.5 text-xs font-semibold bg-white/20 text-white rounded-full backdrop-blur-sm border border-white/30">
-                New
               </span>
             )}
           </button>
@@ -342,6 +376,8 @@ const SidebarContent = ({
         {navigation.map((item) => {
           const isActive = currentTab === item.id;
           const Icon = item.icon;
+          const hasBadge = item.badge && item.badge > 0;
+          const badgeColor = getBadgeColor(item.badge || 0);
           
           return (
             <div key={item.id} className="relative">
@@ -363,24 +399,20 @@ const SidebarContent = ({
                 {!isCollapsed && (
                   <>
                     <span className="flex-1 text-left text-sm font-medium">{item.name}</span>
-                    {item.badge > 0 && (
-                      <div className="relative">
-                        <span className={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full ${
-                          isActive 
-                            ? 'bg-white text-amber-600' 
-                            : 'bg-amber-100 text-amber-600'
-                        }`}>
-                          {item.badge}
+                    {hasBadge && (
+                      <div className="relative flex items-center gap-2">
+                        <span className={`inline-flex items-center justify-center min-w-[20px] px-2 py-0.5 text-xs font-bold text-white rounded-full ${badgeColor} animate-pulse`}>
+                          {item.badge > 99 ? '99+' : item.badge}
                         </span>
-                        <span className="absolute inset-0 rounded-full animate-ping bg-amber-400/30" />
+                        <span className={`absolute inset-0 rounded-full animate-ping ${badgeColor}/30`} />
                       </div>
                     )}
                   </>
                 )}
 
-                {isCollapsed && item.badge > 0 && (
-                  <span className="absolute top-1 right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold text-white bg-red-500 rounded-full">
-                    {item.badge}
+                {isCollapsed && hasBadge && (
+                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[20px] px-1.5 py-0.5 text-xs font-bold text-white rounded-full bg-red-500">
+                    {item.badge > 99 ? '99+' : item.badge}
                   </span>
                 )}
               </button>
@@ -389,7 +421,14 @@ const SidebarContent = ({
               {isCollapsed && showTooltip === item.id && (
                 <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap z-50 shadow-xl animate-fadeIn">
                   <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900" />
-                  <p className="font-semibold">{item.name}</p>
+                  <p className="font-semibold flex items-center gap-2">
+                    {item.name}
+                    {hasBadge && (
+                      <span className={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold text-white rounded-full ${badgeColor}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-gray-300 mt-0.5">{item.description}</p>
                 </div>
               )}

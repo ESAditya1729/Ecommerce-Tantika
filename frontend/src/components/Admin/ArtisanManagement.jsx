@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, MessageSquare, Users, Bell } from 'lucide-react';
 import { 
   fetchArtisans, 
   fetchArtisanStats, 
@@ -21,12 +21,15 @@ import ArtisanTable from './Artisan-Management/ArtisanTable';
 import ArtisanDetailModal from '../Modals/ArtisanDetailModal';
 import ActionModal from '../Modals/ArtisanActionModal';
 import EditModal from '../Modals/ArtisanEditModal';
+import ArtisanMessaging from './Artisan-Management/ArtisanMessaging';
+// ========== NEW IMPORT ==========
+import AdminNotificationHistory from './Artisan-Management/AdminNotificationHistory';
 
 const ArtisansManagement = () => {
   const [artisans, setArtisans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedArtisans, setSelectedArtisans] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -43,6 +46,7 @@ const ArtisansManagement = () => {
     pages: 0
   });
   const [topArtisans, setTopArtisans] = useState([]);
+  const [activeTab, setActiveTab] = useState('list');
   
   // Modal states
   const [selectedArtisan, setSelectedArtisan] = useState(null);
@@ -53,36 +57,63 @@ const ArtisansManagement = () => {
     artisan: null
   });
   const [editModalOpen, setEditModalOpen] = useState(false);
-
-  // Add refresh state for manual refreshes
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
+  // Load artisans on initial mount
   useEffect(() => {
+    console.log("🔄 Initial mount - loading artisans...");
     loadArtisans();
     loadStats();
+    setInitialLoadDone(true);
+  }, []);
+
+  // Load artisans when filters change
+  useEffect(() => {
+    if (initialLoadDone) {
+      console.log("🔄 Filters changed - reloading artisans...");
+      loadArtisans();
+    }
   }, [statusFilter, searchTerm, pagination.page, refreshTrigger]);
+
+  // Load artisans when switching to messaging tab
+  useEffect(() => {
+    if (activeTab === "messaging" && artisans.length === 0 && !loading) {
+      console.log("🔄 Switching to messaging tab - loading artisans...");
+      loadArtisans();
+    }
+  }, [activeTab]);
 
   const loadArtisans = async () => {
     try {
       setLoading(true);
-      
+
       const params = {
         page: pagination.page,
         limit: pagination.limit,
-        ...(searchTerm && { search: searchTerm })
+        ...(searchTerm && { search: searchTerm }),
+        ...(statusFilter && statusFilter !== 'all' && { status: statusFilter })
       };
+
+      console.log("📡 Fetching artisans with params:", params);
 
       const response = await fetchArtisans(statusFilter, params);
 
+      console.log("📦 API Response:", {
+        success: response.success,
+        artisansCount: response.data?.artisans?.length || 0,
+      });
+
       if (response.success) {
         const data = response.data;
+        console.log("📦 Artisans data:", data.artisans);
         setArtisans(data.artisans || []);
         setPagination(data.pagination || pagination);
       } else {
-        console.error('Failed to load artisans:', response.message);
+        console.error("Failed to load artisans:", response.message);
       }
     } catch (error) {
-      console.error('Error loading artisans:', error);
+      console.error("Error loading artisans:", error);
     } finally {
       setLoading(false);
     }
@@ -94,22 +125,19 @@ const ArtisansManagement = () => {
 
       if (response.success) {
         const data = response.data;
-        
-        // Create status map from backend response
+
         const statusMap = {
           pending: 0,
           approved: 0,
           rejected: 0,
-          suspended: 0
+          suspended: 0,
         };
-        
-        // Handle different response formats
+
         if (data.statusCounts) {
-          data.statusCounts.forEach(item => {
+          data.statusCounts.forEach((item) => {
             statusMap[item._id] = item.count;
           });
         } else if (data.counts) {
-          // Alternative format
           statusMap.pending = data.counts.pending || 0;
           statusMap.approved = data.counts.approved || 0;
           statusMap.rejected = data.counts.rejected || 0;
@@ -122,13 +150,13 @@ const ArtisansManagement = () => {
           approved: statusMap.approved,
           rejected: statusMap.rejected,
           suspended: statusMap.suspended,
-          newApplications: data.newApplications || 0
+          newApplications: data.newApplications || 0,
         });
 
         setTopArtisans(data.topArtisans || []);
       }
     } catch (error) {
-      console.error('Error loading stats:', error);
+      console.error("Error loading stats:", error);
     }
   };
 
@@ -136,43 +164,43 @@ const ArtisansManagement = () => {
     setActionModal({
       open: true,
       type,
-      artisan
+      artisan,
     });
   };
 
   const handleActionConfirm = async ({ reason, notes }) => {
     const { type, artisan } = actionModal;
-    
+
     try {
       let response;
-      
+
       switch (type) {
-        case 'approve':
-          response = await approveArtisan(artisan._id, { 
-            adminNotes: notes || 'Approved by admin via dashboard' 
+        case "approve":
+          response = await approveArtisan(artisan._id, {
+            adminNotes: notes || "Approved by admin via dashboard",
           });
           break;
-        case 'reject':
+        case "reject":
           if (!reason) {
-            alert('Please provide a rejection reason');
+            alert("Please provide a rejection reason");
             return;
           }
-          response = await rejectArtisan(artisan._id, { 
-            rejectionReason: reason 
+          response = await rejectArtisan(artisan._id, {
+            rejectionReason: reason,
           });
           break;
-        case 'suspend':
+        case "suspend":
           if (!reason) {
-            alert('Please provide a suspension reason');
+            alert("Please provide a suspension reason");
             return;
           }
-          response = await suspendArtisan(artisan._id, { 
-            suspensionReason: reason 
+          response = await suspendArtisan(artisan._id, {
+            suspensionReason: reason,
           });
           break;
-        case 'verifyBank':
-          response = await verifyBankDetails(artisan._id, { 
-            verificationNotes: notes 
+        case "verifyBank":
+          response = await verifyBankDetails(artisan._id, {
+            verificationNotes: notes,
           });
           break;
         default:
@@ -180,19 +208,16 @@ const ArtisansManagement = () => {
       }
 
       if (response.success) {
-        // Close modal first
         setActionModal({ open: false, type: null, artisan: null });
-        
-        // Refresh data
         await Promise.all([loadArtisans(), loadStats()]);
-        
         alert(`${type.charAt(0).toUpperCase() + type.slice(1)} successful!`);
       } else {
         alert(response.message || `Failed to ${type} artisan`);
       }
     } catch (error) {
       console.error(`Error ${type}ing artisan:`, error);
-      const errorMessage = error.message || `Failed to ${type} artisan. Please try again.`;
+      const errorMessage =
+        error.message || `Failed to ${type} artisan. Please try again.`;
       alert(errorMessage);
     }
   };
@@ -203,13 +228,13 @@ const ArtisansManagement = () => {
 
       if (response.success) {
         await Promise.all([loadArtisans(), loadStats()]);
-        alert('Artisan reactivated successfully!');
+        alert("Artisan reactivated successfully!");
       } else {
-        alert(response.message || 'Failed to reactivate artisan');
+        alert(response.message || "Failed to reactivate artisan");
       }
     } catch (error) {
-      console.error('Error reactivating artisan:', error);
-      alert('Failed to reactivate artisan.');
+      console.error("Error reactivating artisan:", error);
+      alert("Failed to reactivate artisan.");
     }
   };
 
@@ -218,28 +243,27 @@ const ArtisansManagement = () => {
       const response = await updateArtisan(selectedArtisan._id, formData);
 
       if (response.success) {
-        // Close modal and refresh
         setEditModalOpen(false);
         setSelectedArtisan(null);
         await loadArtisans();
-        alert('Artisan updated successfully!');
+        alert("Artisan updated successfully!");
       } else {
-        alert(response.message || 'Failed to update artisan');
+        alert(response.message || "Failed to update artisan");
       }
     } catch (error) {
-      console.error('Error updating artisan:', error);
-      alert('Failed to update artisan.');
+      console.error("Error updating artisan:", error);
+      alert("Failed to update artisan.");
     }
   };
 
   const handleBulkAction = async (action) => {
     if (selectedArtisans.length === 0) {
-      alert('Please select at least one artisan');
+      alert("Please select at least one artisan");
       return;
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to ${action} ${selectedArtisans.length} artisan(s)?`
+      `Are you sure you want to ${action} ${selectedArtisans.length} artisan(s)?`,
     );
 
     if (!confirmed) return;
@@ -256,162 +280,237 @@ const ArtisansManagement = () => {
       }
     } catch (error) {
       console.error(`Error bulk ${action}ing:`, error);
-      const errorMessage = error.message || `Failed to ${action} artisans. Please try again.`;
+      const errorMessage =
+        error.message || `Failed to ${action} artisans. Please try again.`;
       alert(errorMessage);
     }
   };
 
   const handleExport = () => {
-    // Implement export functionality
-    alert('Export functionality to be implemented');
+    alert("Export functionality to be implemented");
   };
 
   const handleRefresh = () => {
-    // Reset pagination to first page and trigger refresh
-    setPagination(prev => ({ ...prev, page: 1 }));
-    setRefreshTrigger(prev => prev + 1);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const handlePageChange = (newPage) => {
-    setPagination(prev => ({ ...prev, page: newPage }));
+    setPagination((prev) => ({ ...prev, page: newPage }));
   };
 
-  // Filter artisans by search term
-  const filteredArtisans = artisans.filter(artisan => {
+  // Filter artisans for list view
+  const filteredArtisans = artisans.filter((artisan) => {
     if (!searchTerm) return true;
-    
+
     const searchLower = searchTerm.toLowerCase();
     return (
-      (artisan.businessName?.toLowerCase().includes(searchLower)) ||
-      (artisan.ownerName?.toLowerCase().includes(searchLower)) ||
-      (artisan.email?.toLowerCase().includes(searchLower)) ||
-      (artisan.phone?.toLowerCase().includes(searchLower)) ||
-      (artisan.category?.toLowerCase().includes(searchLower))
+      artisan.businessName?.toLowerCase().includes(searchLower) ||
+      artisan.ownerName?.toLowerCase().includes(searchLower) ||
+      artisan.fullName?.toLowerCase().includes(searchLower) ||
+      artisan.email?.toLowerCase().includes(searchLower) ||
+      artisan.phone?.toLowerCase().includes(searchLower) ||
+      artisan.category?.toLowerCase().includes(searchLower)
     );
   });
+
+  // ========== UPDATED: Render tabs with History tab ==========
+  const renderTabs = () => (
+    <div className="border-b border-gray-200 mb-6">
+      <div className="flex space-x-6">
+        <button
+          onClick={() => setActiveTab("list")}
+          className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            activeTab === "list"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Users className="w-4 h-4 inline mr-2" />
+          Artisan List
+        </button>
+        <button
+          onClick={() => setActiveTab("messaging")}
+          className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            activeTab === "messaging"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <MessageSquare className="w-4 h-4 inline mr-2" />
+          Send Message
+        </button>
+        {/* ========== NEW: History Tab ========== */}
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            activeTab === "history"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Bell className="w-4 h-4 inline mr-2" />
+          Notification History
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Artisans Management</h2>
-          <p className="text-gray-600">Manage and review artisan applications and accounts</p>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Artisans Management
+          </h2>
+          <p className="text-gray-600">
+            Manage and review artisan applications and accounts
+          </p>
         </div>
         <div className="flex items-center space-x-3">
-          <button 
+          <button
             onClick={handleRefresh}
             disabled={loading}
             className={`px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 transition-colors ${
-              loading ? 'opacity-50 cursor-not-allowed' : ''
+              loading ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Loading...' : 'Refresh'}
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            {loading ? "Loading..." : "Refresh"}
           </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <ArtisanStatsCards 
-        stats={stats} 
-        loading={loading}
-      />
-
-      {/* Bulk Actions */}
-      <BulkActions
-        selectedCount={selectedArtisans.length}
-        onBulkApprove={() => handleBulkAction('approve')}
-        onBulkReject={() => handleBulkAction('reject')}
-        onBulkSuspend={() => handleBulkAction('suspend')}
-        onBulkReactivate={() => handleBulkAction('reactivate')}
-        onClearSelection={() => setSelectedArtisans([])}
-      />
-
-      {/* Top Performing Artisans */}
-      {statusFilter === 'approved' && topArtisans.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Top Performing Artisans</h3>
-            <span className="text-sm text-gray-500">By Total Sales</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {topArtisans.map((artisan, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
-                <div className="flex items-center mb-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-cyan-400 flex items-center justify-center text-white font-bold mr-3">
-                    {artisan.businessName?.charAt(0) || 'A'}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900 truncate">{artisan.businessName}</p>
-                    <div className="flex items-center text-sm text-gray-500">
-                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(artisan.status)}`}>
-                        {getStatusText(artisan.status)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Sales:</span>
-                    <span className="font-medium">{artisan.totalSales || 0}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Revenue:</span>
-                    <span className="font-medium">
-                      {new Intl.NumberFormat('en-IN', {
-                        style: 'currency',
-                        currency: 'INR',
-                        minimumFractionDigits: 0
-                      }).format(artisan.totalRevenue || 0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Stats Cards - Only show on list tab */}
+      {activeTab === "list" && (
+        <ArtisanStatsCards stats={stats} loading={loading} />
       )}
 
-      {/* Filters */}
-      <ArtisanFilters
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        statusFilter={statusFilter}
-        setStatusFilter={(value) => {
-          setStatusFilter(value);
-          setPagination(prev => ({ ...prev, page: 1 }));
-          setSelectedArtisans([]);
-        }}
-        onExport={handleExport}
-        onRefresh={handleRefresh}
-      />
+      {/* Tabs */}
+      {renderTabs()}
 
-      {/* Artisans Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <ArtisanTable
-          artisans={filteredArtisans}
+      {/* Tab Content */}
+      {activeTab === "list" ? (
+        <>
+          {/* Bulk Actions */}
+          <BulkActions
+            selectedCount={selectedArtisans.length}
+            onBulkApprove={() => handleBulkAction("approve")}
+            onBulkReject={() => handleBulkAction("reject")}
+            onBulkSuspend={() => handleBulkAction("suspend")}
+            onBulkReactivate={() => handleBulkAction("reactivate")}
+            onClearSelection={() => setSelectedArtisans([])}
+          />
+
+          {/* Top Performing Artisans */}
+          {statusFilter === "approved" && topArtisans.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Top Performing Artisans
+                </h3>
+                <span className="text-sm text-gray-500">By Total Sales</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {topArtisans.map((artisan, index) => (
+                  <div
+                    key={index}
+                    className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                  >
+                    <div className="flex items-center mb-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-cyan-400 flex items-center justify-center text-white font-bold mr-3">
+                        {artisan.businessName?.charAt(0) || "A"}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 truncate">
+                          {artisan.businessName}
+                        </p>
+                        <div className="flex items-center text-sm text-gray-500">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs ${getStatusColor(artisan.status)}`}
+                          >
+                            {getStatusText(artisan.status)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Sales:</span>
+                        <span className="font-medium">
+                          {artisan.totalSales || 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Revenue:</span>
+                        <span className="font-medium">
+                          {new Intl.NumberFormat("en-IN", {
+                            style: "currency",
+                            currency: "INR",
+                            minimumFractionDigits: 0,
+                          }).format(artisan.totalRevenue || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Filters */}
+          <ArtisanFilters
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            statusFilter={statusFilter}
+            setStatusFilter={(value) => {
+              setStatusFilter(value);
+              setPagination((prev) => ({ ...prev, page: 1 }));
+              setSelectedArtisans([]);
+            }}
+            onExport={handleExport}
+            onRefresh={handleRefresh}
+          />
+
+          {/* Artisans Table */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <ArtisanTable
+              artisans={filteredArtisans}
+              loading={loading}
+              statusFilter={statusFilter}
+              selectedArtisans={selectedArtisans}
+              setSelectedArtisans={setSelectedArtisans}
+              onViewDetails={(artisan) => {
+                setSelectedArtisan(artisan);
+                setDetailModalOpen(true);
+              }}
+              onApprove={(artisan) => handleActionClick("approve", artisan)}
+              onReject={(artisan) => handleActionClick("reject", artisan)}
+              onSuspend={(artisan) => handleActionClick("suspend", artisan)}
+              onVerifyBank={(artisan) =>
+                handleActionClick("verifyBank", artisan)
+              }
+              onReactivate={handleReactivate}
+              onEdit={(artisan) => {
+                setSelectedArtisan(artisan);
+                setEditModalOpen(true);
+              }}
+              pagination={pagination}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        </>
+      ) : activeTab === "messaging" ? (
+        <ArtisanMessaging
+          artisans={artisans} 
           loading={loading}
-          statusFilter={statusFilter}
-          selectedArtisans={selectedArtisans}
-          setSelectedArtisans={setSelectedArtisans}
-          onViewDetails={(artisan) => {
-            setSelectedArtisan(artisan);
-            setDetailModalOpen(true);
-          }}
-          onApprove={(artisan) => handleActionClick('approve', artisan)}
-          onReject={(artisan) => handleActionClick('reject', artisan)}
-          onSuspend={(artisan) => handleActionClick('suspend', artisan)}
-          onVerifyBank={(artisan) => handleActionClick('verifyBank', artisan)}
-          onReactivate={handleReactivate}
-          onEdit={(artisan) => {
-            setSelectedArtisan(artisan);
-            setEditModalOpen(true);
-          }}
-          pagination={pagination}
-          onPageChange={handlePageChange}
+          onRefresh={handleRefresh}
         />
-      </div>
+      ) : (
+        /* ========== NEW: History Tab ========== */
+        <AdminNotificationHistory />
+      )}
 
       {/* Modals */}
       <ArtisanDetailModal
@@ -427,7 +526,9 @@ const ArtisansManagement = () => {
         type={actionModal.type}
         artisan={actionModal.artisan}
         isOpen={actionModal.open}
-        onClose={() => setActionModal({ open: false, type: null, artisan: null })}
+        onClose={() =>
+          setActionModal({ open: false, type: null, artisan: null })
+        }
         onConfirm={handleActionConfirm}
       />
 
