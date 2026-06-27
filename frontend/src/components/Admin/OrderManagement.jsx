@@ -68,6 +68,8 @@ const OrderManagement = ({ refreshTrigger }) => {
   const fetchInProgress = useRef(false);
   const initialFetchDone = useRef(false);
   const abortControllerRef = useRef(null);
+  const loadingTimeoutRef = useRef(null);
+  const mountedRef = useRef(false);
 
   // Auth helpers
   const getAuthToken = useCallback(() => localStorage.getItem("tantika_token"), []);
@@ -89,15 +91,23 @@ const OrderManagement = ({ refreshTrigger }) => {
 
   // Cleanup
   useEffect(() => {
+    mountedRef.current = true;
+    isMounted.current = true;
+    
     return () => {
+      mountedRef.current = false;
       isMounted.current = false;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
     };
   }, []);
 
-  // Verify admin access
+  // Verify admin access - runs once
   useEffect(() => {
     const token = getAuthToken();
     const user = getCurrentUser();
@@ -107,7 +117,7 @@ const OrderManagement = ({ refreshTrigger }) => {
       setLoading(false);
       setInitialLoad(false);
     }
-  }, [getAuthToken, getCurrentUser, isCurrentUserAdmin]);
+  }, []); // Empty dependency - run once
 
   // Transform backend order to frontend format
   const transformOrder = useCallback((backendOrder) => {
@@ -225,11 +235,17 @@ const OrderManagement = ({ refreshTrigger }) => {
     }
   }, [getAuthToken, isCurrentUserAdmin]);
 
-  // ========== FIXED: Fetch orders with proper error handling ==========
+  // ========== FIXED: Main fetch function ==========
   const fetchOrders = useCallback(async (skipLoadingState = false) => {
     // Prevent concurrent fetches
     if (fetchInProgress.current) {
       console.log('⏳ Fetch already in progress');
+      return;
+    }
+    
+    // Check if component is mounted and user is admin
+    if (!isMounted.current) {
+      console.log('⏳ Component not mounted');
       return;
     }
     
@@ -256,6 +272,23 @@ const OrderManagement = ({ refreshTrigger }) => {
     setError(null);
     fetchInProgress.current = true;
 
+    // Clear any existing timeout
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+
+    // Safety timeout - force loading to false after 15 seconds
+    loadingTimeoutRef.current = setTimeout(() => {
+      if (isMounted.current && fetchInProgress.current) {
+        console.warn('⚠️ Fetch timeout - forcing loading to false');
+        setLoading(false);
+        setInitialLoad(false);
+        fetchInProgress.current = false;
+        setError('Request timed out. Please try again.');
+      }
+    }, 15000);
+
     try {
       const token = getAuthToken();
       if (!token) {
@@ -263,6 +296,11 @@ const OrderManagement = ({ refreshTrigger }) => {
         setError("Authentication required. Please log in.");
         setLoading(false);
         setInitialLoad(false);
+        fetchInProgress.current = false;
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
         return;
       }
 
@@ -289,8 +327,11 @@ const OrderManagement = ({ refreshTrigger }) => {
         }
       );
 
-      console.log('📦 Response status:', response.status);
-      console.log('📦 Response success:', response.data?.success);
+      // Clear the timeout since we got a response
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
 
       if (!isMounted.current) return;
 
@@ -325,6 +366,12 @@ const OrderManagement = ({ refreshTrigger }) => {
         setFilteredOrders([]);
       }
     } catch (error) {
+      // Clear the timeout
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+
       // Ignore aborted requests
       if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
         console.log('🔄 Request cancelled');
@@ -357,6 +404,7 @@ const OrderManagement = ({ refreshTrigger }) => {
       setOrders([]);
       setFilteredOrders([]);
     } finally {
+      // ========== FIXED: Ensure loading is set to false ==========
       if (isMounted.current) {
         console.log('✅ Setting loading to false');
         setLoading(false);
@@ -364,27 +412,57 @@ const OrderManagement = ({ refreshTrigger }) => {
         initialFetchDone.current = true;
       }
       fetchInProgress.current = false;
+      
+      // Clear any remaining timeout
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
     }
   }, [currentPage, itemsPerPage, filterStatus, searchTerm, transformOrder, fetchDashboardSummary, getAuthToken, isCurrentUserAdmin]);
 
-  // ========== FIXED: Initial fetch with immediate execution ==========
+  // ========== FIXED: Initial fetch - runs once on mount ==========
   useEffect(() => {
     console.log('🔄 Initial fetch useEffect triggered');
+    console.log('📊 State:', { 
+      initialFetchDone: initialFetchDone.current, 
+      fetchInProgress: fetchInProgress.current,
+      isAdmin: isCurrentUserAdmin(),
+      isMounted: isMounted.current
+    });
     
-    // Force fetch immediately
-    const doFetch = async () => {
-      if (!initialFetchDone.current && !fetchInProgress.current) {
+    // Reset fetch state on mount
+    initialFetchDone.current = false;
+    fetchInProgress.current = false;
+    setLoading(true);
+    setInitialLoad(true);
+    setError(null);
+    
+    // If not admin, show error
+    if (!isCurrentUserAdmin()) {
+      console.log('❌ Not admin, showing error');
+      setError("Admin access required. Please log in with an admin account.");
+      setLoading(false);
+      setInitialLoad(false);
+      return;
+    }
+
+    // Small delay to ensure everything is ready
+    const timer = setTimeout(() => {
+      if (isMounted.current && !fetchInProgress.current && !initialFetchDone.current) {
         console.log('🚀 Starting initial fetch');
-        await fetchOrders(false);
+        fetchOrders(false);
       }
-    };
-    
-    doFetch();
-    
-    // Cleanup
+    }, 100);
+
     return () => {
+      clearTimeout(timer);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+      }
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
       }
     };
   }, []); // Empty dependency - run once on mount
@@ -529,15 +607,23 @@ const OrderManagement = ({ refreshTrigger }) => {
   }, []);
 
   const handleRetry = useCallback(() => {
+    console.log('🔄 Manual retry');
     setCurrentPage(1);
     setError(null);
     initialFetchDone.current = false;
+    fetchInProgress.current = false;
+    setLoading(true);
+    setInitialLoad(true);
     fetchOrders(false);
   }, [fetchOrders]);
 
   const handleRefresh = useCallback(() => {
+    console.log('🔄 Manual refresh');
     setCurrentPage(1);
     initialFetchDone.current = false;
+    fetchInProgress.current = false;
+    setLoading(true);
+    setInitialLoad(true);
     fetchOrders(false);
   }, [fetchOrders]);
 
@@ -846,7 +932,7 @@ const OrderManagement = ({ refreshTrigger }) => {
     }
   }, [selectedOrders, filteredOrders]);
 
-  // ========== FIXED: Loading state with debug info ==========
+  // ========== FIXED: Loading state ==========
   if (initialLoad && loading) {
     return (
       <div className="p-6">
@@ -855,29 +941,12 @@ const OrderManagement = ({ refreshTrigger }) => {
           <p className="text-gray-600">Loading orders...</p>
           {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
           
-          {/* Debug Info */}
-          <div className="mt-6 p-4 bg-gray-100 rounded-lg text-xs text-left w-full max-w-md">
-            {/* <p className="font-semibold mb-2">🔍 Debug Info:</p>
-            <p>Loading: {loading ? 'true' : 'false'}</p>
-            <p>InitialLoad: {initialLoad ? 'true' : 'false'}</p>
-            <p>Orders: {orders.length}</p>
-            <p>API URL: {API_BASE_URL}</p>
-            <p>Token: {getAuthToken() ? '✅ Present' : '❌ Missing'}</p>
-            <p>User Role: {getCurrentUser()?.role || 'None'}</p>
-            <p>Is Admin: {isCurrentUserAdmin() ? '✅ Yes' : '❌ No'}</p>
-            <p>Fetch In Progress: {fetchInProgress.current ? 'true' : 'false'}</p>
-            <p>Initial Fetch Done: {initialFetchDone.current ? 'true' : 'false'}</p> */}
-            <button 
-              onClick={() => {
-                console.log('🔄 Manual retry');
-                initialFetchDone.current = false;
-                fetchOrders(false);
-              }}
-              className="mt-2 px-3 py-1 bg-blue-600 text-white rounded text-xs"
-            >
-              Retry Fetch
-            </button>
-          </div>
+          <button 
+            onClick={handleRetry}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
