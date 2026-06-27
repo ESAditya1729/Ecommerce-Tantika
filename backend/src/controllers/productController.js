@@ -420,7 +420,7 @@ exports.createProduct = async (req, res) => {
 
     // Validate category
     const validCategories = [
-      'Sarees', 'Home Decor', 'Bags', 'Sculptures', 'Clothing', 'Jewelry',
+      'Sarees', 'Home Decor', 'Bags', 'Sculptures', 'Clothing', 'Jewelry','Crochet Fashion',
       'Accessories', 'Pottery', 'Textiles', 'Art', 'Furniture', 'Stationery'
     ];
     
