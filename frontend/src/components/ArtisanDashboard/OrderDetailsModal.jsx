@@ -1,103 +1,199 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
-  Package, User, MapPin, Calendar, DollarSign,
-  Clock, MessageSquare, Phone, Mail, X,
-  ChevronRight, AlertCircle, Info, Truck,
-  CheckCircle, Award, Edit3, FileText
-} from 'lucide-react';
+  Package,
+  User,
+  MapPin,
+  Calendar,
+  DollarSign,
+  Clock,
+  MessageSquare,
+  Phone,
+  Mail,
+  X,
+  ChevronRight,
+  AlertCircle,
+  Info,
+  Truck,
+  CheckCircle,
+  Award,
+  Edit3,
+  FileText,
+  Eye,
+  Loader,
+} from "lucide-react";
+import axios from "axios";
 
-const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) => {
-  const [activeTab, setActiveTab] = useState('products');
-  const [newNote, setNewNote] = useState('');
+// API Base URL
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "https://ecommerce-tantika.onrender.com/api";
+
+const ArtisanOrderViewModal = ({
+  order,
+  onClose,
+  onUpdateStatus,
+  onAddNote,
+}) => {
+  const [activeTab, setActiveTab] = useState("products");
+  const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productDetails, setProductDetails] = useState({});
+  const [imageErrors, setImageErrors] = useState({});
+
+  // Fetch product details when modal opens
+  useEffect(() => {
+    if (order && order.items && order.items.length > 0) {
+      fetchProductDetails();
+    }
+  }, [order]);
+
+  const fetchProductDetails = async () => {
+    setLoadingProducts(true);
+    try {
+      const token = localStorage.getItem("tantika_token");
+
+      // Get product IDs from items
+      const productIds = order.items
+        .filter(
+          (item) =>
+            item.product &&
+            typeof item.product === "object" &&
+            item.product._id,
+        )
+        .map((item) => item.product._id);
+
+      if (productIds.length === 0) {
+        setLoadingProducts(false);
+        return;
+      }
+
+      // Fetch each product individually
+      const productPromises = productIds.map(async (productId) => {
+        try {
+          const response = await axios.get(
+            `${API_BASE_URL}/products/${productId}`,
+            {
+              headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+                "Content-Type": "application/json",
+              },
+            },
+          );
+          return { productId, data: response.data };
+        } catch (err) {
+          console.error(`Failed to fetch product ${productId}:`, err);
+          return { productId, data: null };
+        }
+      });
+
+      const results = await Promise.all(productPromises);
+      const productMap = {};
+      results.forEach(({ productId, data }) => {
+        if (data && data.success) {
+          productMap[productId] = data.data || data;
+        }
+      });
+
+      setProductDetails(productMap);
+    } catch (err) {
+      console.error("Error fetching product details:", err);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
 
   if (!order) return null;
 
-  // Status configuration (simplified for artisan)
+  // Status configuration with proper transitions for artisans
   const statusConfig = {
-    pending: { 
-      label: 'Pending', 
-      color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    pending: {
+      label: "Pending",
+      color: "bg-yellow-100 text-yellow-800 border-yellow-200",
       icon: Clock,
-      next: ['confirmed', 'cancelled']
+      // Artisan can confirm or cancel pending orders
+      next: ["confirmed", "cancelled"],
     },
-    confirmed: { 
-      label: 'Confirmed', 
-      color: 'bg-blue-100 text-blue-800 border-blue-200',
+    confirmed: {
+      label: "Confirmed",
+      color: "bg-blue-100 text-blue-800 border-blue-200",
       icon: CheckCircle,
-      next: ['processing', 'cancelled']
+      // Artisan can start processing or cancel
+      next: ["processing", "cancelled"],
     },
-    processing: { 
-      label: 'Processing', 
-      color: 'bg-purple-100 text-purple-800 border-purple-200',
+    processing: {
+      label: "Processing",
+      color: "bg-purple-100 text-purple-800 border-purple-200",
       icon: Package,
-      next: ['ready_to_ship', 'cancelled']
+      // Artisan can mark as ready to ship or cancel
+      next: ["ready_to_ship", "cancelled"],
     },
-    ready_to_ship: { 
-      label: 'Ready to Ship', 
-      color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    ready_to_ship: {
+      label: "Ready to Ship",
+      color: "bg-indigo-100 text-indigo-800 border-indigo-200",
       icon: Package,
-      next: ['shipped', 'cancelled']
+      // Artisan can mark as shipped or cancel
+      next: ["shipped", "cancelled"],
     },
-    shipped: { 
-      label: 'Shipped', 
-      color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    shipped: {
+      label: "Shipped",
+      color: "bg-cyan-100 text-cyan-800 border-cyan-200",
       icon: Truck,
-      next: []
+      // Artisan can mark as delivered
+      next: ["delivered"],
     },
-    delivered: { 
-      label: 'Delivered', 
-      color: 'bg-green-100 text-green-800 border-green-200',
+    delivered: {
+      label: "Delivered",
+      color: "bg-green-100 text-green-800 border-green-200",
       icon: CheckCircle,
-      next: []
+      next: [],
     },
-    cancelled: { 
-      label: 'Cancelled', 
-      color: 'bg-red-100 text-red-800 border-red-200',
+    cancelled: {
+      label: "Cancelled",
+      color: "bg-red-100 text-red-800 border-red-200",
       icon: X,
-      next: []
+      next: [],
     },
-    refunded: { 
-      label: 'Refunded', 
-      color: 'bg-gray-100 text-gray-800 border-gray-200',
+    refunded: {
+      label: "Refunded",
+      color: "bg-gray-100 text-gray-800 border-gray-200",
       icon: AlertCircle,
-      next: []
-    }
+      next: [],
+    },
   };
 
   // Payment status config
   const paymentConfig = {
-    pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
-    processing: { label: 'Processing', color: 'bg-blue-100 text-blue-800' },
-    completed: { label: 'Completed', color: 'bg-green-100 text-green-800' },
-    failed: { label: 'Failed', color: 'bg-red-100 text-red-800' },
-    refunded: { label: 'Refunded', color: 'bg-purple-100 text-purple-800' }
+    pending: { label: "Pending", color: "bg-yellow-100 text-yellow-800" },
+    processing: { label: "Processing", color: "bg-blue-100 text-blue-800" },
+    completed: { label: "Completed", color: "bg-green-100 text-green-800" },
+    failed: { label: "Failed", color: "bg-red-100 text-red-800" },
+    refunded: { label: "Refunded", color: "bg-purple-100 text-purple-800" },
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      return date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
     } catch {
-      return 'Invalid date';
+      return "Invalid date";
     }
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      maximumFractionDigits: 0,
     }).format(amount || 0);
   };
 
@@ -105,7 +201,9 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
     const config = statusConfig[status] || statusConfig.pending;
     const Icon = config.icon;
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${config.color}`}>
+      <span
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${config.color}`}
+      >
         <Icon className="h-3.5 w-3.5" />
         {config.label}
       </span>
@@ -115,7 +213,9 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
   const getPaymentBadge = (status) => {
     const config = paymentConfig[status] || paymentConfig.pending;
     return (
-      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${config.color}`}>
+      <span
+        className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${config.color}`}
+      >
         {config.label}
       </span>
     );
@@ -124,32 +224,36 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
   const getAvailableStatuses = () => {
     const currentConfig = statusConfig[order.status];
     if (!currentConfig || !currentConfig.next) return [];
-    
-    return currentConfig.next.map(status => ({
+
+    return currentConfig.next.map((status) => ({
       value: status,
-      label: statusConfig[status]?.label || status
+      label: statusConfig[status]?.label || status,
     }));
   };
 
   const calculateArtisanTotal = () => {
     if (!order.items || !Array.isArray(order.items)) return 0;
     return order.items.reduce((sum, item) => {
-      return sum + (item.totalPrice || (item.price * item.quantity) || 0);
+      return sum + (item.totalPrice || item.price * item.quantity || 0);
     }, 0);
   };
 
   const handleStatusUpdate = async (newStatus) => {
-    if (!window.confirm(`Are you sure you want to mark this order as ${statusConfig[newStatus]?.label}?`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to mark this order as ${statusConfig[newStatus]?.label}?`,
+      )
+    ) {
       return;
     }
 
     setUpdatingStatus(true);
-    setError('');
-    
+    setError("");
+
     try {
       await onUpdateStatus(order._id, newStatus);
     } catch (err) {
-      setError(err.message || 'Failed to update status');
+      setError(err.message || "Failed to update status");
     } finally {
       setUpdatingStatus(false);
     }
@@ -159,26 +263,120 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
     if (!newNote.trim()) return;
 
     setAddingNote(true);
-    setError('');
-    
+    setError("");
+
     try {
       await onAddNote(order._id, newNote);
-      setNewNote('');
+      setNewNote("");
     } catch (err) {
-      setError(err.message || 'Failed to add note');
+      setError(err.message || "Failed to add note");
     } finally {
       setAddingNote(false);
     }
   };
 
   const getCustomerInitials = (name) => {
-    if (!name) return '?';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    if (!name) return "?";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Get product image with multiple fallbacks
+  const getProductImage = (item) => {
+    // 1. Check if item has direct image
+    if (item.image && item.image !== "") {
+      return item.image;
+    }
+
+    // 2. Check if item has productImage from backend
+    if (item.productImage && item.productImage !== "") {
+      return item.productImage;
+    }
+
+    // 3. Check if we have product details from API
+    const productId = item.product?._id || item.productId;
+    if (productId && productDetails[productId]) {
+      const product = productDetails[productId];
+      // Check image field (singular) first - this is where the image is stored
+      if (product.image && product.image !== "") {
+        return product.image;
+      }
+      // Then check images array
+      if (product.images && product.images.length > 0) {
+        return product.images[0];
+      }
+    }
+
+    // 4. Check productDetails from the order
+    if (item.productDetails?.image && item.productDetails.image !== "") {
+      return item.productDetails.image;
+    }
+    if (item.productDetails?.images && item.productDetails.images.length > 0) {
+      return item.productDetails.images[0];
+    }
+
+    // 5. No image found
+    return null;
+  };
+
+  // Get product name
+  const getProductName = (item) => {
+    if (item.name && item.name !== "") return item.name;
+
+    const productId = item.product?._id || item.productId;
+    if (productId && productDetails[productId]) {
+      return productDetails[productId].name || "Product";
+    }
+
+    if (item.productDetails?.name) {
+      return item.productDetails.name;
+    }
+
+    return "Product";
+  };
+
+  // Get product price
+  const getProductPrice = (item) => {
+    if (item.price) return item.price;
+
+    const productId = item.product?._id || item.productId;
+    if (productId && productDetails[productId]) {
+      return productDetails[productId].price || 0;
+    }
+
+    if (item.productDetails?.price) {
+      return item.productDetails.price;
+    }
+
+    return 0;
+  };
+
+  // Get product ID
+  const getProductId = (item) => {
+    if (item.product && typeof item.product === "object" && item.product._id) {
+      return item.product._id;
+    }
+    if (typeof item.product === "string") {
+      return item.product;
+    }
+    if (item.productId) {
+      return item.productId;
+    }
+    return null;
+  };
+
+  // Handle image error
+  const handleImageError = (itemId) => {
+    setImageErrors((prev) => ({ ...prev, [itemId]: true }));
   };
 
   const availableStatuses = getAvailableStatuses();
 
-  // Products Tab
+  // ========== FIXED: Products Tab with proper View Product button ==========
   const renderProductsTab = () => (
     <div className="space-y-6">
       {/* Products List */}
@@ -189,77 +387,133 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
             Your Products in this Order
           </h3>
         </div>
-        
-        <div className="divide-y divide-gray-200">
-          {order.items?.map((item, index) => (
-            <div key={index} className="p-6 hover:bg-gray-50 transition-colors">
-              <div className="flex gap-4">
-                {/* Product Image */}
-                <div className="flex-shrink-0">
-                  {item.image ? (
-                    <img 
-                      src={item.image} 
-                      alt={item.name}
-                      className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = 'https://via.placeholder.com/80';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-20 h-20 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-center">
-                      <Package className="h-8 w-8 text-amber-400" />
-                    </div>
-                  )}
-                </div>
 
-                {/* Product Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h4 className="font-medium text-gray-900">{item.name}</h4>
-                      {item.variant && (
-                        <p className="text-sm text-gray-500 mt-0.5">Variant: {item.variant}</p>
-                      )}
-                      {item.sku && (
-                        <p className="text-xs text-gray-400 mt-1">SKU: {item.sku}</p>
+        {loadingProducts ? (
+          <div className="p-12 text-center">
+            <Loader className="h-8 w-8 animate-spin text-amber-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading product details...</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {order.items?.map((item, index) => {
+              const productId = getProductId(item);
+              const productImage = getProductImage(item);
+              const productName = getProductName(item);
+              const productPrice = getProductPrice(item);
+              const hasImageError = imageErrors[index];
+              const hasImage =
+                productImage && productImage !== "" && !hasImageError;
+
+              // ========== FIXED: Product view URL ==========
+              const productUrl = productId
+                ? `${window.location.origin}/product/${productId}`
+                : null;
+
+              return (
+                <div
+                  key={index}
+                  className="p-6 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex gap-4">
+                    {/* Product Image */}
+                    <div className="flex-shrink-0">
+                      {hasImage ? (
+                        <img
+                          src={productImage}
+                          alt={productName}
+                          className="w-24 h-24 object-cover rounded-lg border border-gray-200"
+                          onError={() => handleImageError(index)}
+                        />
+                      ) : (
+                        <div className="w-24 h-24 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-center">
+                          <Package className="h-10 w-10 text-amber-400" />
+                        </div>
                       )}
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">
-                        {formatCurrency(item.totalPrice || (item.price * item.quantity))}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {item.quantity} × {formatCurrency(item.price)}
-                      </p>
+
+                    {/* Product Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">
+                            {productName}
+                          </h4>
+                          {item.variant && (
+                            <p className="text-sm text-gray-500 mt-0.5">
+                              Variant: {item.variant}
+                            </p>
+                          )}
+                          {item.sku && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              SKU: {item.sku}
+                            </p>
+                          )}
+
+                          {/* ========== FIXED: View Product Button - Using <a> tag ========== */}
+                          {productUrl && (
+                            <a
+                              href={productUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View Product
+                            </a>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-900">
+                            {formatCurrency(
+                              item.totalPrice ||
+                                item.price * item.quantity ||
+                                productPrice * item.quantity,
+                            )}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {item.quantity} ×{" "}
+                            {formatCurrency(item.price || productPrice)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Product Specifications */}
+                      {item.specifications &&
+                        Object.keys(item.specifications).length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {Object.entries(item.specifications).map(
+                              ([key, value]) => (
+                                <span
+                                  key={key}
+                                  className="inline-flex items-center px-2 py-1 bg-amber-50 text-amber-700 rounded-md text-xs"
+                                >
+                                  {key}: {value}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        )}
                     </div>
                   </div>
-
-                  {/* Product Specifications */}
-                  {item.specifications && Object.keys(item.specifications).length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {Object.entries(item.specifications).map(([key, value]) => (
-                        <span key={key} className="inline-flex items-center px-2 py-1 bg-amber-50 text-amber-700 rounded-md text-xs">
-                          {key}: {value}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Order Summary */}
         <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
           <div className="flex justify-between items-center">
             <span className="text-gray-600">Total Items:</span>
-            <span className="font-medium text-gray-900">{order.items?.length || 0}</span>
+            <span className="font-medium text-gray-900">
+              {order.items?.length || 0}
+            </span>
           </div>
           <div className="flex justify-between items-center mt-2">
             <span className="text-gray-600">Your Subtotal:</span>
-            <span className="font-bold text-lg text-amber-600">{formatCurrency(calculateArtisanTotal())}</span>
+            <span className="font-bold text-lg text-amber-600">
+              {formatCurrency(calculateArtisanTotal())}
+            </span>
           </div>
         </div>
       </div>
@@ -270,7 +524,10 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
           <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">About this order</p>
-            <p>This order shows only your products. The customer may have ordered items from other artisans as well.</p>
+            <p>
+              This order shows only your products. The customer may have ordered
+              items from other artisans as well.
+            </p>
           </div>
         </div>
       </div>
@@ -289,8 +546,13 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
             </span>
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">{order.customer?.name || 'Customer'}</h3>
-            <p className="text-sm text-gray-500 mt-1">Customer since {formatDate(order.customer?.createdAt).split(',')[0]}</p>
+            <h3 className="text-xl font-semibold text-gray-900">
+              {order.customer?.name || "Customer"}
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Customer since{" "}
+              {formatDate(order.customer?.createdAt).split(",")[0]}
+            </p>
           </div>
         </div>
       </div>
@@ -311,13 +573,16 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Email</p>
-                <a href={`mailto:${order.customer.email}`} className="text-sm font-medium text-gray-900 hover:text-amber-600">
+                <a
+                  href={`mailto:${order.customer.email}`}
+                  className="text-sm font-medium text-gray-900 hover:text-amber-600"
+                >
                   {order.customer.email}
                 </a>
               </div>
             </div>
           )}
-          
+
           {order.customer?.phone && (
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
@@ -325,7 +590,10 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Phone</p>
-                <a href={`tel:${order.customer.phone}`} className="text-sm font-medium text-gray-900 hover:text-amber-600">
+                <a
+                  href={`tel:${order.customer.phone}`}
+                  className="text-sm font-medium text-gray-900 hover:text-amber-600"
+                >
                   {order.customer.phone}
                 </a>
               </div>
@@ -343,11 +611,17 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
           </h3>
         </div>
         <div className="p-6">
-          <p className="text-gray-900 font-medium">{order.customer?.shippingAddress?.street}</p>
-          <p className="text-gray-600 mt-1">
-            {order.customer?.shippingAddress?.city}, {order.customer?.shippingAddress?.state} - {order.customer?.shippingAddress?.postalCode}
+          <p className="text-gray-900 font-medium">
+            {order.customer?.shippingAddress?.street}
           </p>
-          <p className="text-gray-600">{order.customer?.shippingAddress?.country || 'India'}</p>
+          <p className="text-gray-600 mt-1">
+            {order.customer?.shippingAddress?.city},{" "}
+            {order.customer?.shippingAddress?.state} -{" "}
+            {order.customer?.shippingAddress?.postalCode}
+          </p>
+          <p className="text-gray-600">
+            {order.customer?.shippingAddress?.country || "India"}
+          </p>
         </div>
       </div>
 
@@ -357,7 +631,7 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
         <div className="flex flex-wrap gap-3">
           {order.customer?.phone && (
             <a
-              href={`https://wa.me/${order.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${order.customer?.name}, regarding your order ${order.orderNumber}`)}`}
+              href={`https://wa.me/${order.customer.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hello ${order.customer?.name}, regarding your order ${order.orderNumber}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -409,7 +683,9 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
             {order.payment?.status && (
               <div>
                 <p className="text-sm text-gray-500">Payment Status</p>
-                <div className="mt-2">{getPaymentBadge(order.payment.status)}</div>
+                <div className="mt-2">
+                  {getPaymentBadge(order.payment.status)}
+                </div>
               </div>
             )}
           </div>
@@ -417,22 +693,37 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
           {/* Status Update */}
           {availableStatuses.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-sm font-medium text-gray-700 mb-3">Update Status</p>
+              <p className="text-sm font-medium text-gray-700 mb-3">
+                Update Status
+              </p>
               <div className="flex flex-wrap gap-2">
-                {availableStatuses.map((status) => (
-                  <button
-                    key={status.value}
-                    onClick={() => handleStatusUpdate(status.value)}
-                    disabled={updatingStatus}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      status.value === 'cancelled'
-                        ? 'bg-red-600 text-white hover:bg-red-700'
-                        : statusConfig[status.value]?.color.replace('text-', 'text-white bg-').replace('border-', '')
-                    }`}
-                  >
-                    {status.label}
-                  </button>
-                ))}
+                {availableStatuses.map((status) => {
+                  const bgColor =
+                    status.value === "cancelled"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : status.value === "confirmed"
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : status.value === "processing"
+                          ? "bg-purple-600 hover:bg-purple-700"
+                          : status.value === "ready_to_ship"
+                            ? "bg-indigo-600 hover:bg-indigo-700"
+                            : status.value === "shipped"
+                              ? "bg-cyan-600 hover:bg-cyan-700"
+                              : status.value === "delivered"
+                                ? "bg-green-600 hover:bg-green-700"
+                                : "bg-gray-600 hover:bg-gray-700";
+
+                  return (
+                    <button
+                      key={status.value}
+                      onClick={() => handleStatusUpdate(status.value)}
+                      disabled={updatingStatus}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium text-white transition-all ${bgColor} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {status.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -451,21 +742,29 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-gray-500">Order Number</p>
-              <p className="font-medium text-gray-900 mt-1">{order.orderNumber || 'N/A'}</p>
+              <p className="font-medium text-gray-900 mt-1">
+                {order.orderNumber || "N/A"}
+              </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Order Date</p>
-              <p className="font-medium text-gray-900 mt-1">{formatDate(order.createdAt)}</p>
+              <p className="font-medium text-gray-900 mt-1">
+                {formatDate(order.createdAt)}
+              </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Payment Method</p>
               <p className="font-medium text-gray-900 mt-1 uppercase">
-                {order.payment?.method === 'cod' ? 'Cash on Delivery' : order.payment?.method || 'N/A'}
+                {order.payment?.method === "cod"
+                  ? "Cash on Delivery"
+                  : order.payment?.method || "N/A"}
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Amount</p>
-              <p className="font-bold text-lg text-amber-600 mt-1">{formatCurrency(order.total || calculateArtisanTotal())}</p>
+              <p className="font-bold text-lg text-amber-600 mt-1">
+                {formatCurrency(order.total || calculateArtisanTotal())}
+              </p>
             </div>
           </div>
         </div>
@@ -486,23 +785,31 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
                 <CheckCircle className="h-3 w-3 text-green-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Order Placed</p>
-                <p className="text-xs text-gray-500 mt-0.5">{formatDate(order.createdAt)}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  Order Placed
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {formatDate(order.createdAt)}
+                </p>
               </div>
             </div>
-            
+
             {order.statusHistory?.map((history, index) => (
               <div key={index} className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Clock className="h-3 w-3 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 capitalize">{history.status}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{formatDate(history.changedAt)}</p>
+                  <p className="text-sm font-medium text-gray-900 capitalize">
+                    {history.status}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {formatDate(history.changedAt)}
+                  </p>
                 </div>
               </div>
             ))}
-            
+
             {order.shipping?.shippedAt && (
               <div className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -510,11 +817,13 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900">Shipped</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{formatDate(order.shipping.shippedAt)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {formatDate(order.shipping.shippedAt)}
+                  </p>
                 </div>
               </div>
             )}
-            
+
             {order.shipping?.deliveredAt && (
               <div className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -522,7 +831,9 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900">Delivered</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{formatDate(order.shipping.deliveredAt)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {formatDate(order.shipping.deliveredAt)}
+                  </p>
                 </div>
               </div>
             )}
@@ -546,7 +857,10 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
         <div className="divide-y divide-gray-200">
           {order.notes?.length > 0 ? (
             order.notes.map((note, index) => (
-              <div key={index} className="p-6 hover:bg-gray-50 transition-colors">
+              <div
+                key={index}
+                className="p-6 hover:bg-gray-50 transition-colors"
+              >
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <MessageSquare className="h-4 w-4 text-amber-600" />
@@ -554,7 +868,9 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-900">{note.note}</p>
                     <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                      <span className="capitalize">{note.type?.replace(/_/g, ' ') || 'Note'}</span>
+                      <span className="capitalize">
+                        {note.type?.replace(/_/g, " ") || "Note"}
+                      </span>
                       <span>•</span>
                       <span>{formatDate(note.createdAt)}</span>
                       {note.addedBy && (
@@ -574,14 +890,16 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
                 <MessageSquare className="h-8 w-8 text-amber-600" />
               </div>
               <p className="text-gray-600">No notes yet for this order</p>
-              <p className="text-sm text-gray-400 mt-1">Add a note to keep track of important information</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Add a note to keep track of important information
+              </p>
             </div>
           )}
         </div>
       </div>
 
       {/* Add Note */}
-      {!['delivered', 'cancelled', 'refunded'].includes(order.status) && (
+      {!["delivered", "cancelled", "refunded"].includes(order.status) && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="font-medium text-gray-900 mb-4">Add a Note</h3>
           <div className="space-y-4">
@@ -619,13 +937,13 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'products':
+      case "products":
         return renderProductsTab();
-      case 'customer':
+      case "customer":
         return renderCustomerTab();
-      case 'details':
+      case "details":
         return renderDetailsTab();
-      case 'notes':
+      case "notes":
         return renderNotesTab();
       default:
         return renderProductsTab();
@@ -634,15 +952,17 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl animate-scaleIn">
+      <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-5 flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-gray-900">Order Details</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-2xl font-bold text-gray-900">
+                Order Details
+              </h2>
               {getStatusBadge(order.status)}
             </div>
-            <p className="text-gray-500 mt-1 flex items-center gap-2">
+            <p className="text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
               <span className="font-medium">{order.orderNumber}</span>
               <span>•</span>
               <span>{formatDate(order.createdAt)}</span>
@@ -661,7 +981,10 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
           <div className="mx-8 mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
             <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
             <p className="text-sm text-red-700 flex-1">{error}</p>
-            <button onClick={() => setError('')} className="text-red-500 hover:text-red-700">
+            <button
+              onClick={() => setError("")}
+              className="text-red-500 hover:text-red-700"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -671,44 +994,44 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
         <div className="border-b border-gray-200 px-8 mt-2">
           <div className="flex gap-8 overflow-x-auto scrollbar-hide">
             <button
-              onClick={() => setActiveTab('products')}
+              onClick={() => setActiveTab("products")}
               className={`py-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                activeTab === 'products'
-                  ? 'border-amber-600 text-amber-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                activeTab === "products"
+                  ? "border-amber-600 text-amber-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
               <Package className="h-4 w-4 inline mr-2" />
               Products
             </button>
             <button
-              onClick={() => setActiveTab('customer')}
+              onClick={() => setActiveTab("customer")}
               className={`py-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                activeTab === 'customer'
-                  ? 'border-amber-600 text-amber-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                activeTab === "customer"
+                  ? "border-amber-600 text-amber-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
               <User className="h-4 w-4 inline mr-2" />
               Customer
             </button>
             <button
-              onClick={() => setActiveTab('details')}
+              onClick={() => setActiveTab("details")}
               className={`py-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                activeTab === 'details'
-                  ? 'border-amber-600 text-amber-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                activeTab === "details"
+                  ? "border-amber-600 text-amber-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
               <FileText className="h-4 w-4 inline mr-2" />
               Details
             </button>
             <button
-              onClick={() => setActiveTab('notes')}
+              onClick={() => setActiveTab("notes")}
               className={`py-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                activeTab === 'notes'
-                  ? 'border-amber-600 text-amber-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                activeTab === "notes"
+                  ? "border-amber-600 text-amber-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
               <MessageSquare className="h-4 w-4 inline mr-2" />
@@ -723,7 +1046,10 @@ const ArtisanOrderViewModal = ({ order, onClose, onUpdateStatus, onAddNote }) =>
         </div>
 
         {/* Content */}
-        <div className="p-8 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+        <div
+          className="p-8 overflow-y-auto"
+          style={{ maxHeight: "calc(90vh - 180px)" }}
+        >
           {renderTabContent()}
         </div>
 
