@@ -32,7 +32,7 @@ const OrderHistoryModal = ({
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
 
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://ecommerce-tantika.onrender.com/api';
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -79,7 +79,58 @@ const OrderHistoryModal = ({
       const data = await response.json();
       
       if (data.success) {
-        setOrders(data.data || []);
+        // ========== FIXED: Transform order data to match frontend expectations ==========
+        const transformedOrders = (data.data || []).map(order => ({
+          id: order.id || order._id,
+          _id: order._id,
+          orderNumber: order.orderNumber || 'N/A',
+          productName: order.productName || order.items?.[0]?.name || 'Product',
+          productImage: order.productImage || order.items?.[0]?.image || null,
+          artisan: order.artisan || order.items?.[0]?.artisanName || 'Unknown Artisan',
+          price: order.price || order.total || order.productPrice || 0,
+          total: order.total || order.productPrice || 0,
+          status: order.status || 'pending',
+          paymentStatus: order.paymentStatus || order.payment?.status || 'pending',
+          paymentMethod: order.paymentMethod || order.payment?.method || 'cod',
+          customerName: order.customerName || order.customer?.name || order.customerDetails?.name || 'Customer',
+          customerDetails: order.customerDetails || order.customer || {
+            name: 'Customer',
+            email: '',
+            phone: '',
+            address: '',
+            city: '',
+            state: '',
+            pincode: '',
+            message: ''
+          },
+          customerFullAddress: order.customerFullAddress || 
+            `${order.customerDetails?.address || ''}, ${order.customerDetails?.city || ''}, ${order.customerDetails?.state || ''} - ${order.customerDetails?.pincode || ''}`,
+          customerPhone: order.customerPhone || order.customer?.phone || order.customerDetails?.phone || '',
+          customerEmail: order.customerEmail || order.customer?.email || order.customerDetails?.email || '',
+          customerMessage: order.customerMessage || order.customerDetails?.message || '',
+          createdAt: order.createdAt,
+          formattedDate: order.formattedDate || new Date(order.createdAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          }),
+          trackingInfo: order.trackingInfo || order.contactHistory || [],
+          adminNotes: order.adminNotes || order.notes || [],
+          items: order.items || [],
+          subtotal: order.subtotal || 0,
+          shippingCost: order.shippingCost || order.shipping?.shippingCost || 0,
+          tax: order.tax || 0,
+          discount: order.discount || 0,
+          summary: {
+            total: order.total || order.productPrice || 0,
+            subtotal: order.subtotal || 0,
+            shipping: order.shippingCost || order.shipping?.shippingCost || 0,
+            tax: order.tax || 0,
+            discount: order.discount || 0
+          }
+        }));
+        
+        setOrders(transformedOrders);
         setTotalPages(data.pagination?.pages || 1);
       } else {
         throw new Error(data.message || 'Failed to load orders');
@@ -119,7 +170,52 @@ const OrderHistoryModal = ({
       const data = await response.json();
       
       if (data.success) {
-        setSelectedOrder(data.data);
+        // ========== FIXED: Transform order details ==========
+        const orderData = data.data;
+        setSelectedOrder({
+          id: orderData.id || orderData._id,
+          _id: orderData._id,
+          orderNumber: orderData.orderNumber || 'N/A',
+          productName: orderData.productName || orderData.items?.[0]?.name || 'Product',
+          productImage: orderData.productImage || orderData.items?.[0]?.image || null,
+          productPrice: orderData.productPrice || orderData.total || 0,
+          artisan: orderData.artisan || orderData.items?.[0]?.artisanName || 'Unknown Artisan',
+          productLocation: orderData.productLocation || 'Not specified',
+          status: orderData.status || 'pending',
+          paymentStatus: orderData.paymentStatus || orderData.payment?.status || 'pending',
+          paymentMethod: orderData.paymentMethod || orderData.payment?.method || 'cod',
+          customerDetails: orderData.customerDetails || orderData.customer || {
+            name: 'Customer',
+            email: '',
+            phone: '',
+            address: '',
+            city: '',
+            state: '',
+            pincode: '',
+            message: ''
+          },
+          customerFullAddress: orderData.customerFullAddress || 
+            `${orderData.customerDetails?.address || ''}, ${orderData.customerDetails?.city || ''}, ${orderData.customerDetails?.state || ''} - ${orderData.customerDetails?.pincode || ''}`,
+          createdAt: orderData.createdAt,
+          updatedAt: orderData.updatedAt,
+          formattedDate: orderData.formattedDate || new Date(orderData.createdAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          adminNotes: orderData.adminNotes || orderData.notes || [],
+          contactHistory: orderData.contactHistory || [],
+          items: orderData.items || [],
+          summary: orderData.summary || {
+            total: orderData.productPrice || 0,
+            subtotal: orderData.subtotal || 0,
+            shipping: orderData.shippingCost || 0,
+            tax: orderData.tax || 0,
+            discount: orderData.discount || 0
+          }
+        });
         setShowOrderDetails(true);
       } else {
         throw new Error(data.message || 'Failed to load order details');
@@ -276,16 +372,16 @@ const OrderHistoryModal = ({
               <h3 className="text-xl font-bold text-gray-900">Order #{selectedOrder.orderNumber}</h3>
               <p className="text-gray-600">Placed on {formatDateTime(selectedOrder.createdAt)}</p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 flex-wrap gap-2">
               <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(selectedOrder.status)}`}>
                 {getStatusText(selectedOrder.status)}
               </span>
               <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                selectedOrder.paymentStatus === 'paid' 
+                selectedOrder.paymentStatus === 'paid' || selectedOrder.paymentStatus === 'completed'
                   ? 'bg-green-100 text-green-800' 
                   : 'bg-yellow-100 text-yellow-800'
               }`}>
-                {selectedOrder.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                {selectedOrder.paymentStatus === 'paid' || selectedOrder.paymentStatus === 'completed' ? 'Paid' : 'Pending'}
               </span>
             </div>
           </div>
@@ -315,10 +411,24 @@ const OrderHistoryModal = ({
               <p className="text-gray-600 mt-1">Artisan: {selectedOrder.artisan || 'Unknown Artisan'}</p>
               <p className="text-gray-600">Location: {selectedOrder.productLocation || 'Not specified'}</p>
               <div className="mt-3 text-2xl font-bold text-gray-900">
-                ₹{selectedOrder.productPrice?.toLocaleString()}
+                ₹{selectedOrder.productPrice?.toLocaleString() || selectedOrder.summary?.total?.toLocaleString()}
               </div>
             </div>
           </div>
+          {/* Show items if there are multiple */}
+          {selectedOrder.items && selectedOrder.items.length > 1 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm font-medium text-gray-700 mb-2">All Items:</p>
+              <div className="space-y-2">
+                {selectedOrder.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <span>{item.name} x{item.quantity}</span>
+                    <span className="font-medium">₹{item.totalPrice || (item.price * item.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Customer Details */}
@@ -330,21 +440,19 @@ const OrderHistoryModal = ({
           <div className="space-y-3">
             <div>
               <p className="text-sm text-gray-500">Customer Name</p>
-              <p className="font-medium text-gray-900">{selectedOrder.customerDetails?.name}</p>
+              <p className="font-medium text-gray-900">{selectedOrder.customerDetails?.name || 'N/A'}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Phone Number</p>
-              <p className="font-medium text-gray-900">{selectedOrder.customerDetails?.phone}</p>
+              <p className="font-medium text-gray-900">{selectedOrder.customerDetails?.phone || 'N/A'}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Email</p>
-              <p className="font-medium text-gray-900">{selectedOrder.customerDetails?.email}</p>
+              <p className="font-medium text-gray-900">{selectedOrder.customerDetails?.email || 'N/A'}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Address</p>
-              <p className="font-medium text-gray-900">{selectedOrder.customerFullAddress || 
-                `${selectedOrder.customerDetails?.address || ''}, ${selectedOrder.customerDetails?.city || ''}, ${selectedOrder.customerDetails?.state || ''} - ${selectedOrder.customerDetails?.pincode || ''}`}
-              </p>
+              <p className="font-medium text-gray-900">{selectedOrder.customerFullAddress || 'No address provided'}</p>
             </div>
             {selectedOrder.customerDetails?.message && (
               <div>
@@ -369,7 +477,7 @@ const OrderHistoryModal = ({
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">Product Price</span>
-              <span className="font-medium">₹{selectedOrder.productPrice?.toLocaleString()}</span>
+              <span className="font-medium">₹{selectedOrder.productPrice?.toLocaleString() || selectedOrder.summary?.subtotal?.toLocaleString() || 0}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Shipping</span>
@@ -379,13 +487,19 @@ const OrderHistoryModal = ({
               <span className="text-gray-600">Tax</span>
               <span className="font-medium">₹{selectedOrder.summary?.tax || 0}</span>
             </div>
+            {selectedOrder.summary?.discount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Discount</span>
+                <span className="font-medium text-green-600">-₹{selectedOrder.summary.discount}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-lg pt-2 border-t">
               <span>Total Amount</span>
-              <span>₹{selectedOrder.summary?.total || selectedOrder.productPrice}</span>
+              <span>₹{selectedOrder.summary?.total?.toLocaleString() || selectedOrder.productPrice?.toLocaleString() || 0}</span>
             </div>
             <div className="flex justify-between pt-2">
               <span className="text-gray-600">Payment Method</span>
-              <span className="font-medium">{selectedOrder.paymentMethod || 'Not specified'}</span>
+              <span className="font-medium uppercase">{selectedOrder.paymentMethod || 'Not specified'}</span>
             </div>
           </div>
         </div>
@@ -397,10 +511,10 @@ const OrderHistoryModal = ({
             <div className="space-y-3">
               {selectedOrder.adminNotes.map((note, index) => (
                 <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-gray-900">{note.note}</p>
+                  <p className="text-gray-900">{typeof note === 'string' ? note : note.note || note.message || 'No note content'}</p>
                   <div className="flex justify-between items-center mt-2 text-sm text-gray-500">
-                    <span>By: {note.addedBy}</span>
-                    <span>{formatDateTime(note.createdAt)}</span>
+                    <span>By: {note.addedBy || note.by || 'Admin'}</span>
+                    <span>{formatDateTime(note.createdAt || note.timestamp)}</span>
                   </div>
                 </div>
               ))}
@@ -426,13 +540,13 @@ const OrderHistoryModal = ({
             </button>
           )}
           
-          <Link
+          {/* <Link
             to={`/orders/${selectedOrder.id}`}
             onClick={onClose}
             className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300 text-center"
           >
             View Full Details
-          </Link>
+          </Link> */}
         </div>
       </div>
     );
@@ -528,7 +642,7 @@ const OrderHistoryModal = ({
                           {getStatusIcon(order.status)}
                         </div>
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <h4 className="font-bold text-gray-900 text-lg">
                               {order.productName}
                             </h4>
@@ -558,14 +672,14 @@ const OrderHistoryModal = ({
                     <div className="flex flex-col items-end justify-between">
                       <div className="text-right mb-3">
                         <div className="text-2xl font-bold text-gray-900">
-                          ₹{order.price?.toLocaleString()}
+                          ₹{order.price?.toLocaleString() || order.total?.toLocaleString()}
                         </div>
                         <div className={`text-sm mt-1 ${
-                          order.paymentStatus === 'paid' 
+                          order.paymentStatus === 'paid' || order.paymentStatus === 'completed'
                             ? 'text-green-600' 
                             : 'text-yellow-600'
                         }`}>
-                          {order.paymentStatus === 'paid' ? '✓ Paid' : 'Payment Pending'}
+                          {order.paymentStatus === 'paid' || order.paymentStatus === 'completed' ? '✓ Paid' : 'Payment Pending'}
                         </div>
                       </div>
                       
@@ -641,14 +755,14 @@ const OrderHistoryModal = ({
                   Close
                 </button>
                 
-                <Link
+                {/* <Link
                   to="/orders"
                   onClick={onClose}
                   className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300 flex items-center justify-center"
                 >
                   View All Orders
                   <ExternalLink className="w-4 h-4 ml-2" />
-                </Link>
+                </Link> */}
               </div>
             </div>
           </>
