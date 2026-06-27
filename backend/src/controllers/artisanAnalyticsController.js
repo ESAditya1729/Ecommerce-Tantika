@@ -288,19 +288,46 @@ exports.getOrders = async (req, res) => {
     // Get total count
     const total = await Order.countDocuments(matchFilter);
 
-    // Get paginated orders
+    // Get paginated orders with product population
     const orders = await Order.find(matchFilter)
       .sort({ createdAt: -1 })
       .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit))
       .select('orderNumber status createdAt customer items payment shipping')
+      .populate({
+        path: 'items.product',
+        select: 'name images price sku' // Include images field
+      })
       .lean();
 
     // Filter items for this artisan only and calculate totals
     const formattedOrders = orders.map(order => {
-      const artisanItems = order.items.filter(item => 
-        item.artisan && item.artisan.toString() === artisan._id.toString()
-      );
+      const artisanItems = order.items
+        .filter(item => 
+          item.artisan && item.artisan.toString() === artisan._id.toString()
+        )
+        .map(item => {
+          // Get product image from populated product or fallback
+          let productImage = null;
+          if (item.product && item.product.images && item.product.images.length > 0) {
+            productImage = item.product.images[0];
+          }
+          // If item has its own image, use that
+          if (item.image) {
+            productImage = item.image;
+          }
+
+          return {
+            ...item,
+            productImage: productImage,
+            productDetails: item.product ? {
+              name: item.product.name,
+              price: item.product.price,
+              sku: item.product.sku,
+              images: item.product.images
+            } : null
+          };
+        });
 
       // Calculate subtotal for artisan items
       const subtotal = artisanItems.reduce((sum, item) => 
