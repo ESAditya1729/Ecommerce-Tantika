@@ -17,7 +17,20 @@ import {
   UserCheck,
   Info,
   FileText,
-  Eye
+  Eye,
+  Sparkles,
+  Shield,
+  Zap,
+  Mail,
+  Tag,
+  Filter,
+  Layers,
+  Star,
+  Award,
+  Calendar,
+  Phone,
+  MapPin,
+  Briefcase
 } from 'lucide-react';
 import {
   TEMPLATE_CONFIGS,
@@ -178,20 +191,20 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
   };
 
   // Validate form
- const isFormValid = () => {
-  if (selectedArtisans.length === 0) return false;
-  
-  if (messageType === 'notification') {
-    const validation = validateTemplateData(templateId, templateData);
-    return validation.valid;
-  }
-  
-  if (messageType === 'custom') {
-    return customMessage.trim().length > 0;
-  }
-  
-  return false;
-};
+  const isFormValid = () => {
+    if (selectedArtisans.length === 0) return false;
+    
+    if (messageType === 'notification') {
+      const validation = validateTemplateData(templateId, templateData);
+      return validation.valid;
+    }
+    
+    if (messageType === 'custom') {
+      return customMessage.trim().length > 0;
+    }
+    
+    return false;
+  };
 
   // Send notification
   const handleSendNotification = async () => {
@@ -306,138 +319,205 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     if (!templateFields || templateFields.length === 0) return null;
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-blue-600" />
-            <p className="text-sm font-medium text-gray-700">Template Data</p>
-            <span className="text-xs text-red-500">* Required fields</span>
+      <div className="mt-4 space-y-4 p-5 bg-gradient-to-br from-indigo-50/80 via-purple-50/80 to-pink-50/80 border-2 border-indigo-200 rounded-2xl shadow-inner">
+        {/* Header with gradient border */}
+        <div className="flex items-center justify-between pb-3 border-b-2 border-indigo-200">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl shadow-lg">
+              <FileText className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-gray-800">Template Data Fields</h4>
+              <p className="text-xs text-gray-500">Fill in the required information below</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={loadExampleData}
-            className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+            className="group px-4 py-2 bg-white border-2 border-indigo-300 rounded-xl text-xs font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 hover:shadow-md transition-all duration-300 flex items-center gap-2"
           >
-            <span>📝</span> Load Example
+            <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" />
+            Load Example
           </button>
         </div>
         
-        {templateFields.map((field) => {
-          const value = templateData[field.id] || '';
-          
-          if (field.type === 'select') {
+        <div className="space-y-4">
+          {templateFields.map((field, index) => {
+            const value = templateData[field.id] || '';
+            const isRequired = field.required;
+            
+            // Different colored borders for different field types
+            let borderColor = 'border-gray-200';
+            let focusColor = 'focus:ring-blue-500';
+            let bgColor = 'bg-white';
+            
+            if (field.type === 'select') {
+              borderColor = 'border-emerald-200';
+              focusColor = 'focus:ring-emerald-500';
+              bgColor = 'bg-emerald-50/30';
+            } else if (field.type === 'textarea') {
+              borderColor = 'border-purple-200';
+              focusColor = 'focus:ring-purple-500';
+              bgColor = 'bg-purple-50/30';
+            } else if (field.type === 'number') {
+              borderColor = 'border-blue-200';
+              focusColor = 'focus:ring-blue-500';
+              bgColor = 'bg-blue-50/30';
+            }
+            
+            if (field.type === 'select') {
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${isRequired ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                    {field.label}
+                    {isRequired && <span className="text-red-500 text-lg">*</span>}
+                    {!isRequired && <span className="text-xs text-gray-400 font-normal">(optional)</span>}
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={value}
+                      onChange={(e) => handleTemplateDataChange(field.id, e.target.value)}
+                      className={`w-full px-4 py-3 ${bgColor} border-2 ${borderColor} rounded-xl focus:${focusColor} focus:border-transparent transition-all duration-300 appearance-none font-medium`}
+                    >
+                      <option value="">Select {field.label}</option>
+                      {field.options.map((option) => (
+                        <option key={option} value={option}>
+                          {option.charAt(0).toUpperCase() + option.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                  </div>
+                  {isRequired && !value && (
+                    <p className="flex items-center gap-1.5 text-xs text-red-500 mt-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      This field is required
+                    </p>
+                  )}
+                  {field.description && (
+                    <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
+                  )}
+                </div>
+              );
+            }
+            
+            if (field.type === 'textarea') {
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${isRequired ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                    {field.label}
+                    {isRequired && <span className="text-red-500 text-lg">*</span>}
+                    {!isRequired && <span className="text-xs text-gray-400 font-normal">(optional)</span>}
+                  </label>
+                  <textarea
+                    value={value}
+                    onChange={(e) => handleTemplateDataChange(field.id, e.target.value)}
+                    placeholder={field.placeholder}
+                    rows={field.id === 'reason' || field.id === 'message' ? 4 : 3}
+                    className={`w-full px-4 py-3 ${bgColor} border-2 ${borderColor} rounded-xl focus:${focusColor} focus:border-transparent transition-all duration-300 resize-y font-medium`}
+                  />
+                  {isRequired && !value.trim() && (
+                    <p className="flex items-center gap-1.5 text-xs text-red-500 mt-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      This field is required
+                    </p>
+                  )}
+                  {field.description && (
+                    <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
+                  )}
+                </div>
+              );
+            }
+            
+            if (field.type === 'number') {
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${isRequired ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                    {field.label}
+                    {isRequired && <span className="text-red-500 text-lg">*</span>}
+                    {!isRequired && <span className="text-xs text-gray-400 font-normal">(optional)</span>}
+                  </label>
+                  <input
+                    type="number"
+                    value={value === '' ? '' : value}
+                    onChange={(e) => handleTemplateDataChange(field.id, e.target.value)}
+                    placeholder={field.placeholder}
+                    step={field.id === 'amount' ? '0.01' : '1'}
+                    min="0"
+                    className={`w-full px-4 py-3 ${bgColor} border-2 ${borderColor} rounded-xl focus:${focusColor} focus:border-transparent transition-all duration-300 font-medium`}
+                  />
+                  {isRequired && (value === '' || value === null) && (
+                    <p className="flex items-center gap-1.5 text-xs text-red-500 mt-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      This field is required
+                    </p>
+                  )}
+                  {field.description && (
+                    <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
+                  )}
+                </div>
+              );
+            }
+            
             return (
-              <div key={field.id}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div key={field.id} className="space-y-1.5">
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${isRequired ? 'bg-red-500' : 'bg-gray-300'}`}></span>
                   {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-                <select
-                  value={value}
-                  onChange={(e) => handleTemplateDataChange(field.id, e.target.value)}
-                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                    field.required && !value ? 'border-red-300' : ''
-                  }`}
-                >
-                  <option value="">Select {field.label}</option>
-                  {field.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                {field.required && !value && (
-                  <p className="text-xs text-red-500 mt-1">This field is required</p>
-                )}
-              </div>
-            );
-          }
-          
-          if (field.type === 'textarea') {
-            return (
-              <div key={field.id}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-                <textarea
-                  value={value}
-                  onChange={(e) => handleTemplateDataChange(field.id, e.target.value)}
-                  placeholder={field.placeholder}
-                  rows={field.id === 'reason' || field.id === 'message' ? 3 : 2}
-                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none ${
-                    field.required && !value.trim() ? 'border-red-300' : ''
-                  }`}
-                />
-                {field.required && !value.trim() && (
-                  <p className="text-xs text-red-500 mt-1">This field is required</p>
-                )}
-              </div>
-            );
-          }
-          
-          if (field.type === 'number') {
-            return (
-              <div key={field.id}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                  {isRequired && <span className="text-red-500 text-lg">*</span>}
+                  {!isRequired && <span className="text-xs text-gray-400 font-normal">(optional)</span>}
                 </label>
                 <input
-                  type="number"
-                  value={value === '' ? '' : value}
+                  type={field.type}
+                  value={value}
                   onChange={(e) => handleTemplateDataChange(field.id, e.target.value)}
                   placeholder={field.placeholder}
-                  step={field.id === 'amount' ? '0.01' : '1'}
-                  min="0"
-                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                    field.required && (value === '' || value === null) ? 'border-red-300' : ''
-                  }`}
+                  className={`w-full px-4 py-3 ${bgColor} border-2 ${borderColor} rounded-xl focus:${focusColor} focus:border-transparent transition-all duration-300 font-medium`}
                 />
-                {field.required && (value === '' || value === null) && (
-                  <p className="text-xs text-red-500 mt-1">This field is required</p>
+                {isRequired && !value.trim() && (
+                  <p className="flex items-center gap-1.5 text-xs text-red-500 mt-1 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    This field is required
+                  </p>
+                )}
+                {field.description && (
+                  <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
                 )}
               </div>
             );
-          }
-          
-          return (
-            <div key={field.id}>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {field.label}
-                {field.required && <span className="text-red-500 ml-1">*</span>}
-              </label>
-              <input
-                type={field.type}
-                value={value}
-                onChange={(e) => handleTemplateDataChange(field.id, e.target.value)}
-                placeholder={field.placeholder}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                  field.required && !value.trim() ? 'border-red-300' : ''
-                }`}
-              />
-              {field.required && !value.trim() && (
-                <p className="text-xs text-red-500 mt-1">This field is required</p>
-              )}
-            </div>
-          );
-        })}
+          })}
+        </div>
 
-        {/* Preview */}
-        <div className="mt-2">
+        {/* Enhanced Preview Section */}
+        <div className="mt-4 pt-4 border-t-2 border-dashed border-indigo-200">
           <button
             type="button"
             onClick={() => setShowPreview(!showPreview)}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+            className="group flex items-center gap-3 text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-all duration-300"
           >
-            <Eye className="w-4 h-4" />
-            {showPreview ? 'Hide Preview' : 'Show Preview'}
+            <div className={`p-1.5 rounded-lg ${showPreview ? 'bg-indigo-100' : 'bg-gray-100'} group-hover:bg-indigo-100 transition-colors duration-300`}>
+              <Eye className={`w-4 h-4 transition-transform duration-300 ${showPreview ? 'scale-110' : ''}`} />
+            </div>
+            {showPreview ? 'Hide Message Preview' : 'Preview Message'}
+            <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${showPreview ? 'rotate-180' : ''}`} />
           </button>
           
           {showPreview && (
-            <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-500 mb-1">Preview:</p>
-              <p className="text-sm text-gray-700">{getPreviewMessage()}</p>
+            <div className="mt-3 p-5 bg-white border-2 border-indigo-300 rounded-2xl shadow-lg animate-fadeIn">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg">
+                  <Mail className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Live Preview</span>
+                <div className="flex-1"></div>
+                <span className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">PREVIEW</span>
+              </div>
+              <div className="p-4 bg-gradient-to-br from-gray-50 to-indigo-50/50 rounded-xl border-2 border-indigo-100">
+                <p className="text-sm text-gray-800 leading-relaxed font-medium">{getPreviewMessage()}</p>
+              </div>
             </div>
           )}
         </div>
@@ -445,15 +525,15 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     );
   };
 
-  // Get status badge
+  // Get status badge with enhanced styling
   const getStatusBadge = (status) => {
     const colors = {
-      'approved': 'bg-green-100 text-green-700 border-green-200',
-      'pending': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-      'suspended': 'bg-red-100 text-red-700 border-red-200',
-      'rejected': 'bg-gray-100 text-gray-700 border-gray-200'
+      'approved': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      'pending': 'bg-amber-100 text-amber-800 border-amber-300',
+      'suspended': 'bg-rose-100 text-rose-800 border-rose-300',
+      'rejected': 'bg-gray-100 text-gray-800 border-gray-300'
     };
-    return colors[status] || 'bg-gray-100 text-gray-700 border-gray-200';
+    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
   };
 
   const getStatusText = (status) => {
@@ -466,36 +546,65 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     return texts[status] || status;
   };
 
-  // Notification detail modal
+  // Enhanced Status Icon
+  const getStatusIcon = (status) => {
+    const icons = {
+      'approved': <CheckCircle className="w-3.5 h-3.5" />,
+      'pending': <Clock className="w-3.5 h-3.5" />,
+      'suspended': <AlertCircle className="w-3.5 h-3.5" />,
+      'rejected': <X className="w-3.5 h-3.5" />
+    };
+    return icons[status] || null;
+  };
+
+  // Notification detail modal with enhanced design
   const renderNotificationDetail = () => {
     if (!selectedNotification) return null;
 
+    const priorityColors = {
+      'urgent': 'bg-rose-100 text-rose-800 border-rose-300',
+      'high': 'bg-orange-100 text-orange-800 border-orange-300',
+      'medium': 'bg-blue-100 text-blue-800 border-blue-300',
+      'low': 'bg-gray-100 text-gray-800 border-gray-300'
+    };
+
+    const priorityEmojis = {
+      'urgent': '🔴',
+      'high': '🟠',
+      'medium': '🟡',
+      'low': '🟢'
+    };
+
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedNotification(null)}>
-        <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-white">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Bell className="w-5 h-5 text-blue-600" />
-              Notification Details
-            </h3>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn" onClick={() => setSelectedNotification(null)}>
+        <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-2xl border-2 border-indigo-200" onClick={(e) => e.stopPropagation()}>
+          {/* Modal Header with Gradient */}
+          <div className="px-6 py-5 border-b-2 border-indigo-200 flex justify-between items-center bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50">
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl shadow-lg">
+                <Bell className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-extrabold text-gray-900">Notification Details</h3>
+                <p className="text-xs text-gray-500 font-medium">Complete information about this notification</p>
+              </div>
+            </div>
             <button
               onClick={() => setSelectedNotification(null)}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2.5 bg-white/80 hover:bg-white rounded-xl transition-all duration-300 shadow-md hover:shadow-lg"
             >
-              <X className="w-5 h-5 text-gray-500" />
+              <X className="w-5 h-5 text-gray-600" />
             </button>
           </div>
-          <div className="p-6 overflow-y-auto max-h-[60vh] space-y-4">
-            <div className="flex items-center gap-3">
-              <span className={`px-3 py-1 text-sm rounded-full ${
-                selectedNotification.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                selectedNotification.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                selectedNotification.priority === 'medium' ? 'bg-blue-100 text-blue-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
-                {selectedNotification.priority.charAt(0).toUpperCase() + selectedNotification.priority.slice(1)}
+          
+          <div className="p-6 overflow-y-auto max-h-[60vh] space-y-5">
+            {/* Priority and Time */}
+            <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-xl border-2 border-gray-200">
+              <span className={`px-4 py-1.5 text-sm font-bold rounded-full border-2 ${priorityColors[selectedNotification.priority] || priorityColors.medium} flex items-center gap-2`}>
+                {priorityEmojis[selectedNotification.priority]} {selectedNotification.priority.charAt(0).toUpperCase() + selectedNotification.priority.slice(1)} Priority
               </span>
-              <span className="text-sm text-gray-500">
+              <span className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <Clock className="w-4 h-4" />
                 {new Date(selectedNotification.createdAt).toLocaleString('en-IN', {
                   day: '2-digit',
                   month: 'short',
@@ -506,50 +615,73 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </span>
             </div>
 
-            <div>
-              <p className="text-sm text-gray-500 font-medium">Title</p>
-              <p className="text-lg font-semibold text-gray-900 mt-1">{selectedNotification.title}</p>
+            {/* Subject */}
+            <div className="space-y-1.5 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
+              <p className="text-xs font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-2">
+                <Tag className="w-3.5 h-3.5" />
+                Subject
+              </p>
+              <p className="text-lg font-bold text-gray-900">{selectedNotification.title}</p>
             </div>
 
-            <div>
-              <p className="text-sm text-gray-500 font-medium">Message</p>
-              <div className="mt-1 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-gray-800 whitespace-pre-wrap">{selectedNotification.message}</p>
+            {/* Message */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-extrabold text-gray-600 uppercase tracking-wider flex items-center gap-2">
+                <MessageSquare className="w-3.5 h-3.5" />
+                Message Content
+              </p>
+              <div className="p-5 bg-gradient-to-br from-gray-50 to-purple-50/50 rounded-xl border-2 border-purple-200">
+                <p className="text-gray-800 whitespace-pre-wrap leading-relaxed font-medium">{selectedNotification.message}</p>
               </div>
             </div>
 
+            {/* Additional Data */}
             {selectedNotification.data && Object.keys(selectedNotification.data).length > 0 && (
-              <div>
-                <p className="text-sm text-gray-500 font-medium">Data</p>
-                <div className="mt-1 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <pre className="text-xs text-gray-700 overflow-x-auto">
+              <div className="space-y-1.5">
+                <p className="text-xs font-extrabold text-gray-600 uppercase tracking-wider flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5" />
+                  Additional Data
+                </p>
+                <div className="p-4 bg-gray-900 rounded-xl border-2 border-gray-700">
+                  <pre className="text-xs text-green-400 overflow-x-auto font-mono">
                     {JSON.stringify(selectedNotification.data, null, 2)}
                   </pre>
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-500 font-medium">Sent To</p>
-                <p className="text-gray-900 capitalize mt-1">{selectedNotification.recipientType}</p>
+            {/* Meta Information with colored boxes */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-200">
+                <p className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider">Recipient Type</p>
+                <p className="text-gray-900 capitalize mt-1 font-bold text-lg">{selectedNotification.recipientType}</p>
               </div>
-              <div>
-                <p className="text-sm text-gray-500 font-medium">Status</p>
-                <p className="text-gray-900 mt-1">
-                  {selectedNotification.read ? 'Read' : 'Unread'}
+              <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border-2 border-amber-200">
+                <p className="text-xs font-extrabold text-amber-700 uppercase tracking-wider">Status</p>
+                <p className="mt-1">
+                  <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold border-2 ${
+                    selectedNotification.read 
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                      : 'bg-amber-100 text-amber-800 border-amber-300'
+                  }`}>
+                    {selectedNotification.read ? '✅ Read' : '⏳ Unread'}
+                  </span>
                 </p>
               </div>
             </div>
 
+            {/* Reply Section with colored border */}
             {selectedNotification.reply?.status === 'replied' && (
-              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                <p className="text-sm font-medium text-green-800 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Artisan Reply
-                </p>
-                <p className="text-green-700 mt-2">{selectedNotification.reply.content}</p>
-                <p className="text-xs text-green-600 mt-1">
+              <div className="p-5 bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl border-2 border-emerald-300 shadow-md">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-1.5 bg-emerald-500 rounded-lg">
+                    <MessageSquare className="w-4 h-4 text-white" />
+                  </div>
+                  <p className="text-sm font-extrabold text-emerald-800">Artisan Reply</p>
+                </div>
+                <p className="text-emerald-900 leading-relaxed font-medium">{selectedNotification.reply.content}</p>
+                <p className="text-xs text-emerald-700 mt-2 font-medium flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
                   {new Date(selectedNotification.reply.at).toLocaleString('en-IN', {
                     day: '2-digit',
                     month: 'short',
@@ -561,10 +693,11 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </div>
             )}
           </div>
-          <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+          
+          <div className="px-6 py-4 border-t-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 flex justify-end">
             <button
               onClick={() => setSelectedNotification(null)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl font-bold"
             >
               Close
             </button>
@@ -576,115 +709,152 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
 
   return (
     <div className="space-y-6">
-      {/* Messaging Interface */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-blue-600" />
-                Send Message to Artisans
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Select artisans and send notifications with dynamic content
-              </p>
+      {/* Main Messaging Interface */}
+      <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-2xl overflow-hidden">
+        {/* Enhanced Header with Gradient and Icons */}
+        <div className="px-7 py-6 border-b-2 border-indigo-200 bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-xl">
+                <MessageSquare className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">
+                  Send Message to Artisans
+                </h3>
+                <p className="text-sm text-gray-600 font-medium mt-0.5 flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                  Select artisans and send notifications with dynamic content
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                {selectedArtisans.length} selected
-              </span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow-md border-2 border-indigo-200">
+                <UserCheck className="w-4 h-4 text-indigo-600" />
+                <span className="text-sm font-extrabold text-indigo-700">
+                  {selectedArtisans.length} Selected
+                </span>
+              </div>
               {selectedArtisans.length > 0 && (
                 <button
                   onClick={() => {
                     setSelectedArtisans([]);
                     setSelectAll(false);
                   }}
-                  className="text-sm text-red-600 hover:text-red-700 font-medium"
+                  className="text-sm font-extrabold text-rose-600 hover:text-rose-700 hover:underline decoration-2 underline-offset-4 transition-all duration-300"
                 >
-                  Clear All
+                  ✕ Clear All
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        <div className="p-6">
-          {/* Artisan Selection */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Select Artisans <span className="text-red-500">*</span>
-            </label>
+        <div className="p-7">
+          {/* Artisan Selection with Enhanced UI */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl shadow-lg">
+                <Users className="w-5 h-5 text-white" />
+              </div>
+              <label className="text-base font-extrabold text-gray-800">
+                Select Artisans <span className="text-red-500 text-xl">*</span>
+              </label>
+              <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2.5 py-1 rounded-full">
+                {artisans.length} available
+              </span>
+            </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 mb-3">
+            {/* Search and Select All with enhanced styling */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search artisans by name, email, phone, or specialization..."
+                  placeholder="🔍 Search artisans by name, email, phone, or specialization..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300 placeholder:text-gray-400 font-medium"
                 />
               </div>
               <button
                 onClick={handleSelectAll}
-                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 whitespace-nowrap"
+                className="px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-2xl hover:from-gray-800 hover:to-gray-900 transition-all duration-300 flex items-center gap-2 whitespace-nowrap font-bold shadow-lg hover:shadow-xl"
               >
                 <Users className="w-4 h-4" />
                 {selectAll ? 'Deselect All' : 'Select All'}
-                <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full">
+                <span className="text-xs bg-white/20 px-2.5 py-0.5 rounded-full font-bold">
                   {filteredArtisans.length}
                 </span>
               </button>
             </div>
 
-            <div className="mt-3 border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+            {/* Artisan List with Enhanced Cards */}
+            <div className="mt-3 border-2 border-gray-200 rounded-2xl overflow-hidden shadow-inner">
               {artisansLoading ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader className="w-6 h-6 animate-spin text-gray-400" />
-                  <span className="ml-2 text-gray-500">Loading artisans...</span>
+                <div className="flex justify-center items-center py-16">
+                  <Loader className="w-8 h-8 animate-spin text-indigo-600" />
+                  <span className="ml-3 text-gray-600 font-bold">Loading artisans...</span>
                 </div>
               ) : filteredArtisans.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p>
+                <div className="text-center py-16 text-gray-500">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-2xl flex items-center justify-center">
+                    <Users className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="font-extrabold text-lg">
                     {artisans.length === 0 
                       ? 'No artisans available. Please refresh the page.' 
                       : 'No artisans found matching your search'}
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y-2 divide-gray-100 max-h-72 overflow-y-auto">
                   {filteredArtisans.map((artisan) => (
                     <div
                       key={artisan._id}
                       onClick={() => handleSelectArtisan(artisan._id)}
-                      className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors ${
-                        selectedArtisans.includes(artisan._id) ? 'bg-blue-50' : ''
+                      className={`flex items-center gap-4 px-5 py-4 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 cursor-pointer transition-all duration-300 ${
+                        selectedArtisans.includes(artisan._id) 
+                          ? 'bg-gradient-to-r from-indigo-100 to-purple-100 border-l-8 border-indigo-500' 
+                          : ''
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={selectedArtisans.includes(artisan._id)}
                         onChange={() => handleSelectArtisan(artisan._id)}
-                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                        className="w-5 h-5 text-indigo-600 rounded-lg border-2 border-gray-300 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="font-extrabold text-gray-900 text-base">
                             {artisan.businessName || artisan.fullName || artisan.name || 'Unnamed Artisan'}
                           </span>
-                          <span className={`px-2 py-0.5 text-xs rounded-full border ${getStatusBadge(artisan.status)}`}>
+                          <span className={`px-3 py-1 text-xs font-extrabold rounded-full border-2 ${getStatusBadge(artisan.status)} flex items-center gap-1.5`}>
+                            {getStatusIcon(artisan.status)}
                             {getStatusText(artisan.status)}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5 flex-wrap">
-                          <span>{artisan.email || 'No email'}</span>
+                        <div className="flex items-center gap-3 text-sm text-gray-600 mt-1 flex-wrap">
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <Mail className="w-3.5 h-3.5 text-gray-400" />
+                            {artisan.email || 'No email'}
+                          </span>
+                          {artisan.phone && (
+                            <>
+                              <span className="text-gray-300">|</span>
+                              <span className="flex items-center gap-1.5 font-medium">
+                                <Phone className="w-3.5 h-3.5 text-gray-400" />
+                                {artisan.phone}
+                              </span>
+                            </>
+                          )}
                           {artisan.specialization && (
                             <>
-                              <span>•</span>
-                              <span className="bg-gray-100 px-2 py-0.5 rounded text-xs truncate max-w-[150px]">
+                              <span className="text-gray-300">|</span>
+                              <span className="bg-gray-200 px-2.5 py-0.5 rounded-lg text-xs font-bold truncate max-w-[200px] flex items-center gap-1.5">
+                                <Briefcase className="w-3 h-3" />
                                 {typeof artisan.specialization === 'string' 
                                   ? artisan.specialization 
                                   : Array.isArray(artisan.specialization) 
@@ -696,7 +866,9 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                         </div>
                       </div>
                       {selectedArtisans.includes(artisan._id) && (
-                        <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <div className="p-1.5 bg-indigo-500 rounded-xl shadow-lg">
+                          <CheckCircle className="w-5 h-5 text-white" />
+                        </div>
                       )}
                     </div>
                   ))}
@@ -704,13 +876,16 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               )}
             </div>
 
+            {/* Selected Artisans Summary with Enhanced UI */}
             {selectedArtisans.length > 0 && (
-              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="mt-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border-2 border-indigo-300 shadow-md">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-800">
-                      {selectedArtisans.length} artisan(s) selected
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl shadow-lg">
+                      <UserCheck className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-sm font-extrabold text-indigo-800">
+                      {selectedArtisans.length} Artisan{selectedArtisans.length !== 1 ? 's' : ''} Selected
                     </span>
                   </div>
                   <button
@@ -718,23 +893,24 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                       setSelectedArtisans([]);
                       setSelectAll(false);
                     }}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    className="text-xs font-extrabold text-rose-600 hover:text-rose-700 hover:underline decoration-2 underline-offset-4 transition-all duration-300"
                   >
-                    Clear selection
+                    Clear all
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {getSelectedArtisansData().slice(0, 5).map((artisan) => (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {getSelectedArtisansData().slice(0, 6).map((artisan) => (
                     <span 
                       key={artisan._id}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-blue-200 rounded-md text-xs text-gray-700"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-indigo-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm"
                     >
+                      <User className="w-3 h-3 text-indigo-500" />
                       {artisan.businessName || artisan.fullName || 'Artisan'}
                     </span>
                   ))}
-                  {selectedArtisans.length > 5 && (
-                    <span className="text-xs text-blue-600 font-medium ml-1">
-                      +{selectedArtisans.length - 5} more
+                  {selectedArtisans.length > 6 && (
+                    <span className="inline-flex items-center px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl text-xs font-extrabold text-white shadow-lg">
+                      +{selectedArtisans.length - 6} more
                     </span>
                   )}
                 </div>
@@ -742,29 +918,35 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             )}
           </div>
 
-          {/* Message Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Message Configuration with Enhanced Styling */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
+                <div className="p-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg">
+                  <Layers className="w-4 h-4 text-white" />
+                </div>
                 Message Type
               </label>
               <select
                 value={messageType}
                 onChange={(e) => setMessageType(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300 font-bold"
               >
                 <option value="notification">📋 Pre-defined Template</option>
                 <option value="custom">✏️ Custom Message</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Priority <span className="text-red-500">*</span>
+              <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
+                <div className="p-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg">
+                  <Shield className="w-4 h-4 text-white" />
+                </div>
+                Priority <span className="text-red-500 text-lg">*</span>
               </label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300 font-bold"
               >
                 <option value="low">🟢 Low</option>
                 <option value="medium">🟡 Medium</option>
@@ -774,16 +956,19 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             </div>
           </div>
 
-          {/* Template Selector */}
+          {/* Template Selector with Enhanced UI */}
           {messageType === 'notification' && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <div className="mb-6">
+              <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
+                <div className="p-1.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
+                  <Tag className="w-4 h-4 text-white" />
+                </div>
                 Notification Template
               </label>
               <select
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300 font-bold"
               >
                 {templateOptions.map((template) => (
                   <option key={template.id} value={template.id}>
@@ -792,82 +977,109 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                 ))}
               </select>
               
-              {/* Dynamic Data Fields */}
+              {/* Dynamic Data Fields with Enhanced Colors */}
               {renderTemplateFields()}
             </div>
           )}
 
-          {/* Custom Message */}
+          {/* Custom Message with Enhanced Textarea */}
           {messageType === 'custom' && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Custom Message <span className="text-red-500">*</span>
+            <div className="mb-6">
+              <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
+                <div className="p-1.5 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg">
+                  <MessageSquare className="w-4 h-4 text-white" />
+                </div>
+                Custom Message <span className="text-red-500 text-lg">*</span>
               </label>
               <textarea
                 value={customMessage}
                 onChange={(e) => setCustomMessage(e.target.value)}
-                placeholder="Type your custom message here..."
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all"
-                rows="4"
+                placeholder="✏️ Type your custom message here..."
+                className="w-full px-5 py-4 bg-gradient-to-br from-gray-50 to-blue-50/30 border-2 border-blue-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 resize-none font-medium text-gray-800 placeholder:text-gray-400"
+                rows="5"
               />
-              <p className="text-xs text-gray-400 mt-1">
-                This message will be sent to all selected artisans.
+              <p className="flex items-center gap-2 text-xs text-gray-500 mt-2 font-medium">
+                <Info className="w-3.5 h-3.5 text-blue-500" />
+                This message will be sent to all selected artisans
               </p>
             </div>
           )}
 
-          {/* Subject */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Subject <span className="text-gray-400">(Optional)</span>
+          {/* Subject with Enhanced Input */}
+          <div className="mb-6">
+            <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
+              <div className="p-1.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg">
+                <Mail className="w-4 h-4 text-white" />
+              </div>
+              Subject <span className="text-xs text-gray-400 font-normal">(Optional)</span>
             </label>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Enter a subject line for your message..."
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              placeholder="📧 Enter a subject line for your message..."
+              className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300 placeholder:text-gray-400 font-medium"
             />
           </div>
 
-          {/* Error/Success Messages */}
+          {/* Error/Success Messages with Enhanced Colors */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="mb-4 p-5 bg-gradient-to-r from-rose-50 to-red-50 border-2 border-rose-300 rounded-2xl flex items-start gap-3 shadow-md animate-slideDown">
+              <div className="p-1.5 bg-rose-500 rounded-xl">
+                <AlertCircle className="w-5 h-5 text-white flex-shrink-0" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-rose-800">{error}</p>
+              </div>
             </div>
           )}
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-              <p className="text-sm text-green-600">{success}</p>
+            <div className="mb-4 p-5 bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-300 rounded-2xl flex items-start gap-3 shadow-md animate-slideDown">
+              <div className="p-1.5 bg-emerald-500 rounded-xl">
+                <CheckCircle className="w-5 h-5 text-white flex-shrink-0" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-emerald-800">{success}</p>
+              </div>
             </div>
           )}
 
-          {/* Send Button */}
+          {/* Enhanced Send Button with Gradient and Animation */}
           <button
             onClick={handleSendNotification}
             disabled={sending || !isFormValid()}
-            className={`w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
+            className={`w-full py-4 rounded-2xl font-extrabold flex items-center justify-center gap-3 transition-all duration-300 text-base ${
               sending || !isFormValid()
                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg transform hover:-translate-y-0.5'
+                : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 shadow-2xl hover:shadow-3xl transform hover:-translate-y-1 active:translate-y-0'
             }`}
           >
             {sending ? (
               <>
-                <Loader className="w-5 h-5 animate-spin" />
+                <Loader className="w-6 h-6 animate-spin" />
                 Sending...
               </>
             ) : (
               <>
                 <Send className="w-5 h-5" />
                 Send Message to {selectedArtisans.length} Artisan{selectedArtisans.length !== 1 ? 's' : ''}
+                <Sparkles className="w-4 h-4" />
               </>
             )}
           </button>
+
+          {/* Footer Note */}
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-400 font-medium flex items-center justify-center gap-2">
+              <Shield className="w-3 h-3" />
+              All messages are securely delivered and tracked
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Notification Detail Modal */}
+      {renderNotificationDetail()}
     </div>
   );
 };
