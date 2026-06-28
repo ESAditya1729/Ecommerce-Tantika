@@ -168,6 +168,24 @@ const ArtisanNotificationDropdown = ({ onClose, isOpen }) => {
     return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
   };
 
+  // ========== Helper to get message safely ==========
+  const getNotificationMessage = (notification) => {
+    // If message exists, use it
+    if (notification.message) {
+      return notification.message;
+    }
+    // Fallback: check if there's data with message
+    if (notification.data?.message) {
+      return notification.data.message;
+    }
+    // Fallback: check metadata
+    if (notification.data?.metadata?.message) {
+      return notification.data.metadata.message;
+    }
+    // Final fallback
+    return 'Notification';
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -245,7 +263,7 @@ const ArtisanNotificationDropdown = ({ onClose, isOpen }) => {
                     )}
                   </div>
                   <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">
-                    {notification.message}
+                    {getNotificationMessage(notification)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
                     <Clock className="w-3 h-3" />

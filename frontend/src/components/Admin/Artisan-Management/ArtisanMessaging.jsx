@@ -20,16 +20,10 @@ import {
   Eye,
   Sparkles,
   Shield,
-  Zap,
   Mail,
   Tag,
-  Filter,
   Layers,
-  Star,
-  Award,
-  Calendar,
   Phone,
-  MapPin,
   Briefcase
 } from 'lucide-react';
 import {
@@ -77,12 +71,11 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     setTemplateData(initialData);
   }, [templateId]);
 
-  // ========== FIXED: Safe filter with proper null checks ==========
+  // Filter artisans
   const filteredArtisans = artisans.filter(artisan => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     
-    // Safe helper to convert any value to lowercase string
     const safeString = (value) => {
       if (!value) return '';
       if (typeof value === 'string') return value.toLowerCase();
@@ -206,7 +199,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     return false;
   };
 
-  // Send notification
+  // ========== FIXED: Send notification with proper message field ==========
   const handleSendNotification = async () => {
     if (selectedArtisans.length === 0) {
       setError('Please select at least one artisan');
@@ -265,6 +258,11 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
         
         payload.data = processedData;
         
+        // ========== FIXED: Ensure message field is included for system_announcement ==========
+        if (templateId === 'system_announcement' && processedData.message) {
+          payload.data.message = processedData.message;
+        }
+        
         if (subject) {
           payload.data.subject = subject;
         }
@@ -272,6 +270,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
         console.log('📤 Processed payload:', JSON.stringify(payload, null, 2));
         
       } else {
+        // ========== FIXED: Custom message - properly include message field ==========
         payload.templateId = 'system_announcement';
         payload.data = {
           message: customMessage,
@@ -320,7 +319,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
 
     return (
       <div className="mt-4 space-y-4 p-5 bg-gradient-to-br from-indigo-50/80 via-purple-50/80 to-pink-50/80 border-2 border-indigo-200 rounded-2xl shadow-inner">
-        {/* Header with gradient border */}
         <div className="flex items-center justify-between pb-3 border-b-2 border-indigo-200">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl shadow-lg">
@@ -342,11 +340,10 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
         </div>
         
         <div className="space-y-4">
-          {templateFields.map((field, index) => {
+          {templateFields.map((field) => {
             const value = templateData[field.id] || '';
             const isRequired = field.required;
             
-            // Different colored borders for different field types
             let borderColor = 'border-gray-200';
             let focusColor = 'focus:ring-blue-500';
             let bgColor = 'bg-white';
@@ -395,9 +392,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                       This field is required
                     </p>
                   )}
-                  {field.description && (
-                    <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
-                  )}
                 </div>
               );
             }
@@ -423,9 +417,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                       <AlertCircle className="w-3.5 h-3.5" />
                       This field is required
                     </p>
-                  )}
-                  {field.description && (
-                    <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
                   )}
                 </div>
               );
@@ -455,9 +446,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                       This field is required
                     </p>
                   )}
-                  {field.description && (
-                    <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
-                  )}
                 </div>
               );
             }
@@ -483,15 +471,12 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                     This field is required
                   </p>
                 )}
-                {field.description && (
-                  <p className="text-xs text-gray-500 mt-1 italic">💡 {field.description}</p>
-                )}
               </div>
             );
           })}
         </div>
 
-        {/* Enhanced Preview Section */}
+        {/* Preview Section */}
         <div className="mt-4 pt-4 border-t-2 border-dashed border-indigo-200">
           <button
             type="button"
@@ -525,7 +510,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     );
   };
 
-  // Get status badge with enhanced styling
+  // Get status badge
   const getStatusBadge = (status) => {
     const colors = {
       'approved': 'bg-emerald-100 text-emerald-800 border-emerald-300',
@@ -546,7 +531,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     return texts[status] || status;
   };
 
-  // Enhanced Status Icon
   const getStatusIcon = (status) => {
     const icons = {
       'approved': <CheckCircle className="w-3.5 h-3.5" />,
@@ -557,7 +541,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     return icons[status] || null;
   };
 
-  // Notification detail modal with enhanced design
+  // Notification detail modal
   const renderNotificationDetail = () => {
     if (!selectedNotification) return null;
 
@@ -578,7 +562,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn" onClick={() => setSelectedNotification(null)}>
         <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-2xl border-2 border-indigo-200" onClick={(e) => e.stopPropagation()}>
-          {/* Modal Header with Gradient */}
           <div className="px-6 py-5 border-b-2 border-indigo-200 flex justify-between items-center bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50">
             <div className="flex items-center gap-4">
               <div className="p-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl shadow-lg">
@@ -598,7 +581,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
           </div>
           
           <div className="p-6 overflow-y-auto max-h-[60vh] space-y-5">
-            {/* Priority and Time */}
             <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-xl border-2 border-gray-200">
               <span className={`px-4 py-1.5 text-sm font-bold rounded-full border-2 ${priorityColors[selectedNotification.priority] || priorityColors.medium} flex items-center gap-2`}>
                 {priorityEmojis[selectedNotification.priority]} {selectedNotification.priority.charAt(0).toUpperCase() + selectedNotification.priority.slice(1)} Priority
@@ -615,7 +597,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </span>
             </div>
 
-            {/* Subject */}
             <div className="space-y-1.5 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
               <p className="text-xs font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-2">
                 <Tag className="w-3.5 h-3.5" />
@@ -624,7 +605,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               <p className="text-lg font-bold text-gray-900">{selectedNotification.title}</p>
             </div>
 
-            {/* Message */}
             <div className="space-y-1.5">
               <p className="text-xs font-extrabold text-gray-600 uppercase tracking-wider flex items-center gap-2">
                 <MessageSquare className="w-3.5 h-3.5" />
@@ -635,7 +615,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </div>
             </div>
 
-            {/* Additional Data */}
             {selectedNotification.data && Object.keys(selectedNotification.data).length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-xs font-extrabold text-gray-600 uppercase tracking-wider flex items-center gap-2">
@@ -650,7 +629,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </div>
             )}
 
-            {/* Meta Information with colored boxes */}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-200">
                 <p className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider">Recipient Type</p>
@@ -670,7 +648,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </div>
             </div>
 
-            {/* Reply Section with colored border */}
             {selectedNotification.reply?.status === 'replied' && (
               <div className="p-5 bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl border-2 border-emerald-300 shadow-md">
                 <div className="flex items-center gap-3 mb-3">
@@ -711,7 +688,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
     <div className="space-y-6">
       {/* Main Messaging Interface */}
       <div className="bg-white rounded-3xl border-2 border-indigo-200 shadow-2xl overflow-hidden">
-        {/* Enhanced Header with Gradient and Icons */}
         <div className="px-7 py-6 border-b-2 border-indigo-200 bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -751,7 +727,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
         </div>
 
         <div className="p-7">
-          {/* Artisan Selection with Enhanced UI */}
+          {/* Artisan Selection */}
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl shadow-lg">
@@ -765,7 +741,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </span>
             </div>
 
-            {/* Search and Select All with enhanced styling */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -789,7 +764,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               </button>
             </div>
 
-            {/* Artisan List with Enhanced Cards */}
             <div className="mt-3 border-2 border-gray-200 rounded-2xl overflow-hidden shadow-inner">
               {artisansLoading ? (
                 <div className="flex justify-center items-center py-16">
@@ -876,7 +850,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
               )}
             </div>
 
-            {/* Selected Artisans Summary with Enhanced UI */}
             {selectedArtisans.length > 0 && (
               <div className="mt-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border-2 border-indigo-300 shadow-md">
                 <div className="flex items-center justify-between">
@@ -918,7 +891,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             )}
           </div>
 
-          {/* Message Configuration with Enhanced Styling */}
+          {/* Message Configuration */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
             <div>
               <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
@@ -956,7 +929,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             </div>
           </div>
 
-          {/* Template Selector with Enhanced UI */}
+          {/* Template Selector */}
           {messageType === 'notification' && (
             <div className="mb-6">
               <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
@@ -977,12 +950,11 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
                 ))}
               </select>
               
-              {/* Dynamic Data Fields with Enhanced Colors */}
               {renderTemplateFields()}
             </div>
           )}
 
-          {/* Custom Message with Enhanced Textarea */}
+          {/* Custom Message */}
           {messageType === 'custom' && (
             <div className="mb-6">
               <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
@@ -1005,7 +977,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             </div>
           )}
 
-          {/* Subject with Enhanced Input */}
+          {/* Subject */}
           <div className="mb-6">
             <label className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-2">
               <div className="p-1.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg">
@@ -1022,7 +994,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             />
           </div>
 
-          {/* Error/Success Messages with Enhanced Colors */}
+          {/* Error/Success Messages */}
           {error && (
             <div className="mb-4 p-5 bg-gradient-to-r from-rose-50 to-red-50 border-2 border-rose-300 rounded-2xl flex items-start gap-3 shadow-md animate-slideDown">
               <div className="p-1.5 bg-rose-500 rounded-xl">
@@ -1044,7 +1016,7 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             </div>
           )}
 
-          {/* Enhanced Send Button with Gradient and Animation */}
+          {/* Send Button */}
           <button
             onClick={handleSendNotification}
             disabled={sending || !isFormValid()}
@@ -1068,7 +1040,6 @@ const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onR
             )}
           </button>
 
-          {/* Footer Note */}
           <div className="mt-4 text-center">
             <p className="text-xs text-gray-400 font-medium flex items-center justify-center gap-2">
               <Shield className="w-3 h-3" />

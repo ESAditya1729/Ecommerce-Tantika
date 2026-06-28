@@ -142,6 +142,24 @@ const NotificationsTab = () => {
     }
   };
 
+  // ========== Helper to get message safely ==========
+  const getNotificationMessage = (notification) => {
+    // If message exists, use it
+    if (notification.message) {
+      return notification.message;
+    }
+    // Fallback: check if there's data with message
+    if (notification.data?.message) {
+      return notification.data.message;
+    }
+    // Fallback: check metadata
+    if (notification.data?.metadata?.message) {
+      return notification.data.metadata.message;
+    }
+    // Final fallback
+    return 'Notification';
+  };
+
   const getNotificationIcon = (templateId) => {
     const icons = {
       'order_placed': <ShoppingBag className="w-5 h-5 text-blue-500" />,
@@ -204,16 +222,17 @@ const NotificationsTab = () => {
   const filteredNotifications = notifications.filter(notification => {
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
+      const message = getNotificationMessage(notification).toLowerCase();
       const matchesSearch = 
         notification.title?.toLowerCase().includes(searchLower) ||
-        notification.message?.toLowerCase().includes(searchLower);
+        message.includes(searchLower);
       if (!matchesSearch) return false;
     }
     return true;
   });
 
   // ============================================================
-  // Notification Detail Modal (without quick replies)
+  // Notification Detail Modal
   // ============================================================
   const renderDetailModal = () => {
     if (!selectedNotification) return null;
@@ -260,11 +279,13 @@ const NotificationsTab = () => {
               <h4 className="text-lg font-bold text-gray-900 mt-1">{selectedNotification.title}</h4>
             </div>
 
-            {/* Message */}
+            {/* Message - Using getNotificationMessage */}
             <div>
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Message</p>
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-gray-800 whitespace-pre-wrap">{selectedNotification.message}</p>
+                <p className="text-gray-800 whitespace-pre-wrap">
+                  {getNotificationMessage(selectedNotification)}
+                </p>
               </div>
             </div>
 
@@ -460,7 +481,7 @@ const NotificationsTab = () => {
                           </span>
                         </div>
                         <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                          {notification.message}
+                          {getNotificationMessage(notification)}
                         </p>
                         <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
                           <span className="flex items-center gap-1">
