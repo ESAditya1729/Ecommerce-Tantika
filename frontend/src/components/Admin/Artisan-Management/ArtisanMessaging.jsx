@@ -42,7 +42,7 @@ import {
   getTemplateExampleData
 } from '../../../data/notificationTemplates';
 
-const API_BASE_URL = process.env.REACT_REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const ArtisanMessaging = ({ artisans = [], loading: artisansLoading = false, onRefresh }) => {
   const [selectedArtisans, setSelectedArtisans] = useState([]);
