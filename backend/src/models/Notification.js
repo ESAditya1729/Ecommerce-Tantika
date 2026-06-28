@@ -110,7 +110,7 @@ const notificationSchema = new mongoose.Schema({
     enum: Object.keys(NOTIFICATION_TEMPLATES)
   },
   
-  // ========== OPTIMIZED: Store only variable data, not the full message ==========
+  // ========== FIXED: Added 'message' field to data schema ==========
   data: {
     orderNumber: String,
     productName: String,
@@ -123,6 +123,8 @@ const notificationSchema = new mongoose.Schema({
     from: String,
     subject: String,
     cancelledBy: String,
+    // ========== ADDED: For system announcements and custom messages ==========
+    message: String,
     // Reference IDs
     orderId: mongoose.Schema.Types.ObjectId,
     productId: mongoose.Schema.Types.ObjectId,
@@ -149,7 +151,6 @@ const notificationSchema = new mongoose.Schema({
     id: String,
     label: String,
     action: String,
-    // Optional: store additional data for the action
     data: mongoose.Schema.Types.Mixed
   }],
   
@@ -182,12 +183,12 @@ const notificationSchema = new mongoose.Schema({
   replyAt: {
     type: Date
   },
-  replyAction: String, // Store which quick reply was used
+  replyAction: String,
   
   // Expiry
   expiresAt: {
     type: Date,
-    default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   },
   
   // Source
@@ -210,7 +211,6 @@ notificationSchema.virtual('message').get(function() {
   const template = NOTIFICATION_TEMPLATES[this.templateId];
   if (!template) return 'Notification';
   
-  // Convert data object to plain object for template function
   const dataObj = this.data ? this.data.toObject() : {};
   return typeof template.message === 'function' 
     ? template.message(dataObj) 
@@ -235,7 +235,6 @@ notificationSchema.statics.createNotification = async function(
     throw new Error(`Invalid template ID: ${templateId}`);
   }
 
-  // Get quick replies for this template
   const quickReplies = QUICK_REPLIES[templateId] || [];
 
   return this.create({
@@ -392,7 +391,6 @@ notificationSchema.methods.toFrontend = function() {
 
 const Notification = mongoose.model('Notification', notificationSchema);
 
-module.exports = Notification;
 module.exports = Notification;
 module.exports.NOTIFICATION_TEMPLATES = NOTIFICATION_TEMPLATES;
 module.exports.QUICK_REPLIES = QUICK_REPLIES;
