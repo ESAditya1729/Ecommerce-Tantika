@@ -8,12 +8,15 @@ import {
   X,
   ChevronDown,
   Edit,
+  Package,
 } from "lucide-react";
 import axios from "axios";
 import OrderDetailsModal from "../Modals/OrderDetailsModal";
 import QuickStats from "./Order-Management/QuickStats";
 import OrderFilters from "./Order-Management/OrderFilters";
 import OrderTable from "./Order-Management/OrderTable";
+// ========== NEW IMPORT ==========
+import AdHocPackingSlip from "./Order-Management/AdHocPackingSlip";
 
 // API Base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || "https://ecommerce-tantika.onrender.com/api";
@@ -62,6 +65,9 @@ const OrderManagement = ({ refreshTrigger }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [itemsPerPage] = useState(20);
+
+  // ========== NEW: State for AdHoc Packing Slip ==========
+  const [showAdHocSlip, setShowAdHocSlip] = useState(false);
 
   // Refs
   const isMounted = useRef(true);
@@ -1051,6 +1057,15 @@ const OrderManagement = ({ refreshTrigger }) => {
             <option value="csv">CSV</option>
           </select>
 
+          {/* ========== NEW: Create Offline Slip Button ========== */}
+          <button
+            onClick={() => setShowAdHocSlip(true)}
+            className="flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+          >
+            <Package className="w-5 h-5 mr-2" />
+            Create Offline Slip
+          </button>
+
           <button
             onClick={handleExportOrders}
             disabled={loading || !filteredOrders.length}
@@ -1182,6 +1197,13 @@ const OrderManagement = ({ refreshTrigger }) => {
           onStatusUpdate={handleUpdateStatus}
           onAddContact={handleAddContact}
           onCancel={handleCancelOrder}
+        />
+      )}
+
+      {/* ========== NEW: AdHoc Packing Slip Modal ========== */}
+      {showAdHocSlip && (
+        <AdHocPackingSlip
+          onClose={() => setShowAdHocSlip(false)}
         />
       )}
     </div>

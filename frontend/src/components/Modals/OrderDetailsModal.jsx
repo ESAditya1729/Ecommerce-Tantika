@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import StatusBadge from '../Admin/Order-Management/StatusBadge';
 import PaymentBadge from '../Admin/Order-Management/PaymentBadge';
+import OrderPackingSlip from '../Admin/Order-Management/OrderPackingSlip';
 
 // ========== Status configuration matching backend model ==========
 const STATUS_CONFIG = {
@@ -146,6 +147,7 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
   const [cancellationReason, setCancellationReason] = useState('');
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [showPackingSlip, setShowPackingSlip] = useState(false);
 
   if (!order) return null;
 
@@ -400,7 +402,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
 
   const renderDetailsTab = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Order Info */}
       <div className="space-y-4">
         <div className="bg-gray-50 p-4 rounded-lg">
           <h4 className="font-medium text-gray-700 mb-3 flex items-center">
@@ -435,7 +436,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
           </div>
         </div>
 
-        {/* Customer Message */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h4 className="font-medium text-gray-700 mb-2">Customer Message</h4>
           <div className="p-3 bg-white rounded border">
@@ -444,9 +444,7 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
         </div>
       </div>
 
-      {/* Product Info & Status Update */}
       <div className="space-y-4">
-        {/* Product Information */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h4 className="font-medium text-gray-700 mb-3 flex items-center">
             <Package className="w-4 h-4 mr-2" />
@@ -470,7 +468,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
             </div>
           </div>
 
-          {/* Items List for multiple items */}
           {order.items && order.items.length > 1 && (
             <div className="mt-3 pt-3 border-t">
               <p className="text-sm font-medium mb-2">Items:</p>
@@ -486,11 +483,9 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
           )}
         </div>
 
-        {/* ========== FIXED: Status Update Section with proper button styling ========== */}
         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
           <h4 className="font-medium text-gray-700 mb-3">Update Order Status</h4>
           
-          {/* Error/Success Messages */}
           {error && (
             <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
               {error}
@@ -523,7 +518,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
               )}
             </div>
 
-            {/* Notes Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Add Note (Optional)
@@ -540,7 +534,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
           </div>
         </div>
 
-        {/* Cancellation Section */}
         {order.status !== 'cancelled' && order.status !== 'delivered' && (
           <div className="bg-red-50 p-4 rounded-lg border border-red-200">
             <h4 className="font-medium text-red-700 mb-3 flex items-center">
@@ -572,7 +565,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
 
   const renderCustomerTab = () => (
     <div className="space-y-6">
-      {/* Customer Details */}
       <div className="bg-gray-50 p-4 rounded-lg">
         <h4 className="font-medium text-gray-700 mb-3 flex items-center">
           <User className="w-4 h-4 mr-2" />
@@ -594,7 +586,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
         </div>
       </div>
 
-      {/* Shipping Address */}
       <div className="bg-gray-50 p-4 rounded-lg">
         <h4 className="font-medium text-gray-700 mb-3 flex items-center">
           <MapPin className="w-4 h-4 mr-2" />
@@ -605,7 +596,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
         </div>
       </div>
 
-      {/* Contact Actions */}
       <div className="bg-gray-50 p-4 rounded-lg">
         <h4 className="font-medium text-gray-700 mb-3">Quick Contact</h4>
         <div className="flex flex-wrap gap-3">
@@ -633,7 +623,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
         </div>
       </div>
 
-      {/* Add Contact Record */}
       <div className="bg-gray-50 p-4 rounded-lg">
         <h4 className="font-medium text-gray-700 mb-3">Add Contact Record</h4>
         
@@ -742,7 +731,6 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
             </div>
           ))}
           
-          {/* Order Summary */}
           <div className="mt-4 p-4 bg-gray-100 rounded-lg">
             <h5 className="font-medium mb-2">Order Summary</h5>
             <div className="space-y-1 text-sm">
@@ -790,91 +778,108 @@ const OrderDetailsModal = ({ order, onClose, onStatusUpdate, onAddContact, onCan
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900">Order Details</h3>
-            <p className="text-gray-600">{order.orderNumber || 'N/A'}</p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <StatusBadgeComponent status={order.status || 'pending'} />
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg ml-2"
-              disabled={loading}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b px-6">
-          <div className="flex space-x-6 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('details')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === 'details' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Order Details
-            </button>
-            <button
-              onClick={() => setActiveTab('customer')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === 'customer' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Customer Info
-            </button>
-            <button
-              onClick={() => setActiveTab('items')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === 'items' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Items
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === 'history' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Contact History
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
-          {renderTabContent()}
-
-          {/* Action Buttons */}
-          <div className="border-t pt-6 mt-6">
-            <div className="flex flex-wrap gap-3">
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Order Details</h3>
+              <p className="text-gray-600">{order.orderNumber || 'N/A'}</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <StatusBadgeComponent status={order.status || 'pending'} />
               <button
-                onClick={() => window.print()}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-lg ml-2"
+                disabled={loading}
               >
-                <Printer className="w-4 h-4 mr-2" />
-                Print Invoice
+                <X className="w-5 h-5" />
               </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="border-b px-6">
+            <div className="flex space-x-6 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('details')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'details' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Order Details
+              </button>
+              <button
+                onClick={() => setActiveTab('customer')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'customer' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Customer Info
+              </button>
+              <button
+                onClick={() => setActiveTab('items')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'items' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Items
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                  activeTab === 'history' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Contact History
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6">
+            {renderTabContent()}
+
+            {/* Action Buttons */}
+            <div className="border-t pt-6 mt-6">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print Invoice
+                </button>
+                <button
+                  onClick={() => setShowPackingSlip(true)}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center"
+                >
+                  <Package className="w-4 h-4 mr-2" />
+                  Generate Packing Slip
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Packing Slip Modal */}
+      {showPackingSlip && (
+        <OrderPackingSlip
+          order={order}
+          onClose={() => setShowPackingSlip(false)}
+        />
+      )}
+    </>
   );
 };
 
