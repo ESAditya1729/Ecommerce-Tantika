@@ -1088,6 +1088,7 @@ const AdHocPackingSlip = ({ onClose }) => {
                 <div>
                   <h1 className="text-2xl font-bold text-amber-700">তন্তিকা</h1>
                   <p className="text-sm text-gray-500">Handcrafted with ❤️</p>
+                  <p className="text-sm text-gray-500">https://tantikacrafts.netlify.app</p>
                 </div>
               </div>
               <div className="text-right">
