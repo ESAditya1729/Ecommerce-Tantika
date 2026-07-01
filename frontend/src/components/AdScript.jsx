@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 
 const BannerAd = ({ 
-  key: adKey = '708f1310e8b739077a59073d869d1360',
+  adKey = '708f1310e8b739077a59073d869d1360',  // Changed from 'key' to 'adKey'
   format = 'iframe',
   height = 90,
   width = 728,
@@ -21,7 +21,7 @@ const BannerAd = ({
 
     // Set up atOptions globally
     window.atOptions = {
-      key: adKey,
+      key: adKey,  // Use adKey here
       format: format,
       height: height,
       width: width,
@@ -36,6 +36,13 @@ const BannerAd = ({
     
     script.onload = () => {
       scriptLoadedRef.current = true;
+    };
+
+    script.onerror = (error) => {
+      console.error('Failed to load ad script:', error);
+      if (adRef.current) {
+        adRef.current.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">Ad failed to load</div>';
+      }
     };
 
     adRef.current.appendChild(script);
