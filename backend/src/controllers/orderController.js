@@ -1,10 +1,9 @@
-// controllers/OrderController.js
+
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Artisan = require('../models/Artisan');
 
 class OrderController {
-// controllers/order.controller.js
 static async createOrder(req, res) {
   try {
     if (!req.user) {
@@ -33,10 +32,16 @@ static async createOrder(req, res) {
 
     /* -------------------- PREPARE ITEMS -------------------- */
     const orderItems = [];
+    let categoryCode = 'GEN'; // Default category code
 
     const processProduct = async (product, qty) => {
       if (!product.artisan) {
         throw new Error(`Product "${product.name}" has no artisan`);
+      }
+
+      // Store the category code from the first product
+      if (product.category && categoryCode === 'GEN') {
+        categoryCode = product.category;
       }
 
       return {
@@ -85,13 +90,40 @@ static async createOrder(req, res) {
 
     /* -------------------- CALCULATE TOTALS -------------------- */
     const subtotal = orderItems.reduce((sum, i) => sum + i.totalPrice, 0);
-    const tax = +(subtotal * 0.18).toFixed(2);
+    // TAX IS SET TO 0
+    const tax = 0;
     const shippingCost = subtotal > 500 ? 0 : 40;
     const total = subtotal + tax + shippingCost;
 
+    /* -------------------- GENERATE ORDER NUMBER -------------------- */
+    // Get the category code from the first item
+    // Extract first 3 letters from category (e.g., "Sarees" -> "SAR")
+    const getCategoryCode = (category) => {
+      if (!category) return 'GEN';
+      // Remove spaces and special characters, get first 3 letters
+      const clean = category.replace(/[^a-zA-Z]/g, '').toUpperCase();
+      return clean.substring(0, 3) || 'GEN';
+    };
+
+    const categoryCodeForOrder = getCategoryCode(categoryCode);
+    
+    // Generate order number: ORD-{3 letters category}-yyyymmdd-{4 digit random}
+    const generateOrderNumber = (catCode) => {
+      const prefix = 'ORD';
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const dateStr = `${year}${month}${day}`;
+      const random = Math.floor(1000 + Math.random() * 9000);
+      return `${prefix}-${catCode}-${dateStr}-${random}`;
+    };
+
+    const orderNumber = generateOrderNumber(categoryCodeForOrder);
+
     /* -------------------- CREATE ORDER -------------------- */
     const order = await Order.create({
-      orderNumber: Order.generateOrderNumber(),
+      orderNumber: orderNumber,
 
       customer: {
         userId: req.user.role === 'user' ? req.user._id : null,
@@ -116,7 +148,7 @@ static async createOrder(req, res) {
 
       subtotal,
       discount: 0,
-      tax,
+      tax: 0, // Tax is always 0
       shippingCost,
       total,
       currency: 'INR',
