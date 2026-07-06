@@ -218,58 +218,62 @@ const CreateOfferModal = ({ isOpen, onClose, onSubmit, loading }) => {
     product.category?.toLowerCase().includes(productSearch.toLowerCase())
   );
 
- const handleSubmit = (e) => {
-  e.preventDefault();
-  
-  // Basic validation
-  const newErrors = {};
-  if (!formData.name.trim()) newErrors.name = 'Offer name is required';
-  if (!formData.startDate) newErrors.startDate = 'Start date is required';
-  if (!formData.endDate) newErrors.endDate = 'End date is required';
-  if (new Date(formData.startDate) >= new Date(formData.endDate)) {
-    newErrors.endDate = 'End date must be after start date';
-  }
-  if (formData.rules.discountValue <= 0) {
-    newErrors.discountValue = 'Discount value must be greater than 0';
-  }
-  if (formData.rules.discountType === 'percentage' && formData.rules.discountValue > 100) {
-    newErrors.discountValue = 'Percentage discount cannot exceed 100%';
-  }
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Basic validation
+    const newErrors = {};
+    if (!formData.name.trim()) newErrors.name = 'Offer name is required';
+    if (!formData.startDate) newErrors.startDate = 'Start date is required';
+    if (!formData.endDate) newErrors.endDate = 'End date is required';
+    if (new Date(formData.startDate) >= new Date(formData.endDate)) {
+      newErrors.endDate = 'End date must be after start date';
+    }
+    if (formData.rules.discountValue <= 0) {
+      newErrors.discountValue = 'Discount value must be greater than 0';
+    }
+    if (formData.rules.discountType === 'percentage' && formData.rules.discountValue > 100) {
+      newErrors.discountValue = 'Percentage discount cannot exceed 100%';
+    }
 
-  // Validate scope based on type
-  if (formData.scope.type === 'specific_products' && selectedProducts.length === 0) {
-    newErrors.scope = 'Please select at least one product';
-  }
+    if (formData.scope.type === 'specific_products' && selectedProducts.length === 0) {
+      newErrors.scope = 'Please select at least one product';
+    }
 
-  if (Object.keys(newErrors).length > 0) {
-    setErrors(newErrors);
-    return;
-  }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
 
-  // For product-specific discount, we need to create a discount for EACH selected product
-  // But since the API only accepts one productId at a time, we'll loop through selected products
-  // Or we can create a bulk endpoint later
-  
-  // For now, let's just use the first selected product
-  if (formData.scope.type === 'specific_products' && selectedProducts.length > 0) {
-    // Send discount for the first selected product
-    const discountData = {
-      productId: selectedProducts[0]._id,
-      discount: {
-        type: formData.rules.discountType === 'percentage' ? 'percentage' : 'fixed',
-        value: formData.rules.discountValue,
-        isActive: formData.isActive,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-      }
-    };
-    onSubmit(discountData);
-  } else {
-    // For 'all_products' scope, you might want to create a bulk discount
-    // or show a message that this is not supported yet
-    alert('Currently only "Specific Products" scope is supported. Please select products.');
-  }
-};
+    // Always use bulk endpoint - works for both single and multiple products
+    if (formData.scope.type === 'specific_products' && selectedProducts.length > 0) {
+      const productIds = selectedProducts.map(p => p._id);
+      
+      // Format dates properly for the API
+      const formatDate = (dateStr) => {
+        if (!dateStr) return undefined;
+        // Convert to ISO string with timezone offset
+        const date = new Date(dateStr);
+        return date.toISOString();
+      };
+      
+      const discountData = {
+        productIds: productIds, // Send all product IDs (works for single too)
+        discount: {
+          type: formData.rules.discountType === 'percentage' ? 'percentage' : 'fixed',
+          value: Number(formData.rules.discountValue),
+          isActive: formData.isActive,
+          startDate: formatDate(formData.startDate),
+          endDate: formatDate(formData.endDate),
+        }
+      };
+      
+      console.log('Submitting discount data:', discountData);
+      onSubmit(discountData);
+    } else {
+      alert('Please select at least one product');
+    }
+  };
 
   const getOfferTypes = () => [
     { value: 'discount', label: 'Discount' },

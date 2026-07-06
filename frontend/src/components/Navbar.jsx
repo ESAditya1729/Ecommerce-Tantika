@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, Home, Info, Phone, X, LogOut, Shield } from "lucide-react";
 import logo from "../Assets/TantikaLogo.png";
 import useAuth from '../Hooks/useAuth';
+import '../Navbar.css'; // Import CSS for animations
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -10,44 +11,10 @@ const Navbar = () => {
   const { user, logout, isAuthenticated } = useAuth();
 
   // Helper function to get correct dashboard path based on user role
-// In Navbar.jsx, update getDashboardPath function:
-const getDashboardPath = () => {
-  // First try to get from AuthContext
-  if (user?.role) {
-    switch(user.role) {
-      case 'artisan':
-      case 'pending_artisan':
-        return "/artisan/dashboard";
-      case 'admin':
-      case 'superadmin':
-        return "/admin/Addashboard";
-      default:
-        return "/dashboard";
-    }
-  }
-  
-  // If no role in context, check localStorage directly
-  try {
-    const userStr = localStorage.getItem('tantika_user');
-    if (userStr) {
-      const storedUser = JSON.parse(userStr);
-      
-      // Determine role from stored user
-      let userRole = storedUser.role;
-      
-      // If no role, check for artisan indicators
-      if (!userRole) {
-        const username = storedUser.username || '';
-        const email = storedUser.email || '';
-        
-        if (username.toLowerCase().includes('artisan') || email.toLowerCase().includes('artisan')) {
-          userRole = 'artisan';
-        } else {
-          userRole = 'user';
-        }
-      }
-      
-      switch(userRole) {
+  const getDashboardPath = () => {
+    // First try to get from AuthContext
+    if (user?.role) {
+      switch(user.role) {
         case 'artisan':
         case 'pending_artisan':
           return "/artisan/dashboard";
@@ -58,13 +25,46 @@ const getDashboardPath = () => {
           return "/dashboard";
       }
     }
-  } catch (error) {
-    console.error('Error determining dashboard path:', error);
-  }
-  
-  // Default fallback
-  return "/dashboard";
-};
+    
+    // If no role in context, check localStorage directly
+    try {
+      const userStr = localStorage.getItem('tantika_user');
+      if (userStr) {
+        const storedUser = JSON.parse(userStr);
+        
+        // Determine role from stored user
+        let userRole = storedUser.role;
+        
+        // If no role, check for artisan indicators
+        if (!userRole) {
+          const username = storedUser.username || '';
+          const email = storedUser.email || '';
+          
+          if (username.toLowerCase().includes('artisan') || email.toLowerCase().includes('artisan')) {
+            userRole = 'artisan';
+          } else {
+            userRole = 'user';
+          }
+        }
+        
+        switch(userRole) {
+          case 'artisan':
+          case 'pending_artisan':
+            return "/artisan/dashboard";
+          case 'admin':
+          case 'superadmin':
+            return "/admin/Addashboard";
+          default:
+            return "/dashboard";
+        }
+      }
+    } catch (error) {
+      console.error('Error determining dashboard path:', error);
+    }
+    
+    // Default fallback
+    return "/dashboard";
+  };
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -185,8 +185,8 @@ const getDashboardPath = () => {
 
           {/* Right Side - Authentication Buttons */}
           <div className="flex items-center space-x-6">
-            {/* Cart Icon - Only show if authenticated
-            {isAuthenticated && (
+            {/* Cart Icon - Only show if authenticated */}
+            {/* {isAuthenticated && (
               <Link to="/cart" className="relative hidden md:block">
                 <ShoppingBag className="w-7 h-7 text-gray-700 hover:text-blue-600" />
                 <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
@@ -393,23 +393,6 @@ const getDashboardPath = () => {
           </div>
         )}
       </div>
-
-      {/* Add fade-in animation to CSS */}
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
     </nav>
   );
 };

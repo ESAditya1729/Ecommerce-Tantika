@@ -243,22 +243,46 @@ const OfferManagement = () => {
 
       console.log("Creating offer with data:", offerData);
 
-      const response = await axios.post(`${API_BASE_URL}/offers`, offerData, {
-        headers: getAuthHeaders(),
-      });
+      // Check if this is a bulk request (has productIds array)
+      if (offerData.productIds && Array.isArray(offerData.productIds) && offerData.productIds.length > 0) {
+        // Use bulk endpoint for both single and multiple products
+        const response = await axios.post(`${API_BASE_URL}/offers/bulk`, offerData, {
+          headers: getAuthHeaders(),
+        });
 
-      if (response.data.success) {
-        fetchOffers();
-        setShowCreateModal(false);
-        alert(response.data.message || "Offer created successfully!");
+        if (response.data.success) {
+          fetchOffers();
+          setShowCreateModal(false);
+          alert(response.data.message || `Successfully applied discount to ${response.data.count || offerData.productIds.length} products!`);
+        }
+      } else {
+        // If for some reason productIds is not present, try single product endpoint
+        // This is a fallback for backward compatibility
+        console.warn("No productIds found in offerData, trying single product endpoint");
+        const response = await axios.post(`${API_BASE_URL}/offers`, offerData, {
+          headers: getAuthHeaders(),
+        });
+
+        if (response.data.success) {
+          fetchOffers();
+          setShowCreateModal(false);
+          alert(response.data.message || "Offer created successfully!");
+        }
       }
     } catch (err) {
       console.error("Error creating offer:", err);
-      alert(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Failed to create offer",
-      );
+      
+      // More detailed error message
+      let errorMessage = "Failed to create offer";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      alert(errorMessage);
     } finally {
       setActionLoading(false);
     }
