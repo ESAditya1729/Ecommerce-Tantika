@@ -1,23 +1,30 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Shop from "./pages/Shop";
-import About from "./pages/About"; 
+import About from "./pages/About";
 import Contact from "./pages/Contact";
-import Home from "./pages/Home"; 
-import Register from "./pages/Register"; 
+import Home from "./pages/Home";
+import Register from "./pages/Register";
 import AdminPage from "./pages/AdminPage";
 import ProtectedRoute from "./components/ProtectedRoute";
-import ProductDetails from './pages/ProductDetails';
+import ProductDetails from "./pages/ProductDetails";
 import ArtisanStories from "./pages/ArtisiansStories";
-import ArtisanPendingApproval from './pages/ArtisanPendingApproval';
-import ArtisanDashboard from './pages/ArtisanPage'
-import SupportCenter from './components/Support/SupportCenter';
-import ArtisanProfile from './pages/ArtisanProfile';
-import Shipping from './pages/Policies/ShippingPolicy';
+import ArtisanPendingApproval from "./pages/ArtisanPendingApproval";
+import ArtisanDashboard from "./pages/ArtisanPage";
+import SupportCenter from "./components/Support/SupportCenter";
+import ArtisanProfile from "./pages/ArtisanProfile";
+import Shipping from "./pages/Policies/ShippingPolicy";
+import PrivacyPolicy from "./pages/Policies/PrivacyPolicy";
 import ReturnRefundPolicy from "./pages/Policies/ReturnRefundPolicy";
 import WriteReview from "./pages/WriteReview";
 import ReviewsPage from "./pages/ReviewsPage";
+import PackagingDashboard from "./pages/PackagingDashboard";
 
 // Layout components
 import Navbar from "./components/Navbar";
@@ -36,20 +43,12 @@ const MainLayout = ({ children }) => {
 
 // Dashboard Layout without Navbar & Footer (for all dashboard pages)
 const DashboardLayout = ({ children }) => {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {children}
-    </div>
-  );
+  return <div className="min-h-screen bg-gray-50">{children}</div>;
 };
 
 // Admin Layout without Navbar & Footer
 const AdminLayout = ({ children }) => {
-  return (
-    <div className="min-h-screen">
-      {children}
-    </div>
-  );
+  return <div className="min-h-screen">{children}</div>;
 };
 
 function App() {
@@ -57,217 +56,258 @@ function App() {
     <Router>
       <Routes>
         {/* Public Pages - With Navbar & Footer */}
-        <Route path="/" element={
-          <MainLayout>
-            <Home />
-          </MainLayout>
-        } />
+        <Route
+          path="/"
+          element={
+            <MainLayout>
+              <Home />
+            </MainLayout>
+          }
+        />
         <Route path="/support" element={<SupportCenter />} />
-        <Route path="/about" element={
-          <MainLayout>
-            <About />
-          </MainLayout>
-        } />
-        <Route path="/shipping" element={
-          <MainLayout>
-            <Shipping />
-          </MainLayout>
-        } />
-        
-        <Route path="/return-refund" element={
-          <MainLayout>
-            <ReturnRefundPolicy />
-          </MainLayout>
-        } />
-        
-        <Route path="/contact" element={
-          <MainLayout>
-            <Contact />
-          </MainLayout>
-        } />
-        
+        <Route
+          path="/about"
+          element={
+            <MainLayout>
+              <About />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/shipping"
+          element={
+            <MainLayout>
+              <Shipping />
+            </MainLayout>
+          }
+        />
+
+        <Route
+          path="/return-refund"
+          element={
+            <MainLayout>
+              <ReturnRefundPolicy />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/privacy-policy"
+          element={
+            <MainLayout>
+              <PrivacyPolicy />
+            </MainLayout>
+          }
+        />
+
+        <Route
+          path="/contact"
+          element={
+            <MainLayout>
+              <Contact />
+            </MainLayout>
+          }
+        />
+
         {/* Authentication Pages - With Navbar & Footer */}
-        <Route path="/login" element={
-          <MainLayout>
-            <Login />
-          </MainLayout>
-        } />
-        
-        <Route path="/register" element={
-          <MainLayout>
-            <Register />
-          </MainLayout>
-        } />
-        
+        <Route
+          path="/login"
+          element={
+            <MainLayout>
+              <Login />
+            </MainLayout>
+          }
+        />
+
+        <Route
+          path="/register"
+          element={
+            <MainLayout>
+              <Register />
+            </MainLayout>
+          }
+        />
+
         {/* ================================================ */}
         {/* DASHBOARD PAGES - NO NAVBAR/FOOTER */}
         {/* ================================================ */}
-        
+
         {/* Regular User Dashboard */}
-        <Route 
-          path="/dashboard" 
+        <Route
+          path="/dashboard"
           element={
-            <MainLayout >
+            <MainLayout>
               <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
             </MainLayout>
-          } 
+          }
         />
-        
+
         {/* Artisan Dashboard */}
-        <Route 
-          path="/artisan/dashboard" 
+        <Route
+          path="/artisan/dashboard"
           element={
             <DashboardLayout>
-              <ProtectedRoute allowedRoles={['artisan']}>
-               <ArtisanDashboard />
+              <ProtectedRoute allowedRoles={["artisan"]}>
+                <ArtisanDashboard />
               </ProtectedRoute>
             </DashboardLayout>
-          } 
+          }
         />
-        <Route 
-          path="/review/:targetType/:targetId" 
+        <Route
+          path="/review/:targetType/:targetId"
           element={
-            <MainLayout >
+            <MainLayout>
               <ProtectedRoute>
                 <WriteReview />
               </ProtectedRoute>
             </MainLayout>
-          } 
+          }
         />
-        <Route 
-          path="/reviews/:targetType/:targetId" 
+        <Route
+          path="/reviews/:targetType/:targetId"
           element={
-            <MainLayout >
+            <MainLayout>
               <ProtectedRoute>
                 <ReviewsPage />
               </ProtectedRoute>
             </MainLayout>
-          } 
+          }
         />
-        
+
         {/* Artisan Profile Routes - Public Accessible with Different Identifiers */}
         {/* Public artisan profile by ID */}
-        <Route 
-          path="/artisan-profile/artisan/:artisanId" 
+        <Route
+          path="/artisan-profile/artisan/:artisanId"
           element={
             <MainLayout>
               <ArtisanProfile />
             </MainLayout>
-          } 
+          }
         />
-        
+
         {/* Public artisan profile by user ID */}
-        <Route 
-          path="/artisan-profile/user/:userId" 
+        <Route
+          path="/artisan-profile/user/:userId"
           element={
             <MainLayout>
               <ArtisanProfile />
             </MainLayout>
-          } 
+          }
         />
-        
+
         {/* Public artisan profile by slug (business name) */}
-        <Route 
-          path="/artisan-profile/slug/:slug" 
+        <Route
+          path="/artisan-profile/slug/:slug"
           element={
             <MainLayout>
               <ArtisanProfile />
             </MainLayout>
-          } 
+          }
         />
-        
+
         {/* My Profile - Protected route for current artisan */}
-        <Route 
-          path="/artisan/my-profile" 
+        <Route
+          path="/artisan/my-profile"
           element={
             <MainLayout>
-              <ProtectedRoute allowedRoles={['artisan']}>
+              <ProtectedRoute allowedRoles={["artisan"]}>
                 <ArtisanProfile />
               </ProtectedRoute>
             </MainLayout>
-          } 
+          }
         />
-        
+
         {/* Admin view of artisan profile */}
-        <Route 
-          path="/admin/artisan/:artisanId" 
+        <Route
+          path="/admin/artisan/:artisanId"
           element={
             <AdminLayout>
-              <ProtectedRoute allowedRoles={['admin']}>
+              <ProtectedRoute allowedRoles={["admin"]}>
                 <ArtisanProfile />
               </ProtectedRoute>
             </AdminLayout>
-          } 
+          }
         />
-        
+
         {/* Artisan Pending Approval */}
-        <Route 
-          path="/artisan/pending-approval" 
+        <Route
+          path="/artisan/pending-approval"
           element={
             <DashboardLayout>
-              <ProtectedRoute allowedRoles={['pending_artisan', 'artisan']}>
+              <ProtectedRoute allowedRoles={["pending_artisan", "artisan"]}>
                 <ArtisanPendingApproval />
               </ProtectedRoute>
             </DashboardLayout>
-          } 
+          }
         />
-        
+
         {/* Admin Dashboard */}
-        <Route 
-          path="/admin/Addashboard" 
+        <Route
+          path="/admin/Addashboard"
           element={
             <AdminLayout>
-              <ProtectedRoute allowedRoles={['admin']}>
+              <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminPage />
               </ProtectedRoute>
             </AdminLayout>
-          } 
+          }
         />
-        
+
+        {/* Packaging Dashboard - Admin & Artisan */}
+        <Route
+          path="/packaging-dashboard"
+          element={
+            <AdminLayout>
+              <ProtectedRoute allowedRoles={["admin", "artisan"]}>
+                <PackagingDashboard />
+              </ProtectedRoute>
+            </AdminLayout>
+          }
+        />
+
         {/* ================================================ */}
         {/* OTHER PROTECTED PAGES - WITH NAVBAR/FOOTER */}
         {/* ================================================ */}
-        
-        <Route 
-          path="/shop" 
+
+        <Route
+          path="/shop"
           element={
             <MainLayout>
               <ProtectedRoute>
                 <Shop />
               </ProtectedRoute>
             </MainLayout>
-          } 
+          }
         />
-        
-        <Route 
-          path="/product/:id" 
+
+        <Route
+          path="/product/:id"
           element={
             <MainLayout>
               <ProtectedRoute>
                 <ProductDetails />
               </ProtectedRoute>
             </MainLayout>
-          } 
+          }
         />
-        
-        <Route 
-          path="/artisans" 
+
+        <Route
+          path="/artisans"
           element={
             <MainLayout>
               <ProtectedRoute>
                 <ArtisanStories />
               </ProtectedRoute>
             </MainLayout>
-          } 
+          }
         />
-        
+
         {/* Default redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
-};
+}
 
 export default App;
